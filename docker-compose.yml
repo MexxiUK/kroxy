@@ -1,0 +1,87 @@
+version: "3.8"
+
+services:
+  kroxy:
+    build: .
+    image: kroxy:latest
+    container_name: kroxy
+    restart: unless-stopped
+
+    # Security: Run as non-root
+    user: "1000:1000"
+
+    # Security: Read-only root filesystem with tmpfs for writes
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M,mode=1777
+
+    # Security: Drop all capabilities, add only what's needed
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # Required for ports < 1024
+      - CHOWN             # Required for SQLite file creation
+
+    # Security: Prevent privilege escalation
+    privileged: false
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=unconfined  # Required for SQLite
+
+    ports:
+      - "80:80"      # HTTP (redirects to HTTPS)
+      - "443:443"    # HTTPS
+      - "127.0.0.1:8080:8080"  # Admin API (localhost only!)
+
+    volumes:
+      - kroxy-data:/data
+      - kroxy-certs:/home/kroxy/.local/share/caddy:ro
+
+    environment:
+      - KROXY_LISTEN=:443
+      - KROXY_ADMIN=:8080
+      - KROXY_DB=/data/kroxy.db
+      # Security: Generate admin token on first run
+      - KROXY_ADMIN_TOKEN_FILE=/data/admin_token
+
+    labels:
+      - "com.kroxy.description=Self-hosted reverse proxy with WAF and OIDC"
+      - "com.kroxy.security=hardened"
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Security: Limit resources
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+
+    # Security: Log configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service"
+
+volumes:
+  kroxy-data:
+    driver: local
+  kroxy-certs:
+    driver: local
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
