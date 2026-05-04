@@ -11,12 +11,15 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+  - pdb.yaml
 
 commonLabels:
   app.kubernetes.io/managed-by: kustomize
 
-# Image customization for production
-# images:
-#   - name: kroxy
-#     newTag: v0.2.0
-#     newName: your-registry.example.com/kroxy
+images:
+  - name: kroxy
+    newName: ghcr.io/mexxiuk/kroxy
+    newTag: latest
+
+# To pin to a specific release, override the tag:
+#   kustomize edit set image kroxy=ghcr.io/mexxiuk/kroxy:v1.0.0

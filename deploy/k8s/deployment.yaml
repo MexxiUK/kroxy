@@ -46,7 +46,7 @@ spec:
 
       containers:
         - name: kroxy
-          image: kroxy:latest  # Replace with your registry
+          image: kroxy:latest  # Overridden by kustomization.yaml images transformer
           imagePullPolicy: IfNotPresent
 
           ports:
