@@ -51,6 +51,16 @@ const (
 	maxSessionAbsoluteLifetime = 7 * 24 * time.Hour
 )
 
+// dummyPasswordHash is a pre-computed bcrypt hash used for timing-safe
+// comparison when a user does not exist. Running bcrypt.CompareHashAndPassword
+// against this dummy hash ensures the login function takes roughly the same
+// time regardless of whether the email exists, preventing timing-based
+// account enumeration.
+var dummyPasswordHash = func() []byte {
+	h, _ := bcrypt.GenerateFromPassword([]byte("dummy-password-hash-for-timing"), bcryptCost)
+	return h
+}()
+
 // failedAttempt tracks failed login attempts for account lockout
 type failedAttempt struct {
 	mu          sync.Mutex
@@ -887,15 +897,18 @@ func (a *Auth) Login(email, password, ip, userAgent string) (*LoginResponse, err
 	// Look up user (database query is case-insensitive for email)
 	user, err := a.store.GetUserByEmail(email)
 	if err != nil {
-		// Record failed attempt even for non-existent users (prevents enumeration)
+		// Timing-safe: run bcrypt on dummy hash so response time matches a real
+		// user with wrong password, preventing timing-based account enumeration.
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
 		a.recordFailedAttempt(email)
-		// Also record for distributed attack detection
 		a.recordDistributedAttackAttempt(ip, email)
 		return nil, errors.New("invalid credentials")
 	}
 
 	if !user.Enabled {
-		// Return same error as invalid credentials to prevent account enumeration
+		// Timing-safe: run bcrypt on dummy hash so response time matches a real
+		// user with wrong password, preventing timing-based account enumeration.
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
 		a.recordFailedAttempt(email)
 		a.recordDistributedAttackAttempt(ip, email)
 		return nil, errors.New("invalid credentials")
