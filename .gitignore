@@ -124,3 +124,6 @@ DEPLOYMENT.md
 
 # Deployment docs (environment-specific)
 DEPLOYMENT.md
+
+# Claude Code artifacts
+.superpowers/
