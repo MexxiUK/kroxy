@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25.9-alpine AS builder
 
 # Build arguments for version embedding
 ARG VERSION=dev

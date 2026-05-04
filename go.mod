@@ -1,6 +1,6 @@
 module github.com/kroxy/kroxy
 
-go 1.25.0
+go 1.25.9
 
 require (
 	github.com/caddyserver/caddy/v2 v2.11.2
