@@ -8,11 +8,11 @@ import (
 )
 
 var (
-	globalMu              sync.RWMutex
-	globalDetector        *Detector
-	globalCache           *IPChallengeCache
+	globalMu               sync.RWMutex
+	globalDetector         *Detector
+	globalCache            *IPChallengeCache
 	globalChallengeManager *ChallengeManager
-	globalSecret          []byte
+	globalSecret           []byte
 )
 
 // InitGlobals lazily initializes the bot detection globals.

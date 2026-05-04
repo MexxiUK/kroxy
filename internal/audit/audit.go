@@ -20,18 +20,18 @@ import (
 type EventType string
 
 const (
-	EventTypeAuthLogin       EventType = "auth.login"
-	EventTypeAuthLogout      EventType = "auth.logout"
-	EventTypeAuthFailure     EventType = "auth.failure"
+	EventTypeAuthLogin        EventType = "auth.login"
+	EventTypeAuthLogout       EventType = "auth.logout"
+	EventTypeAuthFailure      EventType = "auth.failure"
 	EventTypeAuthAPIKeyCreate EventType = "auth.apikey.create"
 	EventTypeAuthAPIKeyDelete EventType = "auth.apikey.delete"
 
-	EventTypeWAFBlock     EventType = "waf.block"
+	EventTypeWAFBlock EventType = "waf.block"
 
 	EventTypeRateLimitTrigger EventType = "rate_limit.trigger"
 	EventTypeIPBlocked        EventType = "ip.blocked"
 
-	EventTypeAdminAction  EventType = "admin.action"
+	EventTypeAdminAction EventType = "admin.action"
 
 	EventTypeSecurityAlert EventType = "security.alert"
 
@@ -40,36 +40,36 @@ const (
 
 // Event represents an audit log event
 type Event struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	Type        EventType              `json:"type"`
-	UserID      int                    `json:"user_id,omitempty"`
-	UserEmail   string                 `json:"user_email,omitempty"`
-	IP          string                 `json:"ip"`
-	UserAgent   string                 `json:"user_agent,omitempty"`
-	Resource    string                 `json:"resource,omitempty"`
-	ResourceID  int                    `json:"resource_id,omitempty"`
-	Action      string                 `json:"action,omitempty"`
-	Details interface{} `json:"details,omitempty"`
-	Success     bool                   `json:"success"`
-	Error       string                 `json:"error,omitempty"`
-	RequestID   string                 `json:"request_id,omitempty"`
-	SessionID   string                 `json:"session_id,omitempty"`
-	Signature   string                 `json:"signature,omitempty"` // HMAC signature for tamper detection
+	Timestamp  time.Time   `json:"timestamp"`
+	Type       EventType   `json:"type"`
+	UserID     int         `json:"user_id,omitempty"`
+	UserEmail  string      `json:"user_email,omitempty"`
+	IP         string      `json:"ip"`
+	UserAgent  string      `json:"user_agent,omitempty"`
+	Resource   string      `json:"resource,omitempty"`
+	ResourceID int         `json:"resource_id,omitempty"`
+	Action     string      `json:"action,omitempty"`
+	Details    interface{} `json:"details,omitempty"`
+	Success    bool        `json:"success"`
+	Error      string      `json:"error,omitempty"`
+	RequestID  string      `json:"request_id,omitempty"`
+	SessionID  string      `json:"session_id,omitempty"`
+	Signature  string      `json:"signature,omitempty"` // HMAC signature for tamper detection
 }
 
 // Logger handles audit logging with rotation and external forwarding
 type Logger struct {
-	mu           sync.Mutex
-	logFile      *os.File
-	logPath      string
-	maxSize      int64 // Max size in bytes before rotation
-	maxBackups   int   // Max number of rotated files to keep
-	currentSize  int64 // Current file size
-	enabled      bool
-	signingKey   []byte // HMAC signing key for log integrity
-	webhookURL   string // External webhook URL for log forwarding
+	mu            sync.Mutex
+	logFile       *os.File
+	logPath       string
+	maxSize       int64 // Max size in bytes before rotation
+	maxBackups    int   // Max number of rotated files to keep
+	currentSize   int64 // Current file size
+	enabled       bool
+	signingKey    []byte // HMAC signing key for log integrity
+	webhookURL    string // External webhook URL for log forwarding
 	webhookClient *http.Client
-	alertHandler *AlertHandler // Real-time alerting
+	alertHandler  *AlertHandler // Real-time alerting
 }
 
 const (
@@ -238,11 +238,11 @@ func (l *Logger) LogWAFBlock(ip, domain, ruleID, reason string) {
 // LogSecurityAlert logs a security alert
 func (l *Logger) LogSecurityAlert(alertType, ip, details string) {
 	l.Log(Event{
-		Type:      EventTypeSecurityAlert,
-		IP:        ip,
-		Action:    alertType,
-		Success:   false,
-		Error:     details,
+		Type:    EventTypeSecurityAlert,
+		IP:      ip,
+		Action:  alertType,
+		Success: false,
+		Error:   details,
 	})
 }
 
@@ -255,7 +255,7 @@ func (l *Logger) LogRateLimitTrigger(ip, domain string, requestsPerMinute int) {
 		Action:   "trigger",
 		Success:  false,
 		Details: map[string]interface{}{
-			"domain":            domain,
+			"domain":           domain,
 			"requests_per_min": requestsPerMinute,
 		},
 	})
@@ -276,10 +276,10 @@ func (l *Logger) forwardToWebhook(data []byte) {
 
 // AlertHandler monitors security events and triggers alerts when thresholds are exceeded
 type AlertHandler struct {
-	mu             sync.Mutex
-	failedLogins   map[string]*alertCounter // IP -> counter
-	wafBlocks      map[string]*alertCounter // IP -> counter
-	alertCallback  func(alertType, message string)
+	mu            sync.Mutex
+	failedLogins  map[string]*alertCounter // IP -> counter
+	wafBlocks     map[string]*alertCounter // IP -> counter
+	alertCallback func(alertType, message string)
 }
 
 type alertCounter struct {

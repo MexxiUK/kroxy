@@ -13,8 +13,8 @@ import (
 )
 
 type Store struct {
-	db       *sql.DB
-	dbPath   string
+	db     *sql.DB
+	dbPath string
 }
 
 func New(path string) (*Store, error) {

@@ -3,27 +3,27 @@ package store
 import "time"
 
 type Route struct {
-	ID              int       `json:"id"`
-	Domain          string    `json:"domain"`
-	Backend         string    `json:"backend"`
-	Enabled         bool      `json:"enabled"`
-	WAFEnabled      bool      `json:"waf_enabled"`
-	WAFMode             string    `json:"waf_mode"`
-	WAFParanoiaLevel    int       `json:"waf_paranoia_level"`
-	OIDCEnabled     bool      `json:"oidc_enabled"`
-	OIDCProviderID  int       `json:"oidc_provider_id"`
-	RateLimit       int       `json:"rate_limit"`
-	EnableGzip      bool      `json:"enable_gzip"`
-	EnableBrotli    bool      `json:"enable_brotli"`
-	EnableCache     bool      `json:"enable_cache"`
-	CustomHeaders   string    `json:"custom_headers"`
-	BlockCountries  string    `json:"block_countries"`
-	AllowCountries  string    `json:"allow_countries"`
-	RequireHTTPS    bool      `json:"require_https"`
-	IsAdminRoute    bool      `json:"-"` // Internally-created admin self-route
-	BotProtection   string    `json:"bot_protection"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID               int       `json:"id"`
+	Domain           string    `json:"domain"`
+	Backend          string    `json:"backend"`
+	Enabled          bool      `json:"enabled"`
+	WAFEnabled       bool      `json:"waf_enabled"`
+	WAFMode          string    `json:"waf_mode"`
+	WAFParanoiaLevel int       `json:"waf_paranoia_level"`
+	OIDCEnabled      bool      `json:"oidc_enabled"`
+	OIDCProviderID   int       `json:"oidc_provider_id"`
+	RateLimit        int       `json:"rate_limit"`
+	EnableGzip       bool      `json:"enable_gzip"`
+	EnableBrotli     bool      `json:"enable_brotli"`
+	EnableCache      bool      `json:"enable_cache"`
+	CustomHeaders    string    `json:"custom_headers"`
+	BlockCountries   string    `json:"block_countries"`
+	AllowCountries   string    `json:"allow_countries"`
+	RequireHTTPS     bool      `json:"require_https"`
+	IsAdminRoute     bool      `json:"-"` // Internally-created admin self-route
+	BotProtection    string    `json:"bot_protection"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type OIDCProvider struct {
@@ -38,23 +38,23 @@ type OIDCProvider struct {
 type Certificate struct {
 	ID        int       `json:"id"`
 	Domain    string    `json:"domain"`
-	Type      string    `json:"type"`       // "letsencrypt" or "custom"
-	Issuer    string    `json:"issuer"`      // "Let's Encrypt" or "Custom"
+	Type      string    `json:"type"`   // "letsencrypt" or "custom"
+	Issuer    string    `json:"issuer"` // "Let's Encrypt" or "Custom"
 	CertPath  string    `json:"cert_path"`
 	KeyPath   string    `json:"key_path"`
 	AutoRenew bool      `json:"auto_renew"`
-	Status    string    `json:"status"`      // "pending", "active", "failed"
+	Status    string    `json:"status"` // "pending", "active", "failed"
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
 type WAFRule struct {
-	ID      int    `json:"id"`
-	Name    string `json:"name"`
-	Rule    string `json:"rule"`
-	Enabled bool   `json:"enabled"`
-	Mode        string `json:"mode"`                          // "block" or "log_only"
-	Exclusions  string `json:"exclusions,omitempty"`           // comma-separated CRS rule IDs to exclude
-	RouteID     *int   `json:"route_id,omitempty"`            // nil = global rule, non-nil = route-specific
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	Rule       string `json:"rule"`
+	Enabled    bool   `json:"enabled"`
+	Mode       string `json:"mode"`                 // "block" or "log_only"
+	Exclusions string `json:"exclusions,omitempty"` // comma-separated CRS rule IDs to exclude
+	RouteID    *int   `json:"route_id,omitempty"`   // nil = global rule, non-nil = route-specific
 }
 
 type SecurityEvent struct {
@@ -120,11 +120,11 @@ type User struct {
 // APIKey represents an API key for programmatic access
 type APIKey struct {
 	ID            int        `json:"id"`
-	KeyID         string    `json:"key_id"`
-	KeySecretHash string    `json:"-"` // Never expose in API
-	UserID        int       `json:"user_id"`
-	Name          string    `json:"name"`
-	CreatedAt     time.Time `json:"created_at"`
+	KeyID         string     `json:"key_id"`
+	KeySecretHash string     `json:"-"` // Never expose in API
+	UserID        int        `json:"user_id"`
+	Name          string     `json:"name"`
+	CreatedAt     time.Time  `json:"created_at"`
 	ExpiresAt     *time.Time `json:"expires_at"`
 	LastUsed      *time.Time `json:"last_used"`
 }

@@ -23,7 +23,7 @@ type BotProtectionHandler struct {
 // CaddyModule returns the Caddy module info.
 func (h *BotProtectionHandler) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
-		ID: "http.handlers.bot_protection",
+		ID:  "http.handlers.bot_protection",
 		New: func() caddy.Module { return new(BotProtectionHandler) },
 	}
 }

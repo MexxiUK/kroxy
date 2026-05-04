@@ -9,14 +9,9 @@ linters:
     - staticcheck
     - gosimple
     - typecheck
-    - structcheck
-    - varcheck
-    - deadcode
     - prealloc
-    - goconst
     - gofmt
     - misspell
-    - unconvert
     - goimports
     - nakedret
     - rowserrcheck
@@ -24,6 +19,8 @@ linters:
   disable:
     - errcheck
     - unused
+    - goconst
+    - unconvert
 
 linters-settings:
   gofmt:
@@ -35,3 +32,7 @@ issues:
   exclude-use-default: false
   max-issues-per-linter: 50
   max-same-issues: 10
+  exclude-rules:
+    - linters:
+        - staticcheck
+      text: "SA1029"

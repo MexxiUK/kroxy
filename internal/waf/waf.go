@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"strings"
 
+	corazacrs "github.com/corazawaf/coraza-coreruleset/v4"
 	"github.com/corazawaf/coraza/v3"
 	"github.com/corazawaf/coraza/v3/types"
-	corazacrs "github.com/corazawaf/coraza-coreruleset/v4"
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/crypto"
 	"github.com/kroxy/kroxy/internal/security"
@@ -500,28 +500,27 @@ func createWAFEngine(cfg Config, s *store.Store, routeID *int) (coraza.WAF, erro
 		directives.WriteString("SecRuleEngine DetectionOnly\n")
 	}
 
-
-		// 4b. Custom Kroxy WAF rules to close bypass gaps
-		kroxyRules := []string{
-			// HPP: inspect raw query for SQL keywords split across duplicate params
-			`SecRule REQUEST_HEADERS:X-Kroxy-Raw-Query "@rx (?i)(?:union\s+(?:all\s+)?select|insert\s+into|update\s+\w+\s+set|delete\s+from|drop\s+table|alter\s+table|exec\s*\(|execute\s*\()" "id:990100,phase:1,deny,status:403,msg:'Kroxy HPP: SQL keyword pattern in concatenated query',t:lowercase"`,
-			// HPP: XSS patterns in raw query
-			`SecRule REQUEST_HEADERS:X-Kroxy-Raw-Query "@rx (?i)(?:<script|javascript:|on(?:error|load|click|mouseover|focus|blur)\s*=|<img[^>]+onerror|<svg[^>]+onload)" "id:990110,phase:1,deny,status:403,msg:'Kroxy HPP: XSS pattern in concatenated query',t:lowercase"`,
-			// Hex-encoded quote bypass: 0x27 (single quote) and 0x22 (double quote)
-			`SecRule ARGS "@rx 0x[2722]" "id:990120,phase:2,deny,status:403,msg:'Kroxy: Hex-encoded quote detected',t:lowercase"`,
-			`SecRule REQUEST_HEADERS:X-Kroxy-Raw-Query "@rx 0x[2722]" "id:990121,phase:1,deny,status:403,msg:'Kroxy HPP: Hex-encoded quote in query',t:lowercase"`,
-			// Inline comment bypass in SQL keywords (e.g., S/**/LEEP)
-			`SecRule ARGS "@rx (?i)\b\w+/\*\*/\w+" "id:990130,phase:2,deny,status:403,msg:'Kroxy: SQL inline comment obfuscation detected'"`,
-			// XXE detection in request body
-			`SecRule REQUEST_BODY "@rx (?i)<!\s*(?:DOCTYPE|ENTITY)\s+" "id:990140,phase:2,deny,status:403,msg:'Kroxy: XXE payload detected'"`,
-			// SSRF: encoded IPs in query params (hex, octal, decimal, dotted octal)
-			`SecRule ARGS "@rx (?i)(?:0x[0-9a-f]{6,8}|(?:https?://)?[0-9]{8,10}(?:/|$)|0[0-7]{8,11}|0[0-7]{1,3}\.[0-7]{1,3}\.[0-7]{1,3}\.[0-7]{1,3})" "id:990150,phase:2,deny,status:403,msg:'Kroxy: Encoded IP in query param (potential SSRF)'"`,
-			// SSRF: common internal/metadata hostnames in query params
-			`SecRule ARGS "@rx (?i)(?:169\.254\.169\.254|metadata\.google\.internal|\.sslip\.io|\.nip\.io)" "id:990160,phase:2,deny,status:403,msg:'Kroxy: Internal/metadata hostname in query param (SSRF)'"`,
-		}
-		for _, rule := range kroxyRules {
-			directives.WriteString(rule + "\n")
-		}
+	// 4b. Custom Kroxy WAF rules to close bypass gaps
+	kroxyRules := []string{
+		// HPP: inspect raw query for SQL keywords split across duplicate params
+		`SecRule REQUEST_HEADERS:X-Kroxy-Raw-Query "@rx (?i)(?:union\s+(?:all\s+)?select|insert\s+into|update\s+\w+\s+set|delete\s+from|drop\s+table|alter\s+table|exec\s*\(|execute\s*\()" "id:990100,phase:1,deny,status:403,msg:'Kroxy HPP: SQL keyword pattern in concatenated query',t:lowercase"`,
+		// HPP: XSS patterns in raw query
+		`SecRule REQUEST_HEADERS:X-Kroxy-Raw-Query "@rx (?i)(?:<script|javascript:|on(?:error|load|click|mouseover|focus|blur)\s*=|<img[^>]+onerror|<svg[^>]+onload)" "id:990110,phase:1,deny,status:403,msg:'Kroxy HPP: XSS pattern in concatenated query',t:lowercase"`,
+		// Hex-encoded quote bypass: 0x27 (single quote) and 0x22 (double quote)
+		`SecRule ARGS "@rx 0x[2722]" "id:990120,phase:2,deny,status:403,msg:'Kroxy: Hex-encoded quote detected',t:lowercase"`,
+		`SecRule REQUEST_HEADERS:X-Kroxy-Raw-Query "@rx 0x[2722]" "id:990121,phase:1,deny,status:403,msg:'Kroxy HPP: Hex-encoded quote in query',t:lowercase"`,
+		// Inline comment bypass in SQL keywords (e.g., S/**/LEEP)
+		`SecRule ARGS "@rx (?i)\b\w+/\*\*/\w+" "id:990130,phase:2,deny,status:403,msg:'Kroxy: SQL inline comment obfuscation detected'"`,
+		// XXE detection in request body
+		`SecRule REQUEST_BODY "@rx (?i)<!\s*(?:DOCTYPE|ENTITY)\s+" "id:990140,phase:2,deny,status:403,msg:'Kroxy: XXE payload detected'"`,
+		// SSRF: encoded IPs in query params (hex, octal, decimal, dotted octal)
+		`SecRule ARGS "@rx (?i)(?:0x[0-9a-f]{6,8}|(?:https?://)?[0-9]{8,10}(?:/|$)|0[0-7]{8,11}|0[0-7]{1,3}\.[0-7]{1,3}\.[0-7]{1,3}\.[0-7]{1,3})" "id:990150,phase:2,deny,status:403,msg:'Kroxy: Encoded IP in query param (potential SSRF)'"`,
+		// SSRF: common internal/metadata hostnames in query params
+		`SecRule ARGS "@rx (?i)(?:169\.254\.169\.254|metadata\.google\.internal|\.sslip\.io|\.nip\.io)" "id:990160,phase:2,deny,status:403,msg:'Kroxy: Internal/metadata hostname in query param (SSRF)'"`,
+	}
+	for _, rule := range kroxyRules {
+		directives.WriteString(rule + "\n")
+	}
 
 	// 5. Custom rules from config (rarely used)
 	for _, rule := range cfg.CustomRules {
@@ -723,6 +722,7 @@ func (w *WAF) InspectRequest(rw http.ResponseWriter, r *http.Request) (allowed b
 
 	return true, ""
 }
+
 // logDetection logs a WAF detection event
 
 // logDetection logs a WAF detection event in detect mode without blocking the request.
@@ -804,17 +804,17 @@ func (w *WAF) Mode() string {
 
 // TestResult holds the result of a single WAF test payload
 type TestResult struct {
-	Name             string            `json:"name"`
-	Payload          string            `json:"payload"`
-	Blocked          bool              `json:"blocked"`
-	Method           string            `json:"method,omitempty"`
-	Headers          map[string]string `json:"headers,omitempty"`
-	URI              string            `json:"uri,omitempty"`
-	IsResponse       bool              `json:"is_response,omitempty"`
-	RespHeaders      map[string]string `json:"resp_headers,omitempty"`
-	RuleID           int               `json:"rule_id,omitempty"`
-	RuleMsg          string            `json:"rule_msg,omitempty"`
-	SuggestedAction  string            `json:"suggested_action,omitempty"`
+	Name            string            `json:"name"`
+	Payload         string            `json:"payload"`
+	Blocked         bool              `json:"blocked"`
+	Method          string            `json:"method,omitempty"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	URI             string            `json:"uri,omitempty"`
+	IsResponse      bool              `json:"is_response,omitempty"`
+	RespHeaders     map[string]string `json:"resp_headers,omitempty"`
+	RuleID          int               `json:"rule_id,omitempty"`
+	RuleMsg         string            `json:"rule_msg,omitempty"`
+	SuggestedAction string            `json:"suggested_action,omitempty"`
 }
 
 // TestCategory holds results for a category of test payloads
@@ -827,10 +827,10 @@ type TestCategory struct {
 
 // TestSuiteResult holds the full test suite results
 type TestSuiteResult struct {
-	Engine   string         `json:"engine"`
-	Mode     string         `json:"mode"`
-	Results  []TestCategory `json:"results"`
-	Summary  TestSummary    `json:"summary"`
+	Engine  string         `json:"engine"`
+	Mode    string         `json:"mode"`
+	Results []TestCategory `json:"results"`
+	Summary TestSummary    `json:"summary"`
 }
 
 // TestSummary holds aggregated test results
@@ -842,10 +842,10 @@ type TestSummary struct {
 
 // TestPayloadResult holds the outcome of a single test including matched rules.
 type TestPayloadResult struct {
-	Blocked         bool
-	RuleID          int
-	RuleMsg         string
-	MatchedRules    []types.MatchedRule
+	Blocked      bool
+	RuleID       int
+	RuleMsg      string
+	MatchedRules []types.MatchedRule
 }
 
 // TestPayload runs a single test payload through the WAF engine and returns the result.

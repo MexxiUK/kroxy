@@ -24,24 +24,24 @@ type Manager struct {
 
 // Webhook represents a configured webhook endpoint.
 type Webhook struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	URL      string `json:"url"`
-	Events   string `json:"events"` // comma-separated list of event types
-	Enabled  bool   `json:"enabled"`
-	Secret   string `json:"secret,omitempty"` // for HMAC signature
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	URL       string    `json:"url"`
+	Events    string    `json:"events"` // comma-separated list of event types
+	Enabled   bool      `json:"enabled"`
+	Secret    string    `json:"secret,omitempty"` // for HMAC signature
 	CreatedAt time.Time `json:"created_at"`
 }
 
 // Event represents an alert event.
 type Event struct {
-	Type      string    `json:"type"`
-	Severity  string    `json:"severity"` // info, warning, critical
-	Title     string    `json:"title"`
-	Message   string    `json:"message"`
-	RouteID   int       `json:"route_id,omitempty"`
-	Domain    string    `json:"domain,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
+	Type      string                 `json:"type"`
+	Severity  string                 `json:"severity"` // info, warning, critical
+	Title     string                 `json:"title"`
+	Message   string                 `json:"message"`
+	RouteID   int                    `json:"route_id,omitempty"`
+	Domain    string                 `json:"domain,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
 	Details   map[string]interface{} `json:"details,omitempty"`
 }
 
@@ -159,12 +159,12 @@ func (m *Manager) UpdateWebhooks(webhooks []Webhook) {
 // Common alert helpers
 func (m *Manager) BackendDown(routeID int, domain, backend string, err error) {
 	m.Send(Event{
-		Type:     "backend_down",
-		Severity: "critical",
-		Title:    fmt.Sprintf("Backend %s is unreachable", domain),
-		Message:  fmt.Sprintf("Health check failed for %s (%s): %v", domain, backend, err),
-		RouteID:  routeID,
-		Domain:   domain,
+		Type:      "backend_down",
+		Severity:  "critical",
+		Title:     fmt.Sprintf("Backend %s is unreachable", domain),
+		Message:   fmt.Sprintf("Health check failed for %s (%s): %v", domain, backend, err),
+		RouteID:   routeID,
+		Domain:    domain,
 		Timestamp: time.Now(),
 		Details: map[string]interface{}{
 			"backend": backend,
@@ -175,11 +175,11 @@ func (m *Manager) BackendDown(routeID int, domain, backend string, err error) {
 
 func (m *Manager) WAFSpike(domain string, blocks int) {
 	m.Send(Event{
-		Type:     "waf_spike",
-		Severity: "warning",
-		Title:    fmt.Sprintf("WAF blocking spike on %s", domain),
-		Message:  fmt.Sprintf("WAF blocked %d requests in the last minute", blocks),
-		Domain:   domain,
+		Type:      "waf_spike",
+		Severity:  "warning",
+		Title:     fmt.Sprintf("WAF blocking spike on %s", domain),
+		Message:   fmt.Sprintf("WAF blocked %d requests in the last minute", blocks),
+		Domain:    domain,
 		Timestamp: time.Now(),
 		Details: map[string]interface{}{
 			"blocks": blocks,
@@ -189,11 +189,11 @@ func (m *Manager) WAFSpike(domain string, blocks int) {
 
 func (m *Manager) CertExpiring(domain string, days int) {
 	m.Send(Event{
-		Type:     "cert_expiring",
-		Severity: "warning",
-		Title:    fmt.Sprintf("Certificate for %s expires in %d days", domain, days),
-		Message:  fmt.Sprintf("SSL certificate will expire soon. Renewal is recommended."),
-		Domain:   domain,
+		Type:      "cert_expiring",
+		Severity:  "warning",
+		Title:     fmt.Sprintf("Certificate for %s expires in %d days", domain, days),
+		Message:   "SSL certificate will expire soon. Renewal is recommended.",
+		Domain:    domain,
 		Timestamp: time.Now(),
 		Details: map[string]interface{}{
 			"days_remaining": days,

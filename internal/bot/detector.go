@@ -10,14 +10,14 @@ import (
 
 // Score thresholds
 const (
-	ScoreBlock    = 0.8
+	ScoreBlock     = 0.8
 	ScoreChallenge = 0.4
 )
 
 // Detector holds state for passive bot detection.
 type Detector struct {
-	mu          sync.RWMutex
-	knownBotUAs map[string]bool
+	mu           sync.RWMutex
+	knownBotUAs  map[string]bool
 	knownGoodUAs map[string]bool
 }
 

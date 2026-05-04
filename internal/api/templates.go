@@ -199,7 +199,7 @@ func (a *API) renderTemplate(w http.ResponseWriter, r *http.Request, name string
 
 	// Set defaults
 	if data.Title == "" {
-		data.Title = strings.Title(name)
+		data.Title = toTitle(name)
 	}
 
 	// Determine which template to execute
@@ -472,17 +472,17 @@ func (a *API) serveWAF(w http.ResponseWriter, r *http.Request) {
 
 	// Pass WAF presets as safe JS — html/template rejects the regex patterns in <script> tags
 	presets := map[string]map[string]interface{}{
-		"sqli":          {"name": "Block SQL Injection", "desc": "Stops attackers from injecting database commands through forms and URLs. Protects against the #1 web attack.", "rule": `SecRule ARGS "(?i)(union\s+select|select\s+.*\s+from|insert\s+into|delete\s+from|drop\s+table)" "deny,log,msg:'SQL Injection Detected'"`, "enabled": true, "mode": "block"},
-		"xss":           {"name": "Block Cross-Site Scripting", "desc": "Prevents attackers from injecting malicious scripts into your pages that can steal user data or take over accounts.", "rule": `SecRule ARGS "(?i)(<script|javascript:|onerror\s*=|onload\s*=)" "deny,log,msg:'XSS Attack Detected'"`, "enabled": true, "mode": "block"},
-		"traversal":     {"name": "Block Path Traversal", "desc": "Stops attackers from accessing files outside the web root using ../ sequences. Protects sensitive config files and logs.", "rule": `SecRule REQUEST_URI "(\.\./|\.\ |%2e%2e)" "deny,log,msg:'Path Traversal Detected'"`, "enabled": true, "mode": "block"},
-		"bots":          {"name": "Block Attack Tools", "desc": "Blocks known hacking tools like sqlmap, nikto, and nmap that attackers use to scan and exploit websites.", "rule": `SecRule REQUEST_HEADERS:User-Agent "(?i)(sqlmap|nikto|nmap|masscan|dirbuster|gobuster|wfuzz)" "deny,log,msg:'Known Attack Tool Detected'"`, "enabled": true, "mode": "block"},
-		"rfi":           {"name": "Block Remote File Inclusion", "desc": "Stops attackers from loading malicious code from external servers. Common in PHP apps but dangerous in any language.", "rule": `SecRule ARGS "(?i)(http://|https://|ftp://|php://)" "deny,log,msg:'Remote File Inclusion Detected'"`, "enabled": true, "mode": "block"},
-		"cmdi":          {"name": "Block Command Injection", "desc": "Prevents attackers from running system commands on your server through input fields. Can lead to full server takeover.", "rule": `SecRule ARGS "(?i)(;|\||&&|\$\(|%60|\b(cat|ls|pwd|id|whoami|uname)\b)" "deny,log,msg:'Command Injection Detected'"`, "enabled": true, "mode": "block"},
-		"lfi":           {"name": "Block Local File Inclusion", "desc": "Stops attackers from reading local files like /etc/passwd through vulnerable include statements.", "rule": `SecRule ARGS "(?i)(\.\./|%00|/etc/|/proc/|/var/log/)" "deny,log,msg:'Local File Inclusion Detected'"`, "enabled": true, "mode": "block"},
-		"protocoldos":   {"name": "Block Protocol Attacks", "desc": "Blocks HTTP smuggling, request splitting, and other protocol-level exploits that bypass normal security checks.", "rule": `SecRule REQUEST_URI "(?i)(%0d%0a|\r\n|transfer-encoding\s*:\s*chunked)" "deny,log,msg:'HTTP Protocol Attack Detected'"`, "enabled": true, "mode": "block"},
-		"scanner":       {"name": "Block Vulnerability Scanners", "desc": "Stops automated scanners from probing your site for weaknesses. Reduces noise in your logs and prevents recon.", "rule": `SecRule REQUEST_HEADERS:User-Agent "(?i)(w3af|openvas|nessus|burpsuite|acunetix|appscan|arachni|havij)" "deny,log,msg:'Vulnerability Scanner Detected'"`, "enabled": true, "mode": "block"},
-		"method":        {"name": "Block Unusual HTTP Methods", "desc": "Only allows standard GET, POST, HEAD, and OPTIONS. Blocks TRACE, TRACK, DEBUG, and PUT/DELETE that most sites dont need.", "rule": `SecRule REQUEST_METHOD "!@pm GET POST HEAD OPTIONS" "deny,log,msg:'Unusual HTTP Method Blocked'"`, "enabled": true, "mode": "block"},
-		"upload":        {"name": "Block Malicious File Uploads", "desc": "Prevents uploading of executable files (.php, .jsp, .exe, .sh) that could give attackers a backdoor into your server.", "rule": `SecRule FILES_NAMES "\.(?:php|php[0-9]|phtml|jsp|asp|aspx|exe|sh|bat|cmd|py|pl|rb)$" "deny,log,msg:'Malicious File Upload Detected'"`, "enabled": true, "mode": "block"},
+		"sqli":           {"name": "Block SQL Injection", "desc": "Stops attackers from injecting database commands through forms and URLs. Protects against the #1 web attack.", "rule": `SecRule ARGS "(?i)(union\s+select|select\s+.*\s+from|insert\s+into|delete\s+from|drop\s+table)" "deny,log,msg:'SQL Injection Detected'"`, "enabled": true, "mode": "block"},
+		"xss":            {"name": "Block Cross-Site Scripting", "desc": "Prevents attackers from injecting malicious scripts into your pages that can steal user data or take over accounts.", "rule": `SecRule ARGS "(?i)(<script|javascript:|onerror\s*=|onload\s*=)" "deny,log,msg:'XSS Attack Detected'"`, "enabled": true, "mode": "block"},
+		"traversal":      {"name": "Block Path Traversal", "desc": "Stops attackers from accessing files outside the web root using ../ sequences. Protects sensitive config files and logs.", "rule": `SecRule REQUEST_URI "(\.\./|\.\ |%2e%2e)" "deny,log,msg:'Path Traversal Detected'"`, "enabled": true, "mode": "block"},
+		"bots":           {"name": "Block Attack Tools", "desc": "Blocks known hacking tools like sqlmap, nikto, and nmap that attackers use to scan and exploit websites.", "rule": `SecRule REQUEST_HEADERS:User-Agent "(?i)(sqlmap|nikto|nmap|masscan|dirbuster|gobuster|wfuzz)" "deny,log,msg:'Known Attack Tool Detected'"`, "enabled": true, "mode": "block"},
+		"rfi":            {"name": "Block Remote File Inclusion", "desc": "Stops attackers from loading malicious code from external servers. Common in PHP apps but dangerous in any language.", "rule": `SecRule ARGS "(?i)(http://|https://|ftp://|php://)" "deny,log,msg:'Remote File Inclusion Detected'"`, "enabled": true, "mode": "block"},
+		"cmdi":           {"name": "Block Command Injection", "desc": "Prevents attackers from running system commands on your server through input fields. Can lead to full server takeover.", "rule": `SecRule ARGS "(?i)(;|\||&&|\$\(|%60|\b(cat|ls|pwd|id|whoami|uname)\b)" "deny,log,msg:'Command Injection Detected'"`, "enabled": true, "mode": "block"},
+		"lfi":            {"name": "Block Local File Inclusion", "desc": "Stops attackers from reading local files like /etc/passwd through vulnerable include statements.", "rule": `SecRule ARGS "(?i)(\.\./|%00|/etc/|/proc/|/var/log/)" "deny,log,msg:'Local File Inclusion Detected'"`, "enabled": true, "mode": "block"},
+		"protocoldos":    {"name": "Block Protocol Attacks", "desc": "Blocks HTTP smuggling, request splitting, and other protocol-level exploits that bypass normal security checks.", "rule": `SecRule REQUEST_URI "(?i)(%0d%0a|\r\n|transfer-encoding\s*:\s*chunked)" "deny,log,msg:'HTTP Protocol Attack Detected'"`, "enabled": true, "mode": "block"},
+		"scanner":        {"name": "Block Vulnerability Scanners", "desc": "Stops automated scanners from probing your site for weaknesses. Reduces noise in your logs and prevents recon.", "rule": `SecRule REQUEST_HEADERS:User-Agent "(?i)(w3af|openvas|nessus|burpsuite|acunetix|appscan|arachni|havij)" "deny,log,msg:'Vulnerability Scanner Detected'"`, "enabled": true, "mode": "block"},
+		"method":         {"name": "Block Unusual HTTP Methods", "desc": "Only allows standard GET, POST, HEAD, and OPTIONS. Blocks TRACE, TRACK, DEBUG, and PUT/DELETE that most sites dont need.", "rule": `SecRule REQUEST_METHOD "!@pm GET POST HEAD OPTIONS" "deny,log,msg:'Unusual HTTP Method Blocked'"`, "enabled": true, "mode": "block"},
+		"upload":         {"name": "Block Malicious File Uploads", "desc": "Prevents uploading of executable files (.php, .jsp, .exe, .sh) that could give attackers a backdoor into your server.", "rule": `SecRule FILES_NAMES "\.(?:php|php[0-9]|phtml|jsp|asp|aspx|exe|sh|bat|cmd|py|pl|rb)$" "deny,log,msg:'Malicious File Upload Detected'"`, "enabled": true, "mode": "block"},
 		"responseheader": {"name": "Block Server Info Leakage", "desc": "Stops your server from revealing its software version and OS in error pages and headers. Gives attackers less to work with.", "rule": `SecRule RESPONSE_HEADERS "/^(?:Server|X-Powered-By|X-AspNet-Version)/" "deny,log,msg:'Server Information Leakage Detected'"`, "enabled": true, "mode": "log_only"},
 	}
 	presetsJSON, err := json.Marshal(presets)
@@ -693,4 +693,11 @@ func parseInt64(s string) int64 {
 		return 0
 	}
 	return v
+}
+
+func toTitle(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
 }

@@ -29,10 +29,10 @@ type AccessLogEntry struct {
 
 // LogStore holds recent access logs in memory with rotation.
 type LogStore struct {
-	mu       sync.RWMutex
-	entries  []AccessLogEntry
-	maxSize  int
-	logFile  *os.File
+	mu      sync.RWMutex
+	entries []AccessLogEntry
+	maxSize int
+	logFile *os.File
 }
 
 const maxLogEntries = 10000
@@ -133,7 +133,7 @@ func (ls *LogStore) Stats(since time.Time) LogStats {
 	}
 
 	// Top hosts
-	var hostList []HostCount
+	hostList := make([]HostCount, 0, len(stats.Hosts))
 	for h, c := range stats.Hosts {
 		hostList = append(hostList, HostCount{Host: h, Count: c})
 	}
@@ -156,14 +156,14 @@ type HostCount struct {
 
 // LogStats holds aggregated log statistics.
 type LogStats struct {
-	TotalRequests int64         `json:"total_requests"`
-	WAFBlocks     int64         `json:"waf_blocks"`
-	AvgDuration   int64         `json:"avg_duration_ms"`
-	MaxDuration   int64         `json:"max_duration_ms"`
-	TotalDuration int64         `json:"total_duration_ms"`
-	StatusCodes   map[int]int   `json:"status_codes"`
+	TotalRequests int64          `json:"total_requests"`
+	WAFBlocks     int64          `json:"waf_blocks"`
+	AvgDuration   int64          `json:"avg_duration_ms"`
+	MaxDuration   int64          `json:"max_duration_ms"`
+	TotalDuration int64          `json:"total_duration_ms"`
+	StatusCodes   map[int]int    `json:"status_codes"`
 	Hosts         map[string]int `json:"hosts,omitempty"`
-	TopHosts      []HostCount   `json:"top_hosts,omitempty"`
+	TopHosts      []HostCount    `json:"top_hosts,omitempty"`
 }
 
 // Close closes the log file.

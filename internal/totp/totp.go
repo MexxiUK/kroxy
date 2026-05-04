@@ -35,7 +35,7 @@ func ValidateCode(secret, code string) bool {
 			Period:    30,
 			Digits:    otp.DigitsSix,
 			Algorithm: otp.AlgorithmSHA1,
-			Skew:     1,
+			Skew:      1,
 		},
 	)
 	return ok
@@ -51,7 +51,7 @@ func ValidateCodeExact(secret, code string) bool {
 			Period:    30,
 			Digits:    otp.DigitsSix,
 			Algorithm: otp.AlgorithmSHA1,
-			Skew:     0,
+			Skew:      0,
 		},
 	)
 	return ok

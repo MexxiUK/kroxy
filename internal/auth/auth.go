@@ -60,8 +60,8 @@ type failedAttempt struct {
 
 // roleCacheEntry caches a user's role with expiration
 type roleCacheEntry struct {
-	role      string
-	cachedAt  time.Time
+	role     string
+	cachedAt time.Time
 }
 
 // adminTokenAttempt tracks failed admin token attempts per IP
@@ -73,9 +73,9 @@ type adminTokenAttempt struct {
 
 // distributedAttackTracker tracks credential stuffing attacks (same IP, multiple accounts)
 type distributedAttackTracker struct {
-	mu            sync.Mutex
-	ipAttempts    map[string]*ipAttackStats // IP -> attack stats
-	windowStart   time.Time
+	mu          sync.Mutex
+	ipAttempts  map[string]*ipAttackStats // IP -> attack stats
+	windowStart time.Time
 }
 
 // ipAttackStats tracks account enumeration from a single IP
@@ -113,21 +113,21 @@ type pending2FASession struct {
 
 // Auth provides authentication middleware for the Admin API
 type Auth struct {
-	store                 *store.Store
-	sessions              sync.Map // sessionID -> *Session
-	apiKeys               sync.Map // keyID -> *APIKey
-	stateStore            sync.Map // state -> *StateInfo
-	adminTokens           sync.Map // token -> *adminTokenInfo
-	failedAttempts        sync.Map // email -> *failedAttempt
-	roleCache             sync.Map // userID (int) -> *roleCacheEntry
-	sessionMu             sync.Map // userID (int) -> *sync.Mutex (for atomic session operations)
-	adminTokenAttempts    sync.Map // IP -> *adminTokenAttempt // Track failed admin token attempts
-	distributedAttack     *distributedAttackTracker // Credential stuffing detection
-	pending2FA            sync.Map // pendingID -> *pending2FASession
-	twoFARateLimits       sync.Map // userID (int) -> *twoFARateLimit
-	jwtSecret             []byte
-	sessionExpiry         time.Duration
-	productionMode        bool // When false, cookies don't require HTTPS
+	store              *store.Store
+	sessions           sync.Map                  // sessionID -> *Session
+	apiKeys            sync.Map                  // keyID -> *APIKey
+	stateStore         sync.Map                  // state -> *StateInfo
+	adminTokens        sync.Map                  // token -> *adminTokenInfo
+	failedAttempts     sync.Map                  // email -> *failedAttempt
+	roleCache          sync.Map                  // userID (int) -> *roleCacheEntry
+	sessionMu          sync.Map                  // userID (int) -> *sync.Mutex (for atomic session operations)
+	adminTokenAttempts sync.Map                  // IP -> *adminTokenAttempt // Track failed admin token attempts
+	distributedAttack  *distributedAttackTracker // Credential stuffing detection
+	pending2FA         sync.Map                  // pendingID -> *pending2FASession
+	twoFARateLimits    sync.Map                  // userID (int) -> *twoFARateLimit
+	jwtSecret          []byte
+	sessionExpiry      time.Duration
+	productionMode     bool // When false, cookies don't require HTTPS
 }
 
 // twoFARateLimit tracks 2FA verification attempts per user to prevent brute-forcing
@@ -141,7 +141,6 @@ type twoFARateLimit struct {
 	lockoutCount int // number of consecutive lockouts (escalates penalties)
 }
 
-
 // Session represents an authenticated admin session
 type Session struct {
 	ID             string
@@ -151,8 +150,8 @@ type Session struct {
 	Role           string
 	ProviderName   string // "local", "local_totp", "google", "github", etc.
 	CreatedAt      time.Time
-	ExpiresAt      time.Time    // Sliding window expiration
-	AbsoluteExpiry time.Time    // Hard maximum lifetime
+	ExpiresAt      time.Time // Sliding window expiration
+	AbsoluteExpiry time.Time // Hard maximum lifetime
 	IP             string
 	UserAgent      string
 }
@@ -172,12 +171,12 @@ type APIKey struct {
 
 // StateInfo stores OAuth state parameters for CSRF protection
 type StateInfo struct {
-	State         string
-	ProviderID    int
-	RedirectURL   string
+	State          string
+	ProviderID     int
+	RedirectURL    string
 	SessionBinding string // Hash of session cookie to prevent state token theft
-	CreatedAt     time.Time
-	ExpiresAt     time.Time
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
 }
 
 // adminTokenInfo stores admin token with expiration
@@ -236,10 +235,10 @@ func New(s *store.Store) *Auth {
 	}
 
 	a := &Auth{
-		store:             s,
-		sessionExpiry:     24 * time.Hour,
-		jwtSecret:         []byte(jwtSecret),
-		productionMode:     productionMode,
+		store:          s,
+		sessionExpiry:  24 * time.Hour,
+		jwtSecret:      []byte(jwtSecret),
+		productionMode: productionMode,
 		distributedAttack: &distributedAttackTracker{
 			ipAttempts:  make(map[string]*ipAttackStats),
 			windowStart: time.Now(),
@@ -619,7 +618,6 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 	switch strings.ToLower(parts[0]) {
 	case "bearer":
 		// For bearer tokens, the token IS the key
-		keySecret = parts[1]
 		// Try to find key by secret hash (slower, but works for bearer tokens)
 		// This is not ideal - prefer ApiKey format with keyID:secret
 		return nil, errors.New("bearer token not supported, use ApiKey format: keyid:secret")
@@ -733,11 +731,7 @@ func (a *Auth) validateAdminToken(token string) bool {
 
 	// Check database (for persistence across restarts)
 	_, err := a.store.ValidateAdminToken(tokenHash)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }
 
 // checkAdminTokenRateLimit enforces rate limiting for admin token attempts
@@ -1051,14 +1045,14 @@ func (a *Auth) enforceSessionLimitLocked(userID int) {
 			sessionMap[s.ID] = s
 		}
 		for i := range dbSessions {
-					userIDInt, _ := strconv.Atoi(dbSessions[i].UserID)
+			userIDInt, _ := strconv.Atoi(dbSessions[i].UserID)
 			if _, exists := sessionMap[dbSessions[i].ID]; !exists {
 				// Convert store.Session to auth.Session for consistency
 				sessionMap[dbSessions[i].ID] = &Session{
 					ID:        dbSessions[i].ID,
 					UserID:    userIDInt,
 					Email:     dbSessions[i].UserEmail,
-				Name:      dbSessions[i].UserName,
+					Name:      dbSessions[i].UserName,
 					CreatedAt: dbSessions[i].CreatedAt,
 					ExpiresAt: dbSessions[i].ExpiresAt,
 				}
@@ -1239,7 +1233,7 @@ func (a *Auth) Verify2FA(pendingID, code, ip, userAgent string) (*LoginResponse,
 func (a *Auth) Create2FAPendingCookie(pendingID string) *http.Cookie {
 	return &http.Cookie{
 		Name:     "kroxy_pending_2fa",
-		Value:   pendingID,
+		Value:    pendingID,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   a.productionMode,
@@ -1387,12 +1381,12 @@ func (a *Auth) GenerateState(providerID int, redirectURL, sessionBinding string)
 	}
 
 	stateInfo := &StateInfo{
-		State:         state,
-		ProviderID:    providerID,
-		RedirectURL:   redirectURL,
+		State:          state,
+		ProviderID:     providerID,
+		RedirectURL:    redirectURL,
 		SessionBinding: bindingHash,
-		CreatedAt:     time.Now(),
-		ExpiresAt:     time.Now().Add(10 * time.Minute),
+		CreatedAt:      time.Now(),
+		ExpiresAt:      time.Now().Add(10 * time.Minute),
 	}
 
 	a.stateStore.Store(state, stateInfo)
@@ -1652,14 +1646,15 @@ func GenerateSecret(length int) string {
 func generateSecret(length int) string {
 	return GenerateSecret(length)
 }
+
 // CreateSessionCookie creates an HTTP cookie for a session
 func (a *Auth) CreateSessionCookie(sessionID string) *http.Cookie {
 	return &http.Cookie{
 		Name:     "kroxy_session",
-		Value:   sessionID,
+		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   a.productionMode, // Only require HTTPS in production
+		Secure:   a.productionMode,     // Only require HTTPS in production
 		SameSite: http.SameSiteLaxMode, // Lax required for OAuth redirects
 		Expires:  time.Now().Add(a.sessionExpiry),
 	}
@@ -1701,7 +1696,7 @@ func (a *Auth) recordDistributedAttackAttempt(ip, email string) {
 	if !exists {
 		stats = &ipAttackStats{
 			uniqueAccounts: make(map[string]time.Time),
-			firstAttempt:  now,
+			firstAttempt:   now,
 		}
 		a.distributedAttack.ipAttempts[ip] = stats
 	}
@@ -1748,7 +1743,6 @@ func (a *Auth) cleanupDistributedAttackTracker() {
 		}
 	}
 }
-
 
 // VerifyPassword checks if the provided password matches the user's current password
 func (a *Auth) VerifyPassword(userID int, password string) error {

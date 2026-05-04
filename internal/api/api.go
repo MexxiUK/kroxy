@@ -22,16 +22,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/audit"
+	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/bot"
 	"github.com/kroxy/kroxy/internal/crypto"
 	"github.com/kroxy/kroxy/internal/metrics"
 	"github.com/kroxy/kroxy/internal/oidc"
-	"github.com/kroxy/kroxy/internal/totp"
 	"github.com/kroxy/kroxy/internal/proxy"
 	"github.com/kroxy/kroxy/internal/security"
 	"github.com/kroxy/kroxy/internal/store"
+	"github.com/kroxy/kroxy/internal/totp"
 	"github.com/kroxy/kroxy/internal/validation"
 	"github.com/kroxy/kroxy/internal/version"
 	"github.com/kroxy/kroxy/internal/waf"
@@ -39,16 +39,16 @@ import (
 )
 
 type API struct {
-	store               *store.Store
-	router              *chi.Mux
-	oidcManager         *oidc.Manager
-	auth                *auth.Auth
-	audit               *audit.Logger
-	rateLimiter         *RateLimiter
-	wafReloadFunc       func() error // Callback to reload WAF when rules change
-	proxyReloadFunc     func() error // Callback to reload proxy config when routes change
-	templates           *TemplateHandler
-	productionMode      bool // Controls security settings like Secure cookie flag
+	store           *store.Store
+	router          *chi.Mux
+	oidcManager     *oidc.Manager
+	auth            *auth.Auth
+	audit           *audit.Logger
+	rateLimiter     *RateLimiter
+	wafReloadFunc   func() error // Callback to reload WAF when rules change
+	proxyReloadFunc func() error // Callback to reload proxy config when routes change
+	templates       *TemplateHandler
+	productionMode  bool // Controls security settings like Secure cookie flag
 }
 
 // RateLimiter implements a sliding window rate limiter to prevent burst attacks
@@ -373,9 +373,9 @@ func (a *API) registerRoutes() {
 	// Public routes (no auth required)
 	a.router.Get("/api/status", a.getStatus)
 	a.router.Get("/api/version", a.getVersion)
-	a.router.Get("/health", a.health)      // Liveness probe
-	a.router.Get("/ready", a.ready)        // Readiness probe
-	a.router.Get("/healthz", a.healthz)    // Comprehensive health
+	a.router.Get("/health", a.health)   // Liveness probe
+	a.router.Get("/ready", a.ready)     // Readiness probe
+	a.router.Get("/healthz", a.healthz) // Comprehensive health
 
 	// OAuth routes (public)
 	a.router.Get("/api/oauth/login", a.oauthLogin)
@@ -411,9 +411,9 @@ func (a *API) registerRoutes() {
 		r.Get("/api/user", a.getCurrentUser)
 		r.Put("/api/user/password", a.changePassword)
 		r.Delete("/api/user", a.deleteOwnAccount)
-			r.Post("/api/user/2fa/setup", a.setup2FA)
-			r.Post("/api/user/2fa/enable", a.enable2FA)
-			r.Post("/api/user/2fa/disable", a.disable2FA)
+		r.Post("/api/user/2fa/setup", a.setup2FA)
+		r.Post("/api/user/2fa/enable", a.enable2FA)
+		r.Post("/api/user/2fa/disable", a.disable2FA)
 		r.Post("/api/auth/api-key", a.generateAPIKey)
 		r.Get("/api/user/api-keys", a.listUserAPIKeys)
 		r.Delete("/api/user/api-keys/{keyId}", a.deleteUserAPIKey)
@@ -483,7 +483,7 @@ func (a *API) registerRoutes() {
 		// WAF Paranoia Level (admin only)
 		r.With(auth.RequireRole("admin")).Put("/api/waf/paranoia", a.updateWAFParanoia)
 		r.With(auth.RequireRole("admin")).Get("/api/waf/paranoia", a.getWAFParanoia)
-			r.With(auth.RequireRole("admin")).Post("/api/waf/verify-header", a.verifyWAFHeader)
+		r.With(auth.RequireRole("admin")).Post("/api/waf/verify-header", a.verifyWAFHeader)
 
 		// Security Events (admin only)
 		r.With(auth.RequireRole("admin")).Get("/api/security/events", a.listSecurityEvents)
@@ -669,12 +669,12 @@ func (a *API) setup(w http.ResponseWriter, r *http.Request) {
 
 	// Audit log the setup
 	a.audit.Log(audit.Event{
-		Type:    audit.EventTypeAdminAction,
-		Action:  "initial_setup",
-		Success: true,
+		Type:      audit.EventTypeAdminAction,
+		Action:    "initial_setup",
+		Success:   true,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details: map[string]interface{}{"admin_email": user.Email},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"admin_email": user.Email},
 	})
 
 	// Return success (don't include password)
@@ -804,7 +804,7 @@ func (a *API) verify2FA(w http.ResponseWriter, r *http.Request) {
 	// Clear pending 2FA cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "kroxy_pending_2fa",
-		Value:   "",
+		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		MaxAge:   -1,
@@ -921,7 +921,7 @@ func (a *API) enable2FA(w http.ResponseWriter, r *http.Request) {
 	a.auth.InvalidateUserSessions(dbUser.ID)
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"message":     "2FA enabled successfully",
+		"message":      "2FA enabled successfully",
 		"totp_enabled": true,
 	})
 }
@@ -981,7 +981,7 @@ func (a *API) disable2FA(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Invalidate all sessions so the user must re-authenticate with the new
-	 // (lower) security posture.
+	// (lower) security posture.
 	if err := a.auth.InvalidateUserSessions(dbUser.ID); err != nil {
 		log.Printf("Warning: failed to invalidate sessions after 2FA disable: %v", err)
 	}
@@ -1010,7 +1010,7 @@ func (a *API) generateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Name      string `json:"name"`
-		Duration  string `json:"duration,omitempty"`  // e.g., "24h", "168h", "720h"
+		Duration  string `json:"duration,omitempty"`   // e.g., "24h", "168h", "720h"
 		ExpiresAt string `json:"expires_at,omitempty"` // ISO timestamp
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1063,11 +1063,11 @@ func (a *API) generateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:     "api_key_created",
-		UserID:   user.ID,
+		Type:      "api_key_created",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:       security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": req.Name},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": req.Name},
 	})
 
 	// Only return the secret once
@@ -1273,19 +1273,18 @@ func (a *API) createRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:     "route_created",
-		UserID:   user.ID,
+		Type:      "route_created",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:       security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": route.Domain + " -> " + route.Backend},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": route.Domain + " -> " + route.Backend},
 	})
 
-
-		if a.proxyReloadFunc != nil {
-			if err := a.proxyReloadFunc(); err != nil {
-				log.Printf("Warning: failed to reload proxy after route creation: %v", err)
-			}
+	if a.proxyReloadFunc != nil {
+		if err := a.proxyReloadFunc(); err != nil {
+			log.Printf("Warning: failed to reload proxy after route creation: %v", err)
 		}
+	}
 	respondJSON(w, http.StatusCreated, route)
 }
 
@@ -1373,19 +1372,18 @@ func (a *API) updateRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "route_updated",
-		UserID:  user.ID,
+		Type:      "route_updated",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": route.Domain},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": route.Domain},
 	})
 
-
-		if a.proxyReloadFunc != nil {
-			if err := a.proxyReloadFunc(); err != nil {
-				log.Printf("Warning: failed to reload proxy after route update: %v", err)
-			}
+	if a.proxyReloadFunc != nil {
+		if err := a.proxyReloadFunc(); err != nil {
+			log.Printf("Warning: failed to reload proxy after route update: %v", err)
 		}
+	}
 	respondJSON(w, http.StatusOK, route)
 }
 
@@ -1411,19 +1409,18 @@ func (a *API) deleteRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "route_deleted",
-		UserID:  user.ID,
+		Type:      "route_deleted",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": strconv.Itoa(id)},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
 	})
 
-
-		if a.proxyReloadFunc != nil {
-			if err := a.proxyReloadFunc(); err != nil {
-				log.Printf("Warning: failed to reload proxy after route deletion: %v", err)
-			}
+	if a.proxyReloadFunc != nil {
+		if err := a.proxyReloadFunc(); err != nil {
+			log.Printf("Warning: failed to reload proxy after route deletion: %v", err)
 		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1524,11 +1521,11 @@ func (a *API) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, a.oidcManager.CreateSessionCookie(session.ID))
 
 	a.audit.Log(audit.Event{
-		Type:        "oauth_login",
-		UserEmail:    session.UserEmail,
-		IP:          security.GetClientIP(r),
-		UserAgent:   r.UserAgent(),
-		Details:     map[string]interface{}{"info": session.ProviderName},
+		Type:      "oauth_login",
+		UserEmail: session.UserEmail,
+		IP:        security.GetClientIP(r),
+		UserAgent: r.UserAgent(),
+		Details:   map[string]interface{}{"info": session.ProviderName},
 	})
 
 	redirect := "/"
@@ -1666,11 +1663,11 @@ func (a *API) createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "oidc_provider_created",
-		UserID:  user.ID,
+		Type:      "oidc_provider_created",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": provider.Name},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": provider.Name},
 	})
 
 	// Return without secret
@@ -1745,10 +1742,10 @@ func (a *API) updateOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		RedirectURL:  req.RedirectURL,
 	}
 	// Persist the update
-		if err := a.store.UpdateOIDCProvider(provider); err != nil {
-			respondError(w, http.StatusInternalServerError, "Failed to update OIDC provider")
-			return
-		}
+	if err := a.store.UpdateOIDCProvider(provider); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to update OIDC provider")
+		return
+	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"id":            provider.ID,
@@ -1774,11 +1771,11 @@ func (a *API) deleteOIDCProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "oidc_provider_deleted",
-		UserID:  user.ID,
+		Type:      "oidc_provider_deleted",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": strconv.Itoa(id)},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -1820,11 +1817,11 @@ func (a *API) createBlacklist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "blacklist_created",
-		UserID:  user.ID,
+		Type:      "blacklist_created",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": b.Type + ": " + b.Value},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": b.Type + ": " + b.Value},
 	})
 
 	respondJSON(w, http.StatusCreated, b)
@@ -1845,11 +1842,11 @@ func (a *API) deleteBlacklist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "blacklist_deleted",
-		UserID:  user.ID,
+		Type:      "blacklist_deleted",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": strconv.Itoa(id)},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -1885,11 +1882,11 @@ func (a *API) createWhitelist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "whitelist_created",
-		UserID:  user.ID,
+		Type:      "whitelist_created",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": wl.Type + ": " + wl.Value},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": wl.Type + ": " + wl.Value},
 	})
 
 	respondJSON(w, http.StatusCreated, wl)
@@ -1910,11 +1907,11 @@ func (a *API) deleteWhitelist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "whitelist_deleted",
-		UserID:  user.ID,
+		Type:      "whitelist_deleted",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": strconv.Itoa(id)},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -1950,11 +1947,11 @@ func (a *API) createRateLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "rate_limit_created",
-		UserID:  user.ID,
+		Type:      "rate_limit_created",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": rl.Domain},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": rl.Domain},
 	})
 
 	respondJSON(w, http.StatusCreated, rl)
@@ -1992,7 +1989,7 @@ func (a *API) updateRateLimit(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Action:    "update_rate_limit",
-		Details:    map[string]interface{}{"domain": rl.Domain},
+		Details:   map[string]interface{}{"domain": rl.Domain},
 	})
 
 	respondJSON(w, http.StatusOK, rl)
@@ -2013,11 +2010,11 @@ func (a *API) deleteRateLimit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "rate_limit_deleted",
-		UserID:  user.ID,
+		Type:      "rate_limit_deleted",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": strconv.Itoa(id)},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -2337,21 +2334,21 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 		if err := a.wafReloadFunc(); err != nil {
 			// Log but don't fail - rule is stored and will be loaded on restart
 			a.audit.Log(audit.Event{
-				Type:    "waf_reload_failed",
-				UserID:  user.ID,
+				Type:      "waf_reload_failed",
+				UserID:    user.ID,
 				UserEmail: user.Email,
-				IP:      security.GetClientIP(r),
-				Details:     map[string]interface{}{"info": err.Error()},
+				IP:        security.GetClientIP(r),
+				Details:   map[string]interface{}{"info": err.Error()},
 			})
 		}
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "waf_rule_created",
-		UserID:  user.ID,
+		Type:      "waf_rule_created",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": rule.Name},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": rule.Name},
 	})
 
 	respondJSON(w, http.StatusCreated, rule)
@@ -2375,21 +2372,21 @@ func (a *API) deleteWAFRule(w http.ResponseWriter, r *http.Request) {
 	if a.wafReloadFunc != nil {
 		if err := a.wafReloadFunc(); err != nil {
 			a.audit.Log(audit.Event{
-				Type:    "waf_reload_failed",
-				UserID:  user.ID,
+				Type:      "waf_reload_failed",
+				UserID:    user.ID,
 				UserEmail: user.Email,
-				IP:      security.GetClientIP(r),
-				Details:     map[string]interface{}{"info": err.Error()},
+				IP:        security.GetClientIP(r),
+				Details:   map[string]interface{}{"info": err.Error()},
 			})
 		}
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "waf_rule_deleted",
-		UserID:  user.ID,
+		Type:      "waf_rule_deleted",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": strconv.Itoa(id)},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -2451,21 +2448,21 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 	if a.wafReloadFunc != nil {
 		if err := a.wafReloadFunc(); err != nil {
 			a.audit.Log(audit.Event{
-				Type:       "waf_reload_failed",
-				UserID:     user.ID,
-				UserEmail:  user.Email,
-				IP:         security.GetClientIP(r),
-				Details:    map[string]interface{}{"info": err.Error()},
+				Type:      "waf_reload_failed",
+				UserID:    user.ID,
+				UserEmail: user.Email,
+				IP:        security.GetClientIP(r),
+				Details:   map[string]interface{}{"info": err.Error()},
 			})
 		}
 	}
 
 	a.audit.Log(audit.Event{
-		Type:       "waf_rule_updated",
-		UserID:     user.ID,
-		UserEmail:  user.Email,
-		IP:         security.GetClientIP(r),
-		Details:    map[string]interface{}{"info": rule.Name},
+		Type:      "waf_rule_updated",
+		UserID:    user.ID,
+		UserEmail: user.Email,
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": rule.Name},
 	})
 
 	respondJSON(w, http.StatusOK, rule)
@@ -2659,11 +2656,11 @@ func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.audit.Log(audit.Event{
-		Type:    "user_created",
-		UserID:  user.ID,
+		Type:      "user_created",
+		UserID:    user.ID,
 		UserEmail: user.Email,
-		IP:      security.GetClientIP(r),
-		Details:     map[string]interface{}{"info": u.Email},
+		IP:        security.GetClientIP(r),
+		Details:   map[string]interface{}{"info": u.Email},
 	})
 
 	// Don't return password
@@ -2904,10 +2901,10 @@ func (a *API) removeRedirectDomain(w http.ResponseWriter, r *http.Request) {
 func (a *API) verifyWAFHeader(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		HeaderValue string `json:"header_value"`
-		Host         string `json:"host"`
-		Method       string `json:"method"`
-		Path         string `json:"path"`
-		RouteID      int    `json:"route_id"`
+		Host        string `json:"host"`
+		Method      string `json:"method"`
+		Path        string `json:"path"`
+		RouteID     int    `json:"route_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
@@ -2946,7 +2943,7 @@ func (a *API) getTLSSettings(w http.ResponseWriter, r *http.Request) {
 		"tls_auto_https":  a.store.GetSettingDefault("tls_auto_https", "false"),
 		"tls_acme_email":  a.store.GetSettingDefault("tls_acme_email", ""),
 		"tls_min_version": a.store.GetSettingDefault("tls_min_version", "1.2"),
-		"hsts_enabled":     a.store.GetSettingDefault("hsts_enabled", "true"),
+		"hsts_enabled":    a.store.GetSettingDefault("hsts_enabled", "true"),
 		"redirect_http":   a.store.GetSettingDefault("redirect_http", "true"),
 	}
 	respondJSON(w, http.StatusOK, settings)
@@ -3260,9 +3257,9 @@ func (a *API) getDashboardStats(w http.ResponseWriter, r *http.Request) {
 		if details == "" {
 			details = ev.URI
 		}
-		 evType := ev.EventType
+		evType := ev.EventType
 		if evType == "" {
-			 evType = ev.Action
+			evType = ev.Action
 		}
 		eventsOut = append(eventsOut, map[string]interface{}{
 			"time":    ev.CreatedAt.Format("2006-01-02 15:04"),
@@ -3282,7 +3279,7 @@ func (a *API) getDashboardStats(w http.ResponseWriter, r *http.Request) {
 		if daysLeft <= 30 {
 			expiringCertsCount++
 			expiringCerts = append(expiringCerts, map[string]interface{}{
-				"domain":  cert.Domain,
+				"domain":   cert.Domain,
 				"daysLeft": daysLeft,
 			})
 		}
@@ -3302,16 +3299,16 @@ func (a *API) getDashboardStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := map[string]interface{}{
-		"total_routes":      len(routes),
-		"enabled_routes":    enabledRoutes,
-		"disabled_routes":   disabledRoutes,
-		"requests_total":    metrics.RequestsTotal(),
-		"waf_blocks":        blockedCount,
-		"security_events":   totalEvents,
-		"expiring_certs":    expiringCertsCount,
-		"recent_events":     eventsOut,
-		"expiringCerts":     expiringCerts,
-		"topRoutes":         topRoutes,
+		"total_routes":    len(routes),
+		"enabled_routes":  enabledRoutes,
+		"disabled_routes": disabledRoutes,
+		"requests_total":  metrics.RequestsTotal(),
+		"waf_blocks":      blockedCount,
+		"security_events": totalEvents,
+		"expiring_certs":  expiringCertsCount,
+		"recent_events":   eventsOut,
+		"expiringCerts":   expiringCerts,
+		"topRoutes":       topRoutes,
 	}
 
 	respondJSON(w, http.StatusOK, stats)
@@ -3346,7 +3343,7 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify current password
-	if err := a.auth.ChangePassword(user.ID, req.CurrentPassword, req.NewPassword); err != nil{
+	if err := a.auth.ChangePassword(user.ID, req.CurrentPassword, req.NewPassword); err != nil {
 		log.Printf("AUDIT: password change failed for user_id=%d: %v", user.ID, err)
 		respondError(w, http.StatusBadRequest, "Password change failed")
 		return

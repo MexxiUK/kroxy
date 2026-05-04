@@ -10,20 +10,20 @@ import (
 type Config struct {
 	AdminAddr            string `json:"admin_addr"`
 	DatabasePath         string `json:"database_path"`
-	ProxyAddr            string `json:"proxy_addr"`                // HTTP listen address (:80 or :8080)
-	HTTPSAddr            string `json:"https_addr"`                // HTTPS listen address (:443)
+	ProxyAddr            string `json:"proxy_addr"` // HTTP listen address (:80 or :8080)
+	HTTPSAddr            string `json:"https_addr"` // HTTPS listen address (:443)
 	ProductionMode       bool   `json:"production_mode"`
-	MaxRequestSize       int64  `json:"max_request_size"`          // Max request body size in bytes
-	EnableMetrics        bool   `json:"enable_metrics"`            // Enable prometheus metrics
-	AllowPrivateBackends bool   `json:"allow_private_backends"`    // Allow private IP backends (dev only)
-	TLSEnabled           bool   `json:"tls_enabled"`               // Enable HTTPS/TLS
-	TLSCertPath          string `json:"tls_cert_path"`            // Path to TLS certificate PEM
-	TLSKeyPath           string `json:"tls_key_path"`             // Path to TLS private key PEM
-	TLSACMEEmail         string `json:"tls_acme_email"`            // Email for ACME/Let's Encrypt
-	TLSAutoHTTPS         bool   `json:"tls_auto_https"`            // Enable automatic HTTPS via ACME
-	TLSMinVersion        string `json:"tls_min_version"`           // Minimum TLS version (1.2 or 1.3)
-	HSTSEnabled          bool   `json:"hsts_enabled"`              // Enable HSTS headers
-	RedirectHTTP         bool   `json:"redirect_http"`             // Redirect HTTP to HTTPS
+	MaxRequestSize       int64  `json:"max_request_size"`       // Max request body size in bytes
+	EnableMetrics        bool   `json:"enable_metrics"`         // Enable prometheus metrics
+	AllowPrivateBackends bool   `json:"allow_private_backends"` // Allow private IP backends (dev only)
+	TLSEnabled           bool   `json:"tls_enabled"`            // Enable HTTPS/TLS
+	TLSCertPath          string `json:"tls_cert_path"`          // Path to TLS certificate PEM
+	TLSKeyPath           string `json:"tls_key_path"`           // Path to TLS private key PEM
+	TLSACMEEmail         string `json:"tls_acme_email"`         // Email for ACME/Let's Encrypt
+	TLSAutoHTTPS         bool   `json:"tls_auto_https"`         // Enable automatic HTTPS via ACME
+	TLSMinVersion        string `json:"tls_min_version"`        // Minimum TLS version (1.2 or 1.3)
+	HSTSEnabled          bool   `json:"hsts_enabled"`           // Enable HSTS headers
+	RedirectHTTP         bool   `json:"redirect_http"`          // Redirect HTTP to HTTPS
 }
 
 // Security defaults

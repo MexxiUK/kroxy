@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"golang.org/x/oauth2"
 	"github.com/kroxy/kroxy/internal/store"
+	"golang.org/x/oauth2"
 )
 
 // Manager handles OIDC authentication for multiple providers
@@ -20,8 +20,8 @@ type Manager struct {
 	store      *store.Store
 	providers  map[int]*oauthProvider
 	sessions   map[string]*Session
-	mu         sync.RWMutex       // Protects providers map
-	sessionMu  sync.RWMutex       // Protects sessions map
+	mu         sync.RWMutex // Protects providers map
+	sessionMu  sync.RWMutex // Protects sessions map
 	httpClient *http.Client
 }
 
