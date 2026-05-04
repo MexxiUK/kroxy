@@ -39,13 +39,6 @@ docker-run:
 docker-stop:
 	docker-compose down
 
-install:
-	sudo cp bin/$(BINARY) /usr/local/bin/$(BINARY)
-	sudo mkdir -p /etc/$(BINARY) /var/lib/$(BINARY)
-	sudo cp scripts/$(BINARY).service /etc/systemd/system/
-	sudo systemctl daemon-reload
-	sudo systemctl enable $(BINARY)
-
 release: clean
 	# Linux AMD64
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$(VERSION)" -o dist/$(BINARY)-linux-amd64 ./cmd/$(BINARY)
