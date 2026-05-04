@@ -15,13 +15,13 @@ import (
 
 // HealthChecker monitors backend health for all routes.
 type HealthChecker struct {
-	store      *store.Store
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	mu         sync.RWMutex
-	statuses   map[int]HealthStatus // routeID -> status
-	interval   time.Duration
-	client     *http.Client
+	store    *store.Store
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	mu       sync.RWMutex
+	statuses map[int]HealthStatus // routeID -> status
+	interval time.Duration
+	client   *http.Client
 }
 
 // HealthStatus represents the health of a backend.

@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-
 func TestSignAndVerifyWAFHeader(t *testing.T) {
 	// Set a known signing key for predictable results
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")

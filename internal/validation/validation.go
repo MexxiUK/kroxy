@@ -15,14 +15,14 @@ import (
 )
 
 var (
-	ErrInvalidURL      = errors.New("invalid URL format")
+	ErrInvalidURL       = errors.New("invalid URL format")
 	ErrInvalidScheme    = errors.New("only http and https schemes are allowed")
 	ErrInternalIP       = errors.New("internal IP addresses are not allowed")
 	ErrBlockedDomain    = errors.New("domain is blocked")
 	ErrInvalidDomain    = errors.New("invalid domain format")
 	ErrInvalidPort      = errors.New("invalid port")
 	ErrDangerousPattern = errors.New("URL contains dangerous pattern")
-	ErrDNSRebind       = errors.New("DNS rebinding attack detected")
+	ErrDNSRebind        = errors.New("DNS rebinding attack detected")
 	ErrSelfReference    = errors.New("backend would create a proxy loop")
 )
 
@@ -121,20 +121,20 @@ var privateIPRanges = []string{
 	"172.16.0.0/12",
 	"192.168.0.0/16",
 	"169.254.0.0/16",  // Link-local
-	"127.0.0.0/8",      // Loopback
-	"224.0.0.0/4",      // Multicast
-	"240.0.0.0/4",      // Reserved
-	"100.64.0.0/10",    // Carrier-grade NAT
-	"192.0.0.0/24",     // IETF Protocol Assignments
-	"192.0.2.0/24",     // TEST-NET-1
-	"198.51.100.0/24",  // TEST-NET-2
-	"203.0.113.0/24",   // TEST-NET-3
-	"198.18.0.0/15",    // Network Interconnect Device Benchmark Testing
-	"0.0.0.0/8",        // "This network" - can be used for SSRF
-	"::1/128",          // IPv6 loopback
-	"fc00::/7",         // IPv6 ULA
-	"fe80::/10",        // IPv6 link-local
-	"::/128",           // IPv6 unspecified address
+	"127.0.0.0/8",     // Loopback
+	"224.0.0.0/4",     // Multicast
+	"240.0.0.0/4",     // Reserved
+	"100.64.0.0/10",   // Carrier-grade NAT
+	"192.0.0.0/24",    // IETF Protocol Assignments
+	"192.0.2.0/24",    // TEST-NET-1
+	"198.51.100.0/24", // TEST-NET-2
+	"203.0.113.0/24",  // TEST-NET-3
+	"198.18.0.0/15",   // Network Interconnect Device Benchmark Testing
+	"0.0.0.0/8",       // "This network" - can be used for SSRF
+	"::1/128",         // IPv6 loopback
+	"fc00::/7",        // IPv6 ULA
+	"fe80::/10",       // IPv6 link-local
+	"::/128",          // IPv6 unspecified address
 }
 
 // isIPv6Loopback checks if an IPv6 address is a loopback address
@@ -174,20 +174,20 @@ func isIPv6Loopback(ip net.IP) bool {
 // Dangerous URL patterns
 var dangerousPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\.\./`),
-	regexp.MustCompile(`(?i)%2e%2e`),       // URL-encoded ..
-	regexp.MustCompile(`(?i)%252e`),         // Double-encoded .
-	regexp.MustCompile(`(?i)%c0%ae`),        // Overlong UTF-8 encoded .
-	regexp.MustCompile(`(?i)%e0%80%ae`),     // 3-byte overlong UTF-8 .
-	regexp.MustCompile(`(?i)%%32%65`),       // Mixed encoding .
-	regexp.MustCompile(`(?i)\.%00`),         // Null byte after dot
+	regexp.MustCompile(`(?i)%2e%2e`),    // URL-encoded ..
+	regexp.MustCompile(`(?i)%252e`),     // Double-encoded .
+	regexp.MustCompile(`(?i)%c0%ae`),    // Overlong UTF-8 encoded .
+	regexp.MustCompile(`(?i)%e0%80%ae`), // 3-byte overlong UTF-8 .
+	regexp.MustCompile(`(?i)%%32%65`),   // Mixed encoding .
+	regexp.MustCompile(`(?i)\.%00`),     // Null byte after dot
 	regexp.MustCompile(`(?i)file://`),
 	regexp.MustCompile(`(?i)gopher://`),
 	regexp.MustCompile(`(?i)data:`),
 	regexp.MustCompile(`(?i)javascript:`),
 	regexp.MustCompile(`(?i)vbscript:`),
 	regexp.MustCompile(`(?i)@`),
-	regexp.MustCompile(`(?i):\d+@`),         // Credentials in URL
-	regexp.MustCompile(`(?i)\\\.\\\.`),      // Backslash traversal
+	regexp.MustCompile(`(?i):\d+@`),    // Credentials in URL
+	regexp.MustCompile(`(?i)\\\.\\\.`), // Backslash traversal
 }
 
 // ValidateBackendURL validates that a backend URL is safe to use.
@@ -494,11 +494,11 @@ func ValidateNoSelfReference(backend string, isAdminRoute bool) error {
 // Covers: hex (0x7f000001), octal (0177.0.0.1), decimal (2130706433),
 // IPv4 with hex/octal octets, and dotted-decimal with mixed encodings.
 var encodedIPPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`^0x[0-9a-fA-F]{6,8}$`),     // 0x7f000001
+	regexp.MustCompile(`^0x[0-9a-fA-F]{6,8}$`),       // 0x7f000001
 	regexp.MustCompile(`^[0-9]{8,10}$`),              // 2130706433
 	regexp.MustCompile(`^0[0-7]+\.[0-7]+\.[0-7]+\.`), // 0177.0.0.1
-	regexp.MustCompile(`^0x[0-9a-fA-F]+\.`),           // 0x7f.0.0.1
-	regexp.MustCompile(`^0[0-7]+$`),                   // octal without dots
+	regexp.MustCompile(`^0x[0-9a-fA-F]+\.`),          // 0x7f.0.0.1
+	regexp.MustCompile(`^0[0-7]+$`),                  // octal without dots
 }
 
 func decodeEncodedIP(hostname string) net.IP {
@@ -554,7 +554,6 @@ func decodeEncodedIP(hostname string) net.IP {
 
 	return nil
 }
-
 
 func IsPrivateIP(ip net.IP) bool {
 	// Check for IPv4-mapped IPv6 addresses
@@ -805,14 +804,14 @@ func ValidateWAFRule(rule string) error {
 	// These are rule-modifying/engine-configuring directives that should never be in custom rules
 	// Note: "secrule" is NOT blocked because legitimate rules start with SecRule
 	dangerousDirectives := []string{
-		"secruleengine",          // Controls WAF engine state
-		"secruleremovebyid",      // Removes rules by ID
-		"secruleremovebymsg",     // Removes rules by message
-		"secruleremovebytag",     // Removes rules by tag
-		"secdefaultaction",       // Sets default actions (can bypass)
+		"secruleengine",           // Controls WAF engine state
+		"secruleremovebyid",       // Removes rules by ID
+		"secruleremovebymsg",      // Removes rules by message
+		"secruleremovebytag",      // Removes rules by tag
+		"secdefaultaction",        // Sets default actions (can bypass)
 		"secruleupdatetargetbyid", // Modifies rule targets
 		"secruleupdateactionbyid", // Modifies rule actions
-		"secruleupdatebyid",      // Modifies rules by ID
+		"secruleupdatebyid",       // Modifies rules by ID
 	}
 
 	for _, directive := range dangerousDirectives {
@@ -876,17 +875,8 @@ func ValidateWAFRule(rule string) error {
 		if len(parts) >= 3 {
 			action := parts[2]
 			// Common actions: id, msg,deny,block,pass,log,chain
-			if !strings.Contains(action, "id:") &&
-				!strings.Contains(action, "msg:") &&
-				!strings.Contains(action, "deny") &&
-				!strings.Contains(action, "block") &&
-				!strings.Contains(action, "pass") &&
-				!strings.Contains(action, "log") &&
-				!strings.Contains(action, "chain") &&
-				!strings.HasPrefix(action, "\"") {
-				// Might still be valid, but log a warning
-				// Allow continuation on next line or chained rules
-			}
+			// Any unrecognized action is allowed; chained rules may continue on the next line.
+			_ = action
 		}
 	}
 
@@ -897,10 +887,10 @@ func ValidateWAFRule(rule string) error {
 func ValidateWhitelist(whitelistType, value string) error {
 	// Validate type
 	validTypes := map[string]bool{
-		"ip":       true,
-		"domain":   true,
-		"email":    true,
-		"user":     true,
+		"ip":        true,
+		"domain":    true,
+		"email":     true,
+		"user":      true,
 		"useragent": true,
 	}
 	if !validTypes[whitelistType] {

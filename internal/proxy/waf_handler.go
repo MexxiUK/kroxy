@@ -83,7 +83,7 @@ func (h *WAFHandler) ServeHTTP(w http.ResponseWriter, r *http.Request, next cadd
 // Interface guards
 var (
 	_ caddy.Module                = (*WAFHandler)(nil)
-	_ caddy.Provisioner          = (*WAFHandler)(nil)
-	_ caddy.Validator            = (*WAFHandler)(nil)
+	_ caddy.Provisioner           = (*WAFHandler)(nil)
+	_ caddy.Validator             = (*WAFHandler)(nil)
 	_ caddyhttp.MiddlewareHandler = (*WAFHandler)(nil)
 )

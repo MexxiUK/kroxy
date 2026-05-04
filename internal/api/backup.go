@@ -16,16 +16,16 @@ import (
 
 // Backup represents a full system backup.
 type Backup struct {
-	Version        string              `json:"version"`
-	CreatedAt      time.Time           `json:"created_at"`
-	Routes         []store.Route       `json:"routes"`
-	OIDCProviders  []store.OIDCProvider `json:"oidc_providers,omitempty"`
-	WAFRules       []store.WAFRule     `json:"waf_rules,omitempty"`
-	Certificates   []store.Certificate `json:"certificates,omitempty"`
-	Blacklists     []store.Blacklist   `json:"blacklists,omitempty"`
-	Whitelists     []store.Whitelist   `json:"whitelists,omitempty"`
-	RateLimits     []store.RateLimit   `json:"rate_limits,omitempty"`
-	Settings       map[string]string   `json:"settings,omitempty"`
+	Version       string               `json:"version"`
+	CreatedAt     time.Time            `json:"created_at"`
+	Routes        []store.Route        `json:"routes"`
+	OIDCProviders []store.OIDCProvider `json:"oidc_providers,omitempty"`
+	WAFRules      []store.WAFRule      `json:"waf_rules,omitempty"`
+	Certificates  []store.Certificate  `json:"certificates,omitempty"`
+	Blacklists    []store.Blacklist    `json:"blacklists,omitempty"`
+	Whitelists    []store.Whitelist    `json:"whitelists,omitempty"`
+	RateLimits    []store.RateLimit    `json:"rate_limits,omitempty"`
+	Settings      map[string]string    `json:"settings,omitempty"`
 }
 
 const backupVersion = version.Version

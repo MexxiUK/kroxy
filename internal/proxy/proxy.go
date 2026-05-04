@@ -3,8 +3,8 @@ package proxy
 import (
 	"context"
 	"crypto/x509"
-	"encoding/pem"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"log"
 	"net/url"
@@ -31,7 +31,7 @@ import (
 var (
 	routeWAFs   = make(map[int]*waf.WAF) // routeID -> WAF instance
 	routeWAFsMu sync.RWMutex
-	globalWAF  *waf.WAF // fallback for routes without specific engine
+	globalWAF   *waf.WAF // fallback for routes without specific engine
 )
 
 // SetRouteWAF sets the WAF instance for a specific route
@@ -216,8 +216,8 @@ func (p *Proxy) buildConfig() ([]byte, error) {
 	// Build separate route lists for HTTP and HTTPS servers.
 	// HTTPS always gets full handlers. HTTP gets redirects for
 	// routes that require HTTPS, full handlers otherwise.
-	var httpsRoutes []map[string]interface{}
-	var httpRoutes []map[string]interface{}
+	httpsRoutes := make([]map[string]interface{}, 0, len(routes))
+	httpRoutes := make([]map[string]interface{}, 0, len(routes))
 
 	for _, route := range routes {
 		if !route.Enabled {
@@ -314,8 +314,8 @@ func (p *Proxy) buildConfig() ([]byte, error) {
 		// Add OIDC authentication if enabled
 		if route.OIDCEnabled {
 			handlers = append(handlers, map[string]interface{}{
-				"handler":      "authentication",
-				"provider_id":  route.OIDCProviderID,
+				"handler":     "authentication",
+				"provider_id": route.OIDCProviderID,
 			})
 		}
 
@@ -640,8 +640,8 @@ func (p *Proxy) revalidateAllRoutes() {
 		if err := validation.RevalidateBackendDNS(route.Backend); err != nil {
 			// Log security alert for DNS rebinding detection
 			audit.GetLogger().Log(audit.Event{
-				Type:    audit.EventTypeSecurityAlert,
-				Action:  "dns_rebind_detected",
+				Type:   audit.EventTypeSecurityAlert,
+				Action: "dns_rebind_detected",
 				Details: map[string]interface{}{
 					"domain":  route.Domain,
 					"backend": route.Backend,
@@ -671,7 +671,6 @@ func (p *Proxy) revalidateAllRoutes() {
 		}
 	}
 }
-
 
 func (p *Proxy) startCertExpiryScanner() {
 	select {

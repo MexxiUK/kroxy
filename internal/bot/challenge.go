@@ -63,9 +63,9 @@ type consumedNonce struct {
 
 // ChallengeManager creates and verifies proof-of-work challenges.
 type ChallengeManager struct {
-	secret          []byte
-	consumedNonces  sync.Map // nonce -> *consumedNonce
-	nonceCleanup    sync.Once
+	secret         []byte
+	consumedNonces sync.Map // nonce -> *consumedNonce
+	nonceCleanup   sync.Once
 }
 
 // NewChallengeManager creates a challenge manager with a secret key.

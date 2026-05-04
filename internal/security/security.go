@@ -82,7 +82,7 @@ func isTrustedProxy(ip string) bool {
 
 // cachedTrustedProxies caches the parsed trusted proxies list
 var (
-	trustedProxiesOnce sync.Once
+	trustedProxiesOnce   sync.Once
 	cachedTrustedProxies []string
 )
 

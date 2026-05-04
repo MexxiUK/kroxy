@@ -129,7 +129,7 @@ func (m *Migrator) loadMigrations() ([]Migration, error) {
 	}
 
 	// Convert map to sorted slice
-	var migrations []Migration
+	migrations := make([]Migration, 0, len(migrationsMap))
 	for _, mig := range migrationsMap {
 		migrations = append(migrations, *mig)
 	}

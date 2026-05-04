@@ -3,8 +3,8 @@ package waf
 import (
 	"testing"
 
-	"github.com/corazawaf/coraza/v3"
 	corazacrs "github.com/corazawaf/coraza-coreruleset/v4"
+	"github.com/corazawaf/coraza/v3"
 )
 
 func TestWAF_CRSLoads(t *testing.T) {

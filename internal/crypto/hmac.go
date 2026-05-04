@@ -18,7 +18,7 @@ import (
 var (
 	wafSigningKey     []byte
 	wafSigningKeyOnce sync.Once
-	wafKeyLoadErr    error
+	wafKeyLoadErr     error
 )
 
 const (
@@ -38,7 +38,7 @@ var (
 	ErrInvalidHeader = errors.New("invalid WAF verification header format")
 	ErrExpiredHeader = errors.New("WAF verification header timestamp expired")
 	ErrInvalidHMAC   = errors.New("WAF verification header HMAC mismatch")
-	ErrWrongVersion   = errors.New("unsupported WAF verification header version")
+	ErrWrongVersion  = errors.New("unsupported WAF verification header version")
 )
 
 // GetWAFSigningKey returns the WAF signing key, loading it once from the

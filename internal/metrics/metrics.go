@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	requestsTotal     int64
+	requestsTotal    int64
 	authSuccessTotal int64
 	authFailureTotal int64
 )
