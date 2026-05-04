@@ -1,0 +1,46 @@
+# Kroxy + Express API with manual TLS certificate
+#
+# Usage:
+#   1. Place your cert.pem and key.pem in ./certs/
+#   2. docker compose up -d
+#   3. Create a route via the admin API:
+#      curl -X POST http://localhost:8080/api/routes \
+#        -H "Content-Type: application/json" \
+#        -d '{"domain":"api.yourdomain.com","backend":"http://api:3001","waf_enabled":true}'
+#
+version: "3.8"
+
+services:
+  kroxy:
+    image: kroxy/kroxy:latest
+    container_name: kroxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - kroxy-data:/data
+      - ./certs:/data/certs:ro
+    environment:
+      - KROXY_PROXY=:80
+      - KROXY_HTTPS_ADDR=:443
+      - KROXY_ADMIN=:8080
+      - KROXY_DB=/data/kroxy.db
+      - KROXY_TLS_ENABLED=true
+      - KROXY_TLS_CERT=/data/certs/cert.pem
+      - KROXY_TLS_KEY=/data/certs/key.pem
+    depends_on:
+      api:
+        condition: service_started
+
+  api:
+    build: .
+    container_name: express-api
+    restart: unless-stopped
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+
+volumes:
+  kroxy-data:

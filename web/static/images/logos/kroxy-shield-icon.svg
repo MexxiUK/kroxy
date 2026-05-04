@@ -1,0 +1,13 @@
+<!-- Shield Icon - Properly centered -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <rect width="32" height="32" rx="8" fill="#16a34a"/>
+  <!-- Centered shield: width=20, height=24, centered at (16,16) -->
+  <path d="M16 4 L26 8 L26 16 Q26 26 16 29 Q6 26 6 16 L6 8 Z" stroke="white" stroke-width="2" fill="none"/>
+  <!-- Network nodes: centered triangle -->
+  <circle cx="11" cy="13" r="2.5" fill="white"/>
+  <circle cx="21" cy="13" r="2.5" fill="white"/>
+  <circle cx="16" cy="22" r="2.5" fill="white"/>
+  <line x1="11" y1="13" x2="21" y2="13" stroke="white" stroke-width="2"/>
+  <line x1="11" y1="13" x2="16" y2="22" stroke="white" stroke-width="2"/>
+  <line x1="21" y1="13" x2="16" y2="22" stroke="white" stroke-width="2"/>
+</svg>

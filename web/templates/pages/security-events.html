@@ -1,0 +1,251 @@
+{{ define "security-events" }}
+<div class="page-header-row">
+    <div>
+        <h1 class="page-title">Security Events</h1>
+        <p class="page-subtitle">Blocked attacks and detected threats across your routes</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="grid grid-3" style="margin-bottom: 1.5rem;">
+    <div class="card">
+        <div class="card-body">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Blocked</span>
+                <span class="badge badge-error">Block</span>
+            </div>
+            <div id="blocked-count" style="font-size: 2rem; font-weight: 700; color: var(--rose); font-family: 'JetBrains Mono', monospace;">--</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Requests rejected by WAF</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Detected</span>
+                <span class="badge badge-warning">Detect</span>
+            </div>
+            <div id="detected-count" style="font-size: 2rem; font-weight: 700; color: var(--amber); font-family: 'JetBrains Mono', monospace;">--</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Threats logged but allowed</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Total Events</span>
+                <span class="badge badge-neutral">All</span>
+            </div>
+            <div id="total-count" style="font-size: 2rem; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', monospace;">--</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">All security events recorded</div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+    <select id="action-filter" class="form-select" style="width: auto; min-width: 160px;">
+        <option value="">All Events</option>
+        <option value="blocked">Blocked Only</option>
+        <option value="detected">Detected Only</option>
+    </select>
+    <select id="route-filter" class="form-select" style="width: auto; min-width: 200px;">
+        <option value="">All Routes</option>
+        <option value="0">Global</option>
+        {{ range .Routes }}
+        <option value="{{ .ID }}">{{ .Domain }}</option>
+        {{ end }}
+    </select>
+    <input type="text" id="ip-search" class="form-input" placeholder="Search by IP..." style="max-width: 200px;">
+</div>
+
+<!-- Events Table -->
+<div class="card">
+    <div class="card-body-flush">
+        <div class="table-scroll">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Action</th>
+                    <th>IP Address</th>
+                    <th>Host</th>
+                    <th>Method</th>
+                    <th>URI</th>
+                    <th>Route</th>
+                </tr>
+            </thead>
+            <tbody id="events-table">
+                <tr>
+                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading events...</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1rem;">
+    <span id="events-info" style="font-size: 0.875rem; color: var(--text-muted);"></span>
+    <div style="display: flex; gap: 0.5rem;">
+        <button type="button" class="btn btn-secondary btn-sm" id="prev-btn" disabled>Previous</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="next-btn">Next</button>
+    </div>
+</div>
+
+<style nonce="{{ nonce }}">
+.action-blocked { color: var(--rose); font-weight: 600; }
+.action-detected { color: var(--amber); font-weight: 600; }
+.uri-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem; }
+.method-badge { display: inline-block; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; background: #f8fafc; color: var(--text-secondary); border: 1px solid var(--border-subtle); }
+</style>
+
+<script nonce="{{ nonce }}">
+var events = [];
+var currentOffset = 0;
+var totalCount = 0;
+var limit = 50;
+
+var routeMap = {};
+{{ range .Routes }}
+routeMap[{{ .ID }}] = '{{ .Domain }}';
+{{ end }}
+
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || '';
+}
+
+async function loadEvents() {
+    var routeFilter = document.getElementById('route-filter').value;
+    var url = '/api/security/events?limit=' + limit + '&offset=' + currentOffset;
+    if (routeFilter !== '') url += '&route_id=' + routeFilter;
+
+    try {
+        var response = await fetch(url, {
+            headers: { 'X-CSRF-Token': getCsrfToken() },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) { window.location.href = '/login'; return; }
+            throw new Error('Failed to load events');
+        }
+
+        var data = await response.json();
+        events = data.events || [];
+        totalCount = data.total || 0;
+
+        var actionFilter = document.getElementById('action-filter').value;
+        var ipSearch = document.getElementById('ip-search').value.trim().toLowerCase();
+
+        if (actionFilter) {
+            events = events.filter(function(e) { return e.action === actionFilter; });
+        }
+        if (ipSearch) {
+            events = events.filter(function(e) { return e.client_ip && e.client_ip.toLowerCase().includes(ipSearch); });
+        }
+
+        renderEvents();
+        updateCounts(data);
+        updatePagination();
+    } catch (err) {
+        console.error('Failed to load events:', err);
+        document.getElementById('events-table').innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--rose); padding: 2rem;">Failed to load events</td></tr>';
+    }
+}
+
+function renderEvents() {
+    var tbody = document.getElementById('events-table');
+
+    if (events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></div><div class="empty-state-title">No security events</div><div class="empty-state-text">When the WAF blocks or detects attacks, they will appear here.</div></div></td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = events.map(function(evt) {
+        var actionHtml = evt.action === 'blocked'
+            ? '<span class="action-blocked">Blocked</span>'
+            : '<span class="action-detected">Detected</span>';
+
+        var routeText = evt.route_id ? (routeMap[evt.route_id] || 'Route #' + evt.route_id) : 'Global';
+        var timeStr = formatTime(evt.created_at);
+
+        return '<tr>' +
+            '<td style="white-space: nowrap; font-size: 0.8125rem; color: var(--text-muted);">' + escapeHtml(timeStr) + '</td>' +
+            '<td>' + actionHtml + '</td>' +
+            '<td style="font-family: \'JetBrains Mono\', monospace; font-size: 0.8125rem;">' + escapeHtml(evt.client_ip) + '</td>' +
+            '<td style="font-size: 0.8125rem;">' + escapeHtml(evt.host) + '</td>' +
+            '<td><span class="method-badge">' + escapeHtml(evt.method) + '</span></td>' +
+            '<td class="uri-cell" title="' + escapeHtml(evt.uri) + '">' + escapeHtml(evt.uri) + '</td>' +
+            '<td style="font-size: 0.8125rem;">' + escapeHtml(routeText) + '</td>' +
+        '</tr>';
+    }).join('');
+}
+
+function updateCounts(data) {
+    document.getElementById('total-count').textContent = totalCount;
+    var blocked = events.filter(function(e) { return e.action === 'blocked'; }).length;
+    var detected = events.filter(function(e) { return e.action === 'detected'; }).length;
+    document.getElementById('blocked-count').textContent = blocked;
+    document.getElementById('detected-count').textContent = detected;
+}
+
+function updatePagination() {
+    var start = currentOffset + 1;
+    var end = Math.min(currentOffset + limit, totalCount);
+    document.getElementById('events-info').textContent = totalCount > 0
+        ? 'Showing ' + start + ' - ' + end + ' of ' + totalCount
+        : 'No events';
+    document.getElementById('prev-btn').disabled = currentOffset === 0;
+    document.getElementById('next-btn').disabled = end >= totalCount;
+}
+
+function formatTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var now = new Date();
+    var diff = now - d;
+
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+}
+
+// Event listeners
+document.getElementById('action-filter').addEventListener('change', function() {
+    currentOffset = 0;
+    loadEvents();
+});
+document.getElementById('route-filter').addEventListener('change', function() {
+    currentOffset = 0;
+    loadEvents();
+});
+document.getElementById('ip-search').addEventListener('input', function() {
+    var actionFilter = document.getElementById('action-filter').value;
+    var ipSearch = this.value.trim().toLowerCase();
+    var filtered = events.filter(function(e) {
+        var matchAction = !actionFilter || e.action === actionFilter;
+        var matchIp = !ipSearch || (e.client_ip && e.client_ip.toLowerCase().includes(ipSearch));
+        return matchAction && matchIp;
+    });
+    var origEvents = events;
+    events = filtered;
+    renderEvents();
+    events = origEvents;
+});
+
+document.getElementById('prev-btn').addEventListener('click', function() {
+    if (currentOffset >= limit) {
+        currentOffset -= limit;
+        loadEvents();
+    }
+});
+document.getElementById('next-btn').addEventListener('click', function() {
+    currentOffset += limit;
+    loadEvents();
+});
+
+loadEvents();
+</script>
+{{ end }}

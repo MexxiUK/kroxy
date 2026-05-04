@@ -1,0 +1,215 @@
+{{ define "content" }}
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+        <a href="/dashboard" class="sidebar-logo">
+            <img src="/static/images/logos/kroxy-shield-icon.svg" alt="" width="32" height="32" class="sidebar-logo-icon">
+            <span class="sidebar-logo-text">Kroxy</span>
+        </a>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="/dashboard" class="nav-item {{ if eq .Page "dashboard" }}active{{ end }}" title="See how your websites are performing">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <span>Dashboard</span>
+        </a>
+
+        <div class="nav-section-title">Routes</div>
+        <a href="/routes" class="nav-item {{ if eq .Page "routes" }}active{{ end }}" title="Manage the websites Kroxy protects">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+            <span>All Routes</span>
+        </a>
+        <a href="/routes/new" class="nav-item {{ if eq .Page "routes-new" }}active{{ end }}" title="Connect a new website to Kroxy">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Add Route</span>
+        </a>
+
+        <div class="nav-section-title">Security</div>
+        <a href="/security/waf" class="nav-item {{ if eq .Page "waf" }}active{{ end }}" title="Block hackers and malicious traffic">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <span>WAF Rules</span>
+        </a>
+        <a href="/security/ip-lists" class="nav-item {{ if eq .Page "ip-lists" }}active{{ end }}" title="Control which IP addresses can access your sites">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+            <span>IP Lists</span>
+        </a>
+        <a href="/security/rate-limits" class="nav-item {{ if eq .Page "rate-limits" }}active{{ end }}" title="Prevent visitors from overwhelming your site">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>Rate Limits</span>
+        </a>
+        <a href="/security/events" class="nav-item {{ if eq .Page "security-events" }}active{{ end }}" title="View blocked and detected attacks">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span>Security Events</span>
+        </a>
+
+        <div class="nav-section-title">Users</div>
+        <a href="/users" class="nav-item {{ if eq .Page "users" }}active{{ end }}" title="Manage who can access the admin panel">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>Users</span>
+        </a>
+        <a href="/users/api-keys" class="nav-item {{ if eq .Page "api-keys" }}active{{ end }}" title="Allow automated tools to connect to Kroxy">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+            <span>API Keys</span>
+        </a>
+        <a href="/users/oidc" class="nav-item {{ if eq .Page "oidc" }}active{{ end }}" title="Set up sign-in with Google, Microsoft, or Okta">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span>Sign-In Providers</span>
+        </a>
+
+        <div class="nav-section-title">Settings</div>
+        <a href="/settings" class="nav-item {{ if eq .Page "settings" }}active{{ end }}" title="Configure Kroxy's general settings">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>General</span>
+        </a>
+        <a href="/settings/ssl" class="nav-item {{ if eq .Page "ssl" }}active{{ end }}" title="Manage security certificates">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <span>SSL/TLS</span>
+        </a>
+
+        <div class="nav-section-title">Monitoring</div>
+        <a href="/health" class="nav-item {{ if eq .Page "health" }}active{{ end }}" title="Monitor backend server health">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            <span>Health Checks</span>
+        </a>
+        <a href="/logs" class="nav-item {{ if eq .Page "logs" }}active{{ end }}" title="View access logs">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <span>Access Logs</span>
+        </a>
+        <a href="/backup" class="nav-item {{ if eq .Page "backup" }}active{{ end }}" title="Export and import configuration">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Backup &amp; Restore</span>
+        </a>
+    </nav>
+</aside>
+
+<nav class="navbar">
+    <div class="navbar-left">
+        <button id="sidebar-toggle" class="btn btn-secondary btn-sm" aria-label="Toggle sidebar">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+    </div>
+    <div class="navbar-right">
+        <a href="/settings" class="btn btn-secondary btn-sm">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            Settings
+        </a>
+        <div class="dropdown">
+            <button id="user-menu-btn" class="btn btn-secondary btn-sm" aria-label="User menu" aria-expanded="false" aria-haspopup="true">
+                <div class="flex items-center gap-2">
+                    <div class="avatar">{{ if .User }}{{ .User.Name | printf "%.1s" | upper }}{{ end }}</div>
+                    <span class="navbar-user-name">{{ if .User }}{{ .User.Name }}{{ end }}</span>
+                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+            </button>
+            <div id="user-menu" class="dropdown-menu" role="menu">
+                <a href="/profile" class="dropdown-item" role="menuitem">Profile</a>
+                <a href="/users/api-keys" class="dropdown-item" role="menuitem">API Keys</a>
+                <hr class="dropdown-divider">
+                <form action="/api/auth/logout" method="POST" class="dropdown-item">
+                    <input type="hidden" name="_csrf" value="{{ .CSRFToken }}">
+                    <button type="submit" class="text-danger" style="background: none; border: none; cursor: pointer; width: 100%; text-align: left; font-size: inherit; color: var(--rose);">Sign out</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<main class="main-content">
+    {{ .Content }}
+</main>
+
+<script nonce="{{ nonce }}">
+(function() {
+    var sidebar = document.getElementById('sidebar');
+    var backdrop = document.getElementById('sidebar-backdrop');
+    var toggleBtn = document.getElementById('sidebar-toggle');
+
+    function initSidebar() {
+        if (window.innerWidth > 768) {
+            var collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+            document.body.classList.toggle('sidebar-collapsed', collapsed);
+        } else {
+            document.body.classList.remove('sidebar-collapsed');
+            document.body.classList.remove('sidebar-open');
+        }
+    }
+
+    function toggleSidebar() {
+        if (window.innerWidth <= 768) {
+            document.body.classList.toggle('sidebar-open');
+            if (backdrop) backdrop.classList.toggle('active', document.body.classList.contains('sidebar-open'));
+        } else {
+            document.body.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('sidebar-collapsed', document.body.classList.contains('sidebar-collapsed'));
+        }
+    }
+
+    function closeSidebar() {
+        document.body.classList.remove('sidebar-open');
+        if (backdrop) backdrop.classList.remove('active');
+    }
+
+    if (toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
+    if (backdrop) backdrop.addEventListener('click', closeSidebar);
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeSidebar();
+    });
+
+    var resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            if (window.innerWidth > 768) {
+                closeSidebar();
+                initSidebar();
+            } else {
+                document.body.classList.remove('sidebar-collapsed');
+            }
+        }, 150);
+    });
+
+    // User menu dropdown
+    var userMenuBtn = document.getElementById('user-menu-btn');
+    var userMenu = document.getElementById('user-menu');
+
+    userMenuBtn.addEventListener('click', function() {
+        var isOpen = userMenu.classList.toggle('active');
+        userMenuBtn.setAttribute('aria-expanded', isOpen);
+        if (isOpen) {
+            var first = userMenu.querySelector('[role="menuitem"], .dropdown-item');
+            if (first) first.focus();
+        }
+    });
+
+    userMenu.addEventListener('keydown', function(e) {
+        var items = userMenu.querySelectorAll('[role="menuitem"], .dropdown-item button');
+        if (!items.length) return;
+        var current = Array.prototype.indexOf.call(items, document.activeElement) || Array.prototype.indexOf.call(items, document.activeElement.closest('[role="menuitem"]'));
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            var next = (current + 1) % items.length;
+            items[next].focus();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            var prev = (current - 1 + items.length) % items.length;
+            items[prev].focus();
+        } else if (e.key === 'Escape') {
+            userMenu.classList.remove('active');
+            userMenuBtn.setAttribute('aria-expanded', 'false');
+            userMenuBtn.focus();
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.dropdown')) {
+            document.querySelectorAll('.dropdown-menu').forEach(function(menu) {
+                menu.classList.remove('active');
+            });
+            userMenuBtn.setAttribute('aria-expanded', 'false');
+        }
+    });
+
+    initSidebar();
+})();
+</script>
+{{ end }}

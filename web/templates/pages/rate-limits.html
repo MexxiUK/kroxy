@@ -1,0 +1,303 @@
+{{ define "rate-limits" }}
+<div class="page-header-row">
+    <div>
+        <h1 class="page-title">Rate Limits</h1>
+        <p class="page-subtitle">Prevent visitors from overwhelming your site with too many requests</p>
+    </div>
+    <div class="page-header-actions">
+        <button type="button" class="btn btn-primary" id="add-rule-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Rule
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body card-body-flush">
+        <div class="table-scroll">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Requests/min</th>
+                    <th>Burst</th>
+                    <th>Enabled</th>
+                    <th class="col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="rules-table">
+                <tr>
+                    <td colspan="5" class="cell-center cell-secondary" style="padding: 2rem;">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="delete-modal" class="modal">
+    <div class="modal-backdrop" id="delete-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header" style="color: var(--rose);">Delete Rate Limit</div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete <strong id="delete-rule-name"></strong>?</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="delete-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-danger" id="delete-confirm-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div id="add-modal" class="modal">
+    <div class="modal-backdrop" id="add-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header">
+            <span id="modal-title">Add Rate Limit</span>
+            <button class="modal-close" id="add-modal-close">&times;</button>
+        </div>
+        <form id="rule-form">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="rule-domain">Domain *</label>
+                    <input type="text" id="rule-domain" class="form-input" placeholder="e.g., api.example.com" required>
+                    <p class="form-hint">The domain this rate limit applies to</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="rule-requests">Requests per minute *</label>
+                    <input type="number" id="rule-requests" class="form-input" style="max-width: 150px;" min="1" value="60" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="rule-burst">Burst *</label>
+                    <input type="number" id="rule-burst" class="form-input" style="max-width: 150px;" min="1" value="10" required>
+                    <p class="form-hint">Maximum burst of requests allowed before rate limiting kicks in</p>
+                </div>
+                <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="rule-enabled" checked>
+                        <label for="rule-enabled">Rule is active</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="add-modal-cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="submit-btn">Create Rule</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+var rules = [];
+var editingId = null;
+var deleteTargetId = null;
+
+function formatRate(requests, window) {
+    if (window >= 3600) {
+        var hours = window / 3600;
+        return requests + ' requests per ' + hours + ' hour' + (hours > 1 ? 's' : '');
+    } else if (window >= 60) {
+        var minutes = window / 60;
+        return requests + ' requests per ' + minutes + ' min';
+    }
+    return requests + ' requests per ' + window + 's';
+}
+
+function formatScope(scope) {
+    var labels = { ip: 'Per IP', global: 'Global', route: 'Per Route' };
+    return labels[scope] || scope;
+}
+
+async function loadRules() {
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/ratelimits', {
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error('Failed to load rules');
+        }
+
+        var data = await response.json();
+        rules = data.rules || [];
+        renderRules();
+    } catch (err) {
+        console.error('Failed to load rules:', err);
+        document.getElementById('rules-table').innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--rose); padding: 2rem;">Failed to load rules</td></tr>';
+    }
+}
+
+function renderRules() {
+    var tbody = document.getElementById('rules-table');
+
+    if (rules.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div><div class="empty-state-title">No rate limits yet</div><div class="empty-state-text">Rate limits prevent visitors from overwhelming your site with too many requests. Without rate limiting, a single attacker could slow your site down.</div><div class="empty-state-action"><button type="button" class="btn btn-primary" id="add-rule-btn-empty">Add a Rate Limit</button></div></div></td></tr>';
+        document.getElementById('add-rule-btn-empty').addEventListener('click', openAddModal);
+        return;
+    }
+
+    tbody.innerHTML = rules.map(function(rule) {
+        return '<tr>' +
+            '<td style="font-weight: 500;">' + escapeHtml(rule.domain) + '</td>' +
+            '<td>' + escapeHtml(rule.requests_per_minute) + '</td>' +
+            '<td>' + escapeHtml(rule.burst) + '</td>' +
+            '<td>' + (rule.enabled ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-neutral">Disabled</span>') + '</td>' +
+            '<td>' +
+                '<div style="display: flex; gap: 0.5rem;">' +
+                    '<button type="button" class="btn btn-secondary btn-sm edit-rule-btn" data-id="' + rule.id + '">Edit</button>' +
+                    '<button type="button" class="btn btn-danger btn-sm delete-rule-btn" data-id="' + rule.id + '">Delete</button>' +
+                '</div>' +
+            '</td>' +
+        '</tr>';
+    }).join('');
+
+    document.querySelectorAll('.edit-rule-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { editRule(parseInt(btn.dataset.id)); });
+    });
+    document.querySelectorAll('.delete-rule-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { deleteRule(parseInt(btn.dataset.id)); });
+    });
+}
+
+function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Rate Limit';
+    document.getElementById('rule-domain').value = '';
+    document.getElementById('rule-requests').value = '60';
+    document.getElementById('rule-burst').value = '10';
+    document.getElementById('rule-enabled').checked = true;
+    document.getElementById('submit-btn').textContent = 'Create Rule';
+    openModal('add-modal');
+}
+
+function editRule(id) {
+    var rule = rules.find(function(r) { return r.id === id; });
+    if (!rule) return;
+
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Rate Limit';
+    document.getElementById('rule-domain').value = rule.domain;
+    document.getElementById('rule-requests').value = rule.requests_per_minute;
+    document.getElementById('rule-burst').value = rule.burst;
+    document.getElementById('rule-enabled').checked = rule.enabled;
+    document.getElementById('submit-btn').textContent = 'Save Changes';
+    openModal('add-modal');
+}
+
+async function handleSubmit(e) {
+    e.preventDefault();
+
+    var btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    var data = {
+        domain: document.getElementById('rule-domain').value.trim(),
+        requests_per_minute: parseInt(document.getElementById('rule-requests').value) || 60,
+        burst: parseInt(document.getElementById('rule-burst').value) || 10,
+        enabled: document.getElementById('rule-enabled').checked
+    };
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var url = editingId ? '/api/ratelimits/' + editingId : '/api/ratelimits';
+        var method = editingId ? 'PUT' : 'POST';
+
+        var response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to save rule');
+        }
+
+        closeModal('add-modal');
+        showToast('Rule ' + (editingId ? 'updated' : 'created') + ' successfully', 'success');
+        loadRules();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = editingId ? 'Save Changes' : 'Create Rule';
+    }
+
+    return false;
+}
+
+function deleteRule(id) {
+    var rule = rules.find(function(r) { return r.id === id; });
+    document.getElementById('delete-rule-name').textContent = rule ? rule.domain : 'this rule';
+    deleteTargetId = id;
+    openModal('delete-modal');
+}
+
+async function confirmDeleteRule() {
+    if (!deleteTargetId) return;
+    var btn = document.getElementById('delete-confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/ratelimits/' + deleteTargetId, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to delete rule');
+        }
+
+        closeModal('delete-modal');
+        showToast('Rule deleted', 'success');
+        loadRules();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+    }
+}
+
+// Event listeners
+document.getElementById('add-rule-btn').addEventListener('click', openAddModal);
+document.getElementById('add-modal-backdrop').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('add-modal-cancel').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('add-modal-close').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('rule-form').addEventListener('submit', handleSubmit);
+document.getElementById('delete-modal-backdrop').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-modal-cancel').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-confirm-btn').addEventListener('click', confirmDeleteRule);
+
+// Window preset handler
+document.getElementById('rule-window-preset').addEventListener('change', function() {
+    var customInput = document.getElementById('rule-window');
+    if (this.value === 'custom') {
+        customInput.style.display = 'block';
+        customInput.value = '60';
+    } else {
+        customInput.style.display = 'none';
+        customInput.value = this.value;
+    }
+});
+
+loadRules();
+</script>
+{{ end }}

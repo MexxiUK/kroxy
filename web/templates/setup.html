@@ -1,0 +1,955 @@
+{{ define "setup" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="csrf-token" content="{{ .CSRFToken }}">
+    <title>Setup - Kroxy Admin</title>
+    <style nonce="{{ nonce }}">
+        {{ template "auth-css" }}
+        .auth-card { max-width: 32rem; }
+        .card-header { padding-bottom: 0; border-bottom: none; }
+        .form-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+        .btn-primary { width: 100%; }
+        .btn-row { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+        .btn-row .btn-primary { flex: 1; }
+
+        /* Step indicator */
+        .step-indicator { display: flex; justify-content: center; gap: 0.375rem; margin-bottom: 1.5rem; }
+        .step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border-color); transition: all 0.3s; }
+        .step-dot.active { background: var(--accent); box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2); }
+        .step-dot.completed { background: var(--emerald); }
+
+        /* Wizard steps */
+        .wizard-step { display: none; animation: fadeIn 0.3s ease; }
+        .wizard-step.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Option cards */
+        .wizard-options { display: flex; flex-direction: column; gap: 0.75rem; margin: 1.25rem 0; }
+        .wizard-option {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 1rem; border: 2px solid var(--border-color); border-radius: 0.75rem;
+            background: var(--bg-elevated); cursor: pointer; transition: all 0.15s;
+            text-align: left; font-size: 0.9375rem; color: var(--text-secondary);
+        }
+        .wizard-option:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .wizard-option.selected { border-color: var(--accent); background: var(--accent-dim); }
+        .wizard-option-icon { width: 24px; height: 24px; color: var(--accent); flex-shrink: 0; }
+        .wizard-option-title { font-weight: 500; }
+        .wizard-option-desc { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.125rem; }
+
+        .success-icon {
+            width: 64px; height: 64px;
+            background: linear-gradient(135deg, rgba(5,150,105,0.15) 0%, rgba(5,150,105,0.08) 100%);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 1rem;
+        }
+        .success-icon svg { width: 32px; height: 32px; color: var(--emerald); }
+        .text-center { text-align: center; }
+        .hidden { display: none; }
+
+        /* Summary list */
+        .summary-list { list-style: none; padding: 0; margin: 1rem 0; }
+        .summary-list li { padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.875rem; color: var(--text-secondary); display: flex; justify-content: space-between; }
+        .summary-list li:last-child { border-bottom: none; }
+        .summary-label { color: var(--text-muted); }
+        .summary-value { font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <div class="logo">
+            <svg class="logo-icon" width="48" height="48" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="32" height="32" rx="8" fill="rgba(22,163,74,0.1)"/>
+                <path d="M16 4 L26 8 L26 16 Q26 26 16 29 Q6 26 6 16 L6 8 Z" stroke="#16a34a" stroke-width="2" fill="none"/>
+                <circle cx="11" cy="13" r="2.5" fill="#16a34a"/>
+                <circle cx="21" cy="13" r="2.5" fill="#16a34a"/>
+                <circle cx="16" cy="22" r="2.5" fill="#16a34a"/>
+                <line x1="11" y1="13" x2="21" y2="13" stroke="#16a34a" stroke-width="2"/>
+                <line x1="11" y1="13" x2="16" y2="22" stroke="#16a34a" stroke-width="2"/>
+                <line x1="21" y1="13" x2="16" y2="22" stroke="#16a34a" stroke-width="2"/>
+            </svg>
+            <div>
+                <div class="logo-text">Kroxy</div>
+                <div class="logo-subtitle" id="logo-subtitle">First-time setup</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <!-- Step 1: Use Case -->
+            <div id="step-usecase" class="wizard-step active">
+                <div class="step-indicator">
+                    <div class="step-dot active"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                </div>
+                <div class="card-header">
+                    <h1>What will you use Kroxy for?</h1>
+                    <p>Choose the option that best describes your needs</p>
+                </div>
+                <div class="wizard-options">
+                    <label class="wizard-option" data-value="personal">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                        <div>
+                            <div class="wizard-option-title">Personal Website</div>
+                            <div class="wizard-option-desc">Protect a blog, portfolio, or personal project</div>
+                        </div>
+                    </label>
+                    <label class="wizard-option" data-value="business">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                        <div>
+                            <div class="wizard-option-title">Business App</div>
+                            <div class="wizard-option-desc">Protect a company website or SaaS product</div>
+                        </div>
+                    </label>
+                    <label class="wizard-option" data-value="api">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                        <div>
+                            <div class="wizard-option-title">API Gateway</div>
+                            <div class="wizard-option-desc">Manage and protect APIs and microservices</div>
+                        </div>
+                    </label>
+                </div>
+                <div class="btn-row">
+                    <button type="button" class="btn btn-primary" id="usecase-next-btn" disabled>Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Security -->
+            <div id="step-security" class="wizard-step">
+                <div class="step-indicator">
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot active"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                </div>
+                <div class="card-header">
+                    <h1>How should we protect your site?</h1>
+                    <p>Choose your security level — you can always change this later</p>
+                </div>
+                <div class="wizard-options">
+                    <label class="wizard-option" data-value="recommended">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                        <div>
+                            <div class="wizard-option-title">Recommended Protection</div>
+                            <div class="wizard-option-desc">Enable the firewall with rules to block common attacks</div>
+                        </div>
+                    </label>
+                    <label class="wizard-option" data-value="custom">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        <div>
+                            <div class="wizard-option-title">Custom Rules</div>
+                            <div class="wizard-option-desc">I'll create my own firewall rules later</div>
+                        </div>
+                    </label>
+                    <label class="wizard-option" data-value="skip">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        <div>
+                            <div class="wizard-option-title">Skip for Now</div>
+                            <div class="wizard-option-desc">I'll set up security later in the dashboard</div>
+                        </div>
+                    </label>
+                </div>
+                <div class="btn-row">
+                    <button type="button" class="btn btn-secondary" id="security-back-btn">Back</button>
+                    <button type="button" class="btn btn-primary" id="security-next-btn" disabled>Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 3: First Route -->
+            <div id="step-route" class="wizard-step">
+                <div class="step-indicator">
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot active"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                </div>
+                <div class="card-header">
+                    <h1>Connect your first website</h1>
+                    <p>You can add more routes later in the dashboard</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="setup-domain">Your Website Domain</label>
+                    <input type="text" id="setup-domain" class="form-input" placeholder="myapp.com" required>
+                    <p class="form-hint">The web address people type to visit your site (e.g., myapp.com)</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="setup-backend">Backend Address</label>
+                    <input type="url" id="setup-backend" class="form-input" placeholder="http://localhost:3000" required>
+                    <p class="form-hint">Where Kroxy should send traffic — must be a valid URL (e.g., http://localhost:3000)</p>
+                </div>
+                <div class="btn-row">
+                    <button type="button" class="btn btn-secondary" id="route-back-btn">Back</button>
+                    <button type="button" class="btn btn-primary" id="route-skip-btn" style="background: var(--bg-secondary); color: var(--text-secondary); box-shadow: none;">Skip</button>
+                    <button type="button" class="btn btn-primary" id="route-next-btn">Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 4: Admin Access Security -->
+            <div id="step-auth" class="wizard-step">
+                <div class="step-indicator">
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot active"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                </div>
+                <div class="card-header">
+                    <h1>Secure your admin panel</h1>
+                    <p>If you expose Kroxy to the internet, strong authentication is required</p>
+                </div>
+                <div class="wizard-options">
+                    <label class="wizard-option" data-value="totp">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <div>
+                            <div class="wizard-option-title">Authenticator App (TOTP)</div>
+                            <div class="wizard-option-desc">Use Google Authenticator or Authy for a second factor when logging in</div>
+                        </div>
+                    </label>
+                    <label class="wizard-option" data-value="oidc">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+                        <div>
+                            <div class="wizard-option-title">Single Sign-On (OIDC)</div>
+                            <div class="wizard-option-desc">Sign in with Google, Microsoft, or a custom OIDC provider</div>
+                        </div>
+                    </label>
+                    <label class="wizard-option" data-value="local">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+                        <div>
+                            <div class="wizard-option-title">Password Only (Local Network)</div>
+                            <div class="wizard-option-desc">Only use if Kroxy is only accessible from your local network</div>
+                        </div>
+                    </label>
+                </div>
+                <p class="form-hint" style="text-align: center; margin-top: 0.5rem;">You can change this later in Settings</p>
+                <div class="btn-row">
+                    <button type="button" class="btn btn-secondary" id="auth-back-btn">Back</button>
+                    <button type="button" class="btn btn-primary" id="auth-next-btn" disabled>Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 4b: OIDC Provider Configuration (shown only if OIDC selected) -->
+            <div id="step-oidc" class="wizard-step">
+                <div class="step-indicator">
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot active"></div>
+                    <div class="step-dot"></div>
+                </div>
+                <div class="card-header">
+                    <h1>Configure your SSO provider</h1>
+                    <p>Choose a provider and enter your app credentials</p>
+                </div>
+                <div class="wizard-options" style="margin-bottom: 0.75rem;">
+                    <label class="wizard-option" data-value="google">
+                        <svg class="wizard-option-icon" viewBox="0 0 24 24" width="24" height="24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.23H2.18C1.43 8.88 1 10.69 1 12.59s.43 3.71 1.18 5.36l2.85-2.22.81-.64z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.23l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                        </svg>
+                        <div>
+                            <div class="wizard-option-title">Google</div>
+                            <div class="wizard-option-desc">Use Google Workspace or Gmail accounts</div>
+                        </div>
+                    </label>
+                    <label class="wizard-option" data-value="microsoft">
+                        <svg class="wizard-option-icon" viewBox="0 0 24 24" width="24" height="24">
+                            <rect fill="#F25022" x="1" y="1" width="10" height="10"/><rect fill="#7FBA00" x="13" y="1" width="10" height="10"/><rect fill="#00A4EF" x="1" y="13" width="10" height="10"/><rect fill="#FFB900" x="13" y="13" width="10" height="10"/>
+                        </svg>
+                        <div>
+                            <div class="wizard-option-title">Microsoft</div>
+                            <div class="wizard-option-desc">Use Azure AD / Microsoft Entra ID</div>
+                        </div>
+                    </label>
+                    <label class="wizard-option" data-value="custom">
+                        <svg class="wizard-option-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        <div>
+                            <div class="wizard-option-title">Custom Provider</div>
+                            <div class="wizard-option-desc">Okta, Auth0, Keycloak, or any OIDC provider</div>
+                        </div>
+                    </label>
+                </div>
+                <div id="oidc-fields" style="display: none; margin-top: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="oidc-client-id">Client ID</label>
+                        <input type="text" id="oidc-client-id" class="form-input" placeholder="Your app's Client ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="oidc-client-secret">Client Secret</label>
+                        <input type="password" id="oidc-client-secret" class="form-input" placeholder="Your app's Client Secret">
+                    </div>
+                    <div class="form-group" id="oidc-discovery-group" style="display: none;">
+                        <label class="form-label" for="oidc-discovery-url">Discovery URL</label>
+                        <input type="url" id="oidc-discovery-url" class="form-input" placeholder="https://auth.example.com/.well-known/openid-configuration">
+                        <p class="form-hint">The OpenID Connect discovery endpoint for your provider</p>
+                    </div>
+                    <p class="form-hint" style="margin-top: 0.5rem;">You can get these from your provider's developer console. The redirect URL will be auto-generated.</p>
+                </div>
+                <div class="btn-row">
+                    <button type="button" class="btn btn-secondary" id="oidc-back-btn">Back</button>
+                    <button type="button" class="btn btn-primary" id="oidc-next-btn" disabled>Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 5: Create Account -->
+            <div id="step-account" class="wizard-step">
+                <div class="step-indicator">
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot active"></div>
+                </div>
+                <div class="card-header">
+                    <h1>Create your admin account</h1>
+                    <p>This will be your primary administrator account</p>
+                </div>
+
+                <form id="setupForm">
+                    <div id="error" class="error" style="display: none;"></div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="name">First Name <span style="color: var(--text-muted);">(optional)</span></label>
+                        <input type="text" id="name" name="name" class="form-input" placeholder="Your name">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="email">Email</label>
+                        <input type="email" id="email" name="email" class="form-input" placeholder="admin@example.com" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="password">Password</label>
+                        <div class="password-field">
+                            <input type="password" id="password" name="password" class="form-input" placeholder="Create a strong password" required minlength="12">
+                            <button type="button" class="password-toggle" id="toggle-password" aria-label="Toggle password visibility">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </button>
+                        </div>
+                        <p class="form-hint">At least 12 characters</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="confirmPassword">Confirm Password</label>
+                        <div class="password-field">
+                            <input type="password" id="confirmPassword" name="confirmPassword" class="form-input" placeholder="Confirm your password" required>
+                            <button type="button" class="password-toggle" id="toggle-confirmPassword" aria-label="Toggle password visibility">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="btn-row">
+                        <button type="button" class="btn btn-secondary" id="account-back-btn">Back</button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">Create Account</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Step 6: TOTP Setup (shown only if TOTP selected) -->
+            <div id="step-totp" class="wizard-step">
+                <div class="step-indicator">
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot active"></div>
+                </div>
+                <div class="card-header">
+                    <svg class="icon-shield" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 0.75rem;width:48px;height:48px;">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M9 12l2 2 4-4"/>
+                    </svg>
+                    <h1>Set up your authenticator</h1>
+                    <p>Scan the QR code with your authenticator app, then enter the 6-digit code</p>
+                </div>
+                <div id="totp-setup-content" style="text-align: center;">
+                    <div id="totp-qr-container" style="margin: 1rem auto; width: 200px; height: 200px; background: var(--bg-secondary); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                        <span style="color: var(--text-muted); font-size: 0.875rem;">Loading...</span>
+                    </div>
+                    <div style="margin: 1rem 0;">
+                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Can't scan? Enter this code manually:</p>
+                        <code id="totp-secret-display" style="font-size: 0.875rem; background: var(--bg-secondary); padding: 0.375rem 0.75rem; border-radius: 6px; letter-spacing: 0.05em; word-break: break-all;"></code>
+                    </div>
+                    <div class="form-group" style="text-align: left; margin-top: 1.5rem;">
+                        <label class="form-label" for="totp-verify-code">Verification Code</label>
+                        <input type="text" id="totp-verify-code" class="form-input" placeholder="000000" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" style="text-align: center; letter-spacing: 0.5em; font-size: 1.25rem;">
+                    </div>
+                    <div id="totp-error" class="error" style="display: none;"></div>
+                    <button type="button" class="btn btn-primary" id="totp-verify-btn" style="margin-top: 0.75rem;">Verify and Enable</button>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.75rem;">You can also set this up later in Settings</p>
+                    <button type="button" class="btn btn-secondary" id="totp-skip-btn" style="margin-top: 0.5rem;">Skip for Now</button>
+                </div>
+            </div>
+
+            <!-- Step 7: Done -->
+            <div id="step-done" class="wizard-step">
+                <div class="step-indicator">
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                    <div class="step-dot completed"></div>
+                </div>
+                <div class="text-center">
+                    <div class="success-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </div>
+                    <h1 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">You're all set!</h1>
+                    <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem;">Here's what we've set up for you:</p>
+                    <ul class="summary-list" id="summary-list"></ul>
+                    <a href="/login" class="btn btn-primary" style="text-decoration: none; display: inline-block; margin-top: 1rem;">
+                        Go to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script nonce="{{ nonce }}">
+    // Setup state
+    var setupState = {
+        usecase: null,
+        security: null,
+        domain: '',
+        backend: '',
+        authType: null,
+        oidcProvider: '',
+        oidcClientId: '',
+        oidcClientSecret: '',
+        oidcDiscoveryUrl: '',
+        name: '',
+        email: '',
+        password: ''
+    };
+
+    var currentStep = 'usecase';
+
+    function goToStep(step) {
+        document.querySelectorAll('.wizard-step').forEach(function(el) {
+            el.classList.remove('active');
+        });
+        document.getElementById('step-' + step).classList.add('active');
+        currentStep = step;
+    }
+
+    function toggleSetupPassword(inputId) {
+        var input = document.getElementById(inputId);
+        input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    document.getElementById('toggle-password').addEventListener('click', function() { toggleSetupPassword('password'); });
+    document.getElementById('toggle-confirmPassword').addEventListener('click', function() { toggleSetupPassword('confirmPassword'); });
+
+    // Wizard option selection
+    function setupOptionGroup(containerId, stateKey, nextStep) {
+        var container = document.getElementById(containerId);
+        container.querySelectorAll('.wizard-option').forEach(function(opt) {
+            opt.addEventListener('click', function() {
+                container.querySelectorAll('.wizard-option').forEach(function(o) { o.classList.remove('selected'); });
+                opt.classList.add('selected');
+                setupState[stateKey] = opt.dataset.value;
+                if (nextStep) {
+                    var nextBtn = document.getElementById(nextStep + '-next-btn') || document.getElementById(nextStep);
+                    if (nextBtn && nextBtn.disabled !== undefined) {
+                        nextBtn.disabled = false;
+                    }
+                }
+            });
+        });
+    }
+
+    setupOptionGroup('step-usecase', 'usecase', 'usecase');
+    setupOptionGroup('step-security', 'security', 'security');
+    setupOptionGroup('step-auth', 'authType', 'auth');
+
+    // Navigation buttons
+    document.getElementById('usecase-next-btn').addEventListener('click', function() {
+        if (setupState.usecase) goToStep('security');
+    });
+
+    document.getElementById('security-back-btn').addEventListener('click', function() { goToStep('usecase'); });
+    document.getElementById('security-next-btn').addEventListener('click', function() {
+        if (setupState.security) goToStep('route');
+    });
+
+    document.getElementById('route-back-btn').addEventListener('click', function() { goToStep('security'); });
+    document.getElementById('route-next-btn').addEventListener('click', function() {
+        var domain = document.getElementById('setup-domain').value.trim();
+        var backend = document.getElementById('setup-backend').value.trim();
+
+        if (!domain) {
+            alert('Please enter a domain name (e.g., myapp.com)');
+            return;
+        }
+        if (!backend) {
+            alert('Please enter a backend address (e.g., http://localhost:3000)');
+            return;
+        }
+        if (!backend.match(/^https?:\/\/.+/)) {
+            alert('Backend address must start with http:// or https://');
+            return;
+        }
+        try {
+            var url = new URL(backend);
+            if (!url.hostname || url.hostname.length < 1) {
+                alert('Backend address must have a valid hostname');
+                return;
+            }
+        } catch(e) {
+            alert('Backend address is not a valid URL');
+            return;
+        }
+        setupState.domain = domain;
+        setupState.backend = backend;
+        goToStep('auth');
+    });
+    document.getElementById('route-skip-btn').addEventListener('click', function() {
+        setupState.domain = '';
+        setupState.backend = '';
+        goToStep('auth');
+    });
+
+    document.getElementById('auth-back-btn').addEventListener('click', function() { goToStep('route'); });
+    document.getElementById('auth-next-btn').addEventListener('click', function() {
+        if (setupState.authType === 'oidc') {
+            goToStep('oidc');
+        } else if (setupState.authType) {
+            goToStep('account');
+        }
+    });
+
+    // OIDC provider selection
+    var oidcProviderSelected = '';
+    document.getElementById('step-oidc').querySelectorAll('.wizard-option').forEach(function(opt) {
+        opt.addEventListener('click', function() {
+            document.getElementById('step-oidc').querySelectorAll('.wizard-option').forEach(function(o) { o.classList.remove('selected'); });
+            opt.classList.add('selected');
+            oidcProviderSelected = opt.dataset.value;
+            setupState.oidcProvider = opt.dataset.value;
+            document.getElementById('oidc-fields').style.display = 'block';
+            document.getElementById('oidc-discovery-group').style.display = opt.dataset.value === 'custom' ? 'block' : 'none';
+            validateOidcForm();
+        });
+    });
+
+    function validateOidcForm() {
+        var clientId = document.getElementById('oidc-client-id').value.trim();
+        var clientSecret = document.getElementById('oidc-client-secret').value.trim();
+        var hasRequired = oidcProviderSelected && clientId && clientSecret;
+        if (oidcProviderSelected === 'custom') {
+            var discoveryUrl = document.getElementById('oidc-discovery-url').value.trim();
+            hasRequired = hasRequired && discoveryUrl;
+        }
+        document.getElementById('oidc-next-btn').disabled = !hasRequired;
+    }
+
+    document.getElementById('oidc-client-id').addEventListener('input', validateOidcForm);
+    document.getElementById('oidc-client-secret').addEventListener('input', validateOidcForm);
+    document.getElementById('oidc-discovery-url').addEventListener('input', validateOidcForm);
+
+    document.getElementById('oidc-back-btn').addEventListener('click', function() { goToStep('auth'); });
+    document.getElementById('oidc-next-btn').addEventListener('click', function() {
+        setupState.oidcClientId = document.getElementById('oidc-client-id').value.trim();
+        setupState.oidcClientSecret = document.getElementById('oidc-client-secret').value.trim();
+        setupState.oidcDiscoveryUrl = document.getElementById('oidc-discovery-url').value.trim();
+        goToStep('account');
+    });
+
+    document.getElementById('account-back-btn').addEventListener('click', function() {
+        if (setupState.authType === 'oidc') {
+            goToStep('oidc');
+        } else {
+            goToStep('auth');
+        }
+    });
+
+    // Auth next button enable
+    document.getElementById('step-auth').querySelectorAll('.wizard-option').forEach(function(opt) {
+        opt.addEventListener('click', function() {
+            document.getElementById('auth-next-btn').disabled = false;
+        });
+    });
+
+    // Form submission - sequential API calls
+    var form = document.getElementById('setupForm');
+    var errorDiv = document.getElementById('error');
+    var submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        var email = document.getElementById('email').value;
+        var password = document.getElementById('password').value;
+        var confirmPassword = document.getElementById('confirmPassword').value;
+        var name = document.getElementById('name').value.trim();
+
+        if (!email || !password || !confirmPassword) {
+            showError('Please fill in all fields');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            showError('Passwords do not match');
+            return;
+        }
+
+        if (password.length < 12) {
+            showError('Password must be at least 12 characters');
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Setting up...';
+        errorDiv.style.display = 'none';
+
+        try {
+            var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+            // Step 1: Create admin account
+            var setupResponse = await fetch('/api/setup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                body: JSON.stringify({ email: email, password: password, name: name || email }),
+                credentials: 'include'
+            });
+
+            var setupData = await setupResponse.json();
+            if (!setupResponse.ok) {
+                throw new Error(setupData.error || 'Failed to create account');
+            }
+
+            // Step 2: Login to get session
+            var loginResponse = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                body: JSON.stringify({ email: email, password: password }),
+                credentials: 'include'
+            });
+
+            if (!loginResponse.ok) {
+                // Account created but login failed - redirect to login page
+                window.location.href = '/login';
+                return;
+            }
+
+            // Get fresh CSRF token after login
+            var csrfResponse = await fetch('/api/csrf', { credentials: 'include' });
+            var csrfData = await csrfResponse.json();
+            csrfToken = csrfData.csrf_token || csrfToken;
+
+            // Step 3: Create route if domain was provided
+            if (setupState.domain && setupState.backend) {
+                var routeData = {
+                    domain: setupState.domain,
+                    backend: setupState.backend,
+                    enabled: true,
+                    waf_enabled: setupState.security === 'recommended',
+                    rate_limit: setupState.security === 'recommended' ? 60 : 0
+                };
+
+                try {
+                    await fetch('/api/routes', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                        credentials: 'include',
+                        body: JSON.stringify(routeData)
+                    });
+                } catch (e) {
+                    // Route creation failed, but account is created - continue
+                }
+            }
+
+            // Step 4: Add WAF preset rules if recommended
+            if (setupState.security === 'recommended') {
+                var presets = [
+                    { name: 'Block SQL Injection', rule: 'SecRule ARGS "(?i)(union\\s+select|select\\s+.*\\s+from|insert\\s+into|delete\\s+from|drop\\s+table)" "deny,log,msg:\'SQL Injection Detected\'"', enabled: true, route_id: null },
+                    { name: 'Block XSS Attacks', rule: 'SecRule ARGS "(?i)(<script|javascript:|onerror\\s*=|onload\\s*=)" "deny,log,msg:\'XSS Attack Detected\'"', enabled: true, route_id: null },
+                    { name: 'Block Directory Traversal', rule: 'SecRule REQUEST_URI "(\\.\\./|\\.\\\\|%2e%2e)" "deny,log,msg:\'Directory Traversal Detected\'"', enabled: true, route_id: null },
+                    { name: 'Block Known Bots', rule: 'SecRule REQUEST_HEADERS:User-Agent "(?i)(sqlmap|nikto|nmap|masscan|dirbuster|gobuster|wfuzz)" "deny,log,msg:\'Known Attack Tool Detected\'"', enabled: true, route_id: null }
+                ];
+
+                for (var i = 0; i < presets.length; i++) {
+                    try {
+                        await fetch('/api/waf/rules', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                            credentials: 'include',
+                            body: JSON.stringify(presets[i])
+                        });
+                    } catch (e) { /* ignore errors */ }
+                }
+            }
+
+            // Step 5: Create OIDC provider if selected
+            if (setupState.authType === 'oidc' && setupState.oidcClientId) {
+                var discoveryUrls = {
+                    google: 'https://accounts.google.com/.well-known/openid-configuration',
+                    microsoft: 'https://login.microsoftonline.com/common/.well-known/openid-configuration'
+                };
+                var providerName = setupState.oidcProvider === 'custom' ? 'custom' : setupState.oidcProvider;
+                var discoveryUrl = setupState.oidcProvider === 'custom' ? setupState.oidcDiscoveryUrl : (discoveryUrls[setupState.oidcProvider] || '');
+                var redirectUrl = window.location.origin + '/api/oauth/callback';
+                try {
+                    await fetch('/api/oidc', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            name: providerName,
+                            client_id: setupState.oidcClientId,
+                            client_secret: setupState.oidcClientSecret,
+                            discovery_url: discoveryUrl,
+                            redirect_url: redirectUrl
+                        })
+                    });
+                } catch (e) { /* OIDC setup optional, can be configured later */ }
+            }
+
+            // Step 6: Set up TOTP if selected — navigate to TOTP step
+            if (setupState.authType === 'totp') {
+                setupState._csrfToken = csrfToken;
+                try {
+                    var totpSetupResp = await fetch('/api/user/2fa/setup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                        credentials: 'include'
+                    });
+                    var totpSetupData = await totpSetupResp.json();
+                    if (totpSetupResp.ok && totpSetupData.uri) {
+                        setupState._totpSecret = totpSetupData.secret;
+                        setupState._totpUri = totpSetupData.uri;
+                        document.getElementById('totp-secret-display').textContent = totpSetupData.secret;
+                        renderQRCode(totpSetupData.uri);
+                        goToStep('totp');
+                        return;
+                    }
+                } catch (e) { /* fall through to done */ }
+            }
+
+            finishSetup();
+
+        } catch (err) {
+            showError(err.message || 'Network error. Please try again.');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create Account';
+        }
+    });
+
+    function showError(message) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+    }
+
+    // QR code renderer (no external library — generates SVG from otpauth URI)
+    function renderQRCode(text) {
+        var container = document.getElementById('totp-qr-container');
+        try {
+            var qr = qrcode(0, 'M', text);
+            var svg = qr.createSvgTag(4, 0);
+            container.innerHTML = svg;
+            container.querySelector('svg').style.width = '100%';
+            container.querySelector('svg').style.height = '100%';
+        } catch (e) {
+            container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.75rem;">QR code unavailable</span>';
+        }
+    }
+
+    // Minimal QR code generator (inline, no external dependency)
+    var qrcode = (function() {
+        // QR Code generator adapted from qrcode-generator (MIT license, Kazuhiko Arase)
+        var QR = function(typeNumber, errorCorrectionLevel) {
+            this.typeNumber = typeNumber;
+            this.errorCorrectionLevel = errorCorrectionLevel;
+            this.modules = null;
+            this.moduleCount = 0;
+            this.dataCache = null;
+            this.dataList = [];
+        };
+        QR.prototype = {
+            addData: function(data) { this.dataList.push(data); this.dataCache = null; },
+            isDark: function(row, col) { if (row < 0 || this.moduleCount <= row || col < 0 || this.moduleCount <= col) throw new Error(row + ',' + col); return this.modules[row][col]; },
+            getModuleCount: function() { return this.moduleCount; },
+            make: function() { this.makeImpl(false, this.getBestMaskPattern()); },
+            makeImpl: function(test, maskPattern) {
+                this.moduleCount = this.typeNumber * 4 + 17;
+                this.modules = new Array(this.moduleCount);
+                for (var row = 0; row < this.moduleCount; row++) { this.modules[row] = new Array(this.moduleCount); for (var col = 0; col < this.moduleCount; col++) this.modules[row][col] = null; }
+                this.setupPositionProbePattern(0, 0); this.setupPositionProbePattern(this.moduleCount - 7, 0); this.setupPositionProbePattern(0, this.moduleCount - 7);
+                this.setupPositionAdjustPattern(); this.setupTimingPattern(); this.setupTypeInfo(test, maskPattern);
+                if (this.typeNumber >= 7) this.setupTypeNumber(test);
+                if (this.dataCache == null) this.dataCache = createData(this.typeNumber, this.errorCorrectionLevel, this.dataList);
+                this.mapData(this.dataCache, maskPattern);
+            },
+            setupPositionProbePattern: function(row, col) {
+                for (var r = -1; r <= 7; r++) { if (row + r <= -1 || this.moduleCount <= row + r) continue; for (var c = -1; c <= 7; c++) { if (col + c <= -1 || this.moduleCount <= col + c) continue; if ((0 <= r && r <= 6 && (c == 0 || c == 6)) || (0 <= c && c <= 6 && (r == 0 || r == 6)) || (2 <= r && r <= 4 && 2 <= c && c <= 4)) this.modules[row + r][col + c] = true; else this.modules[row + r][col + c] = false; } }
+            },
+            getBestMaskPattern: function() { var minLostPoint = 0; var pattern = 0; for (var i = 0; i < 8; i++) { this.makeImpl(true, i); var lostPoint = QRUtil.getLostPoint(this); if (i == 0 || minLostPoint > lostPoint) { minLostPoint = lostPoint; pattern = i; } } return pattern; },
+            setupTimingPattern: function() { for (var r = 8; r < this.moduleCount - 8; r++) { if (this.modules[r][6] != null) continue; this.modules[r][6] = (r % 2 == 0); } for (var c = 8; c < this.moduleCount - 8; c++) { if (this.modules[6][c] != null) continue; this.modules[6][c] = (c % 2 == 0); } },
+            setupPositionAdjustPattern: function() { var pos = QRUtil.getPatternPosition(this.typeNumber); for (var i = 0; i < pos.length; i++) { for (var j = 0; j < pos.length; j++) { var row = pos[i]; var col = pos[j]; if (this.modules[row][col] != null) continue; for (var r = -2; r <= 2; r++) { for (var c = -2; c <= 2; c++) { if (r == -2 || r == 2 || c == -2 || c == 2 || (r == 0 && c == 0)) this.modules[row + r][col + c] = true; else this.modules[row + r][col + c] = false; } } } } },
+            setupTypeNumber: function(test) { var bits = QRUtil.getBCHTypeNumber(this.typeNumber); for (var i = 0; i < 18; i++) { var mod = (!test && ((bits >> i) & 1) == 1); this.modules[Math.floor(i / 3)][i % 3 + this.moduleCount - 8 - 3] = mod; } for (var i = 0; i < 18; i++) { var mod = (!test && ((bits >> i) & 1) == 1); this.modules[i % 3 + this.moduleCount - 8 - 3][Math.floor(i / 3)] = mod; } },
+            setupTypeInfo: function(test, maskPattern) { var data = (this.errorCorrectionLevel << 3) | maskPattern; var bits = QRUtil.getBCHTypeInfo(data); for (var i = 0; i < 15; i++) { var mod = (!test && ((bits >> i) & 1) == 1); if (i < 6) this.modules[i][8] = mod; else if (i < 8) this.modules[i + 1][8] = mod; else this.modules[this.moduleCount - 15 + i][8] = mod; } for (var i = 0; i < 15; i++) { var mod = (!test && ((bits >> i) & 1) == 1); if (i < 8) this.modules[8][this.moduleCount - i - 1] = mod; else if (i < 9) this.modules[8][15 - i - 1 + 1] = mod; else this.modules[8][15 - i - 1] = mod; } this.modules[this.moduleCount - 8][8] = (!test); },
+            mapData: function(data, maskPattern) { var inc = -1; var row = this.moduleCount - 1; var bitIndex = 7; var byteIndex = 0; for (var col = this.moduleCount - 1; col > 0; col -= 2) { if (col == 6) col--; while (true) { for (var c = 0; c < 2; c++) { if (this.modules[row][col - c] == null) { var dark = false; if (byteIndex < data.length) dark = (((data[byteIndex] >>> bitIndex) & 1) == 1); var mask = QRUtil.getMask(maskPattern, row, col - c); if (mask) dark = !dark; this.modules[row][col - c] = dark; bitIndex--; if (bitIndex == -1) { byteIndex++; bitIndex = 7; } } } row += inc; if (row < 0 || this.moduleCount <= row) { row -= inc; inc = -inc; break; } } } },
+            createSvgTag: function(cellSize, margin) {
+                cellSize = cellSize || 2; margin = margin || 4;
+                var size = this.moduleCount * cellSize + margin * 2;
+                var sb = []; sb.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + size + ' ' + size + '">');
+                sb.push('<rect width="' + size + '" height="' + size + '" fill="white"/>');
+                for (var r = 0; r < this.moduleCount; r++) { for (var c = 0; c < this.moduleCount; c++) { if (this.isDark(r, c)) { sb.push('<rect x="' + (c * cellSize + margin) + '" y="' + (r * cellSize + margin) + '" width="' + cellSize + '" height="' + cellSize + '" fill="black"/>'); } } }
+                sb.push('</svg>'); return sb.join('');
+            }
+        };
+        var QRUtil = {
+            PATTERN_POSITION_TABLE: [[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,82,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],
+            G15: (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0),
+            G18: (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0),
+            G15_MASK: (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1),
+            getBCHTypeInfo: function(data) { var d = data << 10; while (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G15) >= 0) d ^= (QRUtil.G15 << (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G15))); return ((data << 10) | d) ^ QRUtil.G15_MASK; },
+            getBCHTypeNumber: function(data) { var d = data << 12; while (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G18) >= 0) d ^= (QRUtil.G18 << (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G18))); return (data << 12) | d; },
+            getBCHDigit: function(data) { var digit = 0; while (data != 0) { digit++; data >>>= 1; } return digit; },
+            getPatternPosition: function(typeNumber) { return QRUtil.PATTERN_POSITION_TABLE[typeNumber - 1]; },
+            getMask: function(maskPattern, i, j) { switch (maskPattern) { case 0: return (i + j) % 2 == 0; case 1: return i % 2 == 0; case 2: return j % 3 == 0; case 3: return (i + j) % 3 == 0; case 4: return (Math.floor(i / 2) + Math.floor(j / 3)) % 2 == 0; case 5: return (i * j) % 2 + (i * j) % 3 == 0; case 6: return ((i * j) % 2 + (i * j) % 3) % 2 == 0; case 7: return ((i * j) % 3 + (i + j) % 2) % 2 == 0; default: throw new Error('bad maskPattern:' + maskPattern); } },
+            getLostPoint: function(qrCode) { var moduleCount = qrCode.getModuleCount(); var lostPoint = 0; for (var row = 0; row < moduleCount; row++) { for (var col = 0; col < moduleCount; col++) { var sameCount = 0; var dark = qrCode.isDark(row, col); for (var r = -1; r <= 1; r++) { if (row + r < 0 || moduleCount <= row + r) continue; for (var c = -1; c <= 1; c++) { if (col + c < 0 || moduleCount <= col + c) continue; if (r == 0 && c == 0) continue; if (dark == qrCode.isDark(row + r, col + c)) sameCount++; } } if (sameCount > 5) lostPoint += (3 + (sameCount - 5)); } } for (var row = 0; row < moduleCount - 1; row++) { for (var col = 0; col < moduleCount - 1; col++) { var count = 0; if (qrCode.isDark(row, col)) count++; if (qrCode.isDark(row + 1, col)) count++; if (qrCode.isDark(row, col + 1)) count++; if (qrCode.isDark(row + 1, col + 1)) count++; if (count == 0 || count == 4) lostPoint += 3; } } for (var row = 0; row < moduleCount; row++) { for (var col = 0; col < moduleCount - 6; col++) { if (qrCode.isDark(row, col) && !qrCode.isDark(row, col + 1) && qrCode.isDark(row, col + 2) && qrCode.isDark(row, col + 3) && qrCode.isDark(row, col + 4) && !qrCode.isDark(row, col + 5) && qrCode.isDark(row, col + 6)) lostPoint += 40; } } for (var col = 0; col < moduleCount; col++) { for (var row = 0; row < moduleCount - 6; row++) { if (qrCode.isDark(row, col) && !qrCode.isDark(row + 1, col) && qrCode.isDark(row + 2, col) && qrCode.isDark(row + 3, col) && qrCode.isDark(row + 4, col) && !qrCode.isDark(row + 5, col) && qrCode.isDark(row + 6, col)) lostPoint += 40; } } var darkCount = 0; for (var col = 0; col < moduleCount; col++) { for (var row = 0; row < moduleCount; row++) { if (qrCode.isDark(row, col)) darkCount++; } } var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5; lostPoint += ratio * 10; return lostPoint; }
+        };
+        function createData(typeNumber, errorCorrectionLevel, dataList) {
+            var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
+            var buffer = new QRBitBuffer();
+            for (var i = 0; i < dataList.length; i++) { var data = dataList[i]; buffer.put(data.mode, 4); buffer.put(data.getLength(), QRUtil.getLengthInBits(data.mode, typeNumber)); data.write(buffer); }
+            var totalDataCount = 0; for (var i = 0; i < rsBlocks.length; i++) totalDataCount += rsBlocks[i].dataCount;
+            if (buffer.getLengthInBits() > totalDataCount * 8) throw new Error('code length overflow. (' + buffer.getLengthInBits() + '>' + totalDataCount * 8 + ')');
+            if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) buffer.put(0, 4);
+            while (buffer.getLengthInBits() % 8 != 0) buffer.putBit(false);
+            while (true) { if (buffer.getLengthInBits() >= totalDataCount * 8) break; buffer.put(0x19, 8); }
+            return createBytes(buffer, rsBlocks);
+        }
+        function createBytes(buffer, rsBlocks) {
+            var offset = 0; var maxDcCount = 0; var maxEcCount = 0; var dcdata = new Array(rsBlocks.length); var ecdata = new Array(rsBlocks.length);
+            for (var r = 0; r < rsBlocks.length; r++) { var dcCount = rsBlocks[r].dataCount; var ecCount = rsBlocks[r].totalCount - dcCount; maxDcCount = Math.max(maxDcCount, dcCount); maxEcCount = Math.max(maxEcCount, ecCount); dcdata[r] = new Array(dcCount); for (var i = 0; i < dcdata[r].length; i++) dcdata[r][i] = 0xff & buffer.buffer[i + offset]; offset += dcCount; var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount); var rawPoly = new QRPolynomial(dcdata[r], rsPoly.getLength() - 1); var modPoly = rawPoly.mod(rsPoly); ecdata[r] = new Array(rsPoly.getLength() - 1); for (var i = 0; i < ecdata[r].length; i++) { var modIndex = i + modPoly.getLength() - ecdata[r].length; ecdata[r][i] = (modIndex >= 0) ? modPoly.get(modIndex) : 0; } }
+            var totalCodeCount = 0; for (var i = 0; i < rsBlocks.length; i++) totalCodeCount += rsBlocks[i].totalCount;
+            var data = new Array(totalCodeCount); var index = 0;
+            for (var i = 0; i < maxDcCount; i++) for (var r = 0; r < rsBlocks.length; r++) if (i < dcdata[r].length) data[index++] = dcdata[r][i];
+            for (var i = 0; i < maxEcCount; i++) for (var r = 0; r < rsBlocks.length; r++) if (i < ecdata[r].length) data[index++] = ecdata[r][i];
+            return data;
+        }
+        QRUtil.getLengthInBits = function(mode, type) { if (1 <= type && type < 10) { switch(mode) { case 1: return 8; case 2: return 8; case 4: return 8; case 8: return 2; default: throw new Error('mode:' + mode); } } else if (type < 27) { switch(mode) { case 1: return 16; case 2: return 10; case 4: return 12; case 8: return 6; default: throw new Error('mode:' + mode); } } else if (type < 41) { switch(mode) { case 1: return 16; case 2: return 12; case 4: return 16; case 8: return 6; default: throw new Error('mode:' + mode); } } else throw new Error('type:' + type); };
+        QRUtil.getErrorCorrectPolynomial = function(errorCorrectLength) { var a = new QRPolynomial([1], 0); for (var i = 0; i < errorCorrectLength; i++) a = a.multiply(new QRPolynomial([1, QRMath.gexp(i)], 0)); return a; };
+        var QRMath = { glog: function(n) { if (n < 1) throw new Error('glog(' + n + ')'); return QRMath.LOG_TABLE[n]; }, gexp: function(n) { while (n < 0) n += 255; while (n >= 256) n -= 255; return QRMath.EXP_TABLE[n]; }, EXP_TABLE: new Array(256), LOG_TABLE: new Array(256) };
+        for (var i = 0; i < 8; i++) QRMath.EXP_TABLE[i] = 1 << i;
+        for (var i = 8; i < 256; i++) QRMath.EXP_TABLE[i] = QRMath.EXP_TABLE[i - 4] ^ QRMath.EXP_TABLE[i - 5] ^ QRMath.EXP_TABLE[i - 6] ^ QRMath.EXP_TABLE[i - 8];
+        for (var i = 255; i >= 0; i--) QRMath.LOG_TABLE[QRMath.EXP_TABLE[i]] = i;
+        function QRPolynomial(num, shift) { if (num.length == undefined) throw new Error(num.length + '/' + shift); var offset = 0; while (offset < num.length && num[offset] == 0) offset++; this.num = new Array(num.length - offset + shift); for (var i = 0; i < num.length - offset; i++) this.num[i] = num[i + offset]; }
+        QRPolynomial.prototype = { get: function(index) { return this.num[index]; }, getLength: function() { return this.num.length; }, multiply: function(e) { var num = new Array(this.getLength() + e.getLength() - 1); for (var i = 0; i < this.getLength(); i++) for (var j = 0; j < e.getLength(); j++) num[i + j] ^= QRMath.gexp(QRMath.glog(this.get(i)) + QRMath.glog(e.get(j))); return new QRPolynomial(num, 0); }, mod: function(e) { if (this.getLength() - e.getLength() < 0) return this; var ratio = QRMath.glog(this.get(0)) - QRMath.glog(e.get(0)); var num = new Array(this.getLength()); for (var i = 0; i < this.getLength(); i++) num[i] = this.get(i); for (var i = 0; i < e.getLength(); i++) num[i] ^= QRMath.gexp(QRMath.glog(e.get(i)) + ratio); return new QRPolynomial(num, 0).mod(e); } };
+        var QRRSBlock = { RS_BLOCK_TABLE: [[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]], getRSBlocks: function(typeNumber, errorCorrectionLevel) { var rsBlock = QRRSBlock.getRsBlockTable(typeNumber, errorCorrectionLevel); if (rsBlock == undefined) throw new Error('bad rs block @ typeNumber:' + typeNumber + '/errorCorrectionLevel:' + errorCorrectionLevel); var length = rsBlock.length / 3; var list = []; for (var i = 0; i < length; i++) { var count = rsBlock[i * 3 + 0]; var totalCount = rsBlock[i * 3 + 1]; var dataCount = rsBlock[i * 3 + 2]; for (var j = 0; j < count; j++) list.push({ totalCount: totalCount, dataCount: dataCount }); } return list; }, getRsBlockTable: function(typeNumber, errorCorrectionLevel) { switch(errorCorrectionLevel) { case 1: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0]; case 0: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1]; case 3: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2]; case 2: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3]; default: return undefined; } } };
+        var QRBitBuffer = function() { this.buffer = []; this.length = 0; };
+        QRBitBuffer.prototype = { get: function(index) { var bufIndex = Math.floor(index / 8); return ((this.buffer[bufIndex] >>> (7 - index % 8)) & 1) == 1; }, put: function(num, length) { for (var i = 0; i < length; i++) this.putBit(((num >>> (length - i - 1)) & 1) == 1); }, getLengthInBits: function() { return this.length; }, putBit: function(bit) { var bufIndex = Math.floor(this.length / 8); if (this.buffer.length <= bufIndex) this.buffer.push(0); if (bit) this.buffer[bufIndex] |= (0x80 >>> (this.length % 8)); this.length++; } };
+        var QR8bitByte = function(data) { this.mode = 4; this.data = data; };
+        QR8bitByte.prototype = { getLength: function() { return this.data.length; }, write: function(buffer) { for (var i = 0; i < this.data.length; i++) { var c = this.data.charCodeAt(i); if (c < 0x80) { buffer.put(c, 8); } else if (c < 0x800) { buffer.put(0xC0 | (c >> 6), 8); buffer.put(0x80 | (c & 0x3F), 8); } else { buffer.put(0xE0 | (c >> 12), 8); buffer.put(0x80 | ((c >> 6) & 0x3F), 8); buffer.put(0x80 | (c & 0x3F), 8); } } } };
+        return function(typeNumber, errorCorrectionLevel) {
+            var qr = new QR(typeNumber || 0, { L: 1, M: 0, Q: 3, H: 2 }[errorCorrectionLevel] || 0);
+            qr.addData(new QR8bitByte(''));
+            var autoType = typeNumber || 0;
+            var data = '';
+            for (var i = 0; i < arguments.length; i++) { if (typeof arguments[i] === 'string') data = arguments[i]; }
+            if (!typeNumber) { for (var t = 1; t <= 40; t++) { try { var test = new QR(t, { L: 1, M: 0, Q: 3, H: 2 }[errorCorrectionLevel] || 0); test.addData(new QR8bitByte(data)); test.make(); autoType = t; break; } catch(e) {} } }
+            var qr2 = new QR(autoType, { L: 1, M: 0, Q: 3, H: 2 }[errorCorrectionLevel] || 0);
+            qr2.addData(new QR8bitByte(data));
+            qr2.make();
+            return qr2;
+        };
+    })();
+
+    // TOTP verify button
+    document.getElementById('totp-verify-btn').addEventListener('click', async function() {
+        var code = document.getElementById('totp-verify-code').value.trim();
+        var errorEl = document.getElementById('totp-error');
+        errorEl.style.display = 'none';
+
+        if (code.length !== 6) {
+            errorEl.textContent = 'Please enter a 6-digit code';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        this.disabled = true;
+        this.textContent = 'Verifying...';
+
+        try {
+            var resp = await fetch('/api/user/2fa/enable', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': setupState._csrfToken },
+                credentials: 'include',
+                body: JSON.stringify({ code: code })
+            });
+
+            if (resp.ok) {
+                finishSetup();
+            } else {
+                var data = await resp.json();
+                errorEl.textContent = data.error || 'Invalid code. Please try again.';
+                errorEl.style.display = 'block';
+                document.getElementById('totp-verify-code').value = '';
+                document.getElementById('totp-verify-code').focus();
+                this.disabled = false;
+                this.textContent = 'Verify and Enable';
+            }
+        } catch (e) {
+            errorEl.textContent = 'Network error. Please try again.';
+            errorEl.style.display = 'block';
+            this.disabled = false;
+            this.textContent = 'Verify and Enable';
+        }
+    });
+
+    // Auto-submit TOTP code on 6 digits
+    document.getElementById('totp-verify-code').addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, '');
+    });
+
+    // TOTP skip button
+    document.getElementById('totp-skip-btn').addEventListener('click', function() {
+        finishSetup();
+    });
+
+    // Finish setup — show summary and go to done step
+    function finishSetup() {
+        var summaryItems = [];
+        if (setupState.domain) {
+            summaryItems.push({ label: 'Route', value: setupState.domain + ' \u2192 ' + setupState.backend });
+        }
+        summaryItems.push({ label: 'Security', value: setupState.security === 'recommended' ? 'Firewall with recommended rules' : setupState.security === 'custom' ? 'Custom rules (add later)' : 'Skipped (add later)' });
+        var authMethod = 'Password only (local)';
+        if (setupState.authType === 'totp') { authMethod = 'Password + Authenticator App'; }
+        if (setupState.authType === 'oidc') { authMethod = 'Password + ' + (setupState.oidcProvider || 'SSO'); }
+        summaryItems.push({ label: 'Admin Auth', value: authMethod });
+
+        var summaryList = document.getElementById('summary-list');
+        summaryList.innerHTML = summaryItems.map(function(item) {
+            return '<li><span class="summary-label">' + item.label + '</span><span class="summary-value">' + item.value + '</span></li>';
+        }).join('');
+
+        goToStep('done');
+    }
+    </script>
+</body>
+</html>
+{{ end }}

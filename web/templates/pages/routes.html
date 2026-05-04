@@ -1,0 +1,304 @@
+{{ define "routes" }}
+<div class="page-header-row">
+    <div>
+        <h1 class="page-title">Routes</h1>
+        <p class="page-subtitle">Manage the websites Kroxy protects</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="/routes/new" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Route
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-body card-body-compact">
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+            <select id="filter-status" class="form-select" style="width: auto;">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="disabled">Disabled</option>
+            </select>
+            <select id="filter-health" class="form-select" style="width: auto;">
+                <option value="">All Health</option>
+                <option value="healthy">Healthy</option>
+                <option value="unhealthy">Issues</option>
+            </select>
+            <input type="search" id="filter-search" class="form-input" placeholder="Search routes..." style="max-width: 240px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="refresh-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Routes Table -->
+<div class="card">
+    <div class="card-body card-body-flush">
+        <div class="table-scroll">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Backend</th>
+                    <th>Status</th>
+                    <th>Features</th>
+                    <th class="col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="routes-table">
+                <tr>
+                    <td colspan="5" class="cell-center cell-secondary" style="padding: 2rem;">Loading routes...</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+    <div class="card-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="pagination-info" style="font-size: 0.875rem; color: var(--text-muted);">Showing 0 routes</span>
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="button" id="prev-btn" class="btn btn-secondary btn-sm" disabled>Previous</button>
+            <button type="button" id="next-btn" class="btn btn-secondary btn-sm" disabled>Next</button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="delete-modal" class="modal">
+    <div class="modal-backdrop" id="delete-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header">
+            <span>Delete Route</span>
+            <button class="modal-close" id="delete-modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete <strong id="delete-domain"></strong>? This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="delete-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-danger" id="delete-confirm-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+var routes = [];
+var currentPage = 1;
+var totalPages = 1;
+var routesPerPage = 20;
+var deleteTargetId = null;
+
+async function loadRoutes() {
+    var status = document.getElementById('filter-status').value;
+    var health = document.getElementById('filter-health').value;
+    var search = document.getElementById('filter-search').value;
+
+    var params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (health) params.append('health', health);
+    if (search) params.append('search', search);
+    params.append('page', currentPage);
+    params.append('limit', routesPerPage);
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/routes?' + params.toString(), {
+            headers: {
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error('Failed to load routes');
+        }
+
+        var data = await response.json();
+        routes = data.routes || [];
+        totalPages = data.totalPages || 1;
+        var total = data.total || 0;
+
+        renderRoutes();
+        updatePagination(total);
+    } catch (err) {
+        console.error('Failed to load routes:', err);
+        document.getElementById('routes-table').innerHTML = '<tr><td colspan="5" class="cell-center" style="color: var(--rose); padding: 2rem;">Failed to load routes</td></tr>';
+    }
+}
+
+function renderRoutes() {
+    var tbody = document.getElementById('routes-table');
+
+    if (routes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg></div><div class="empty-state-title">No routes yet</div><div class="empty-state-text">Routes tell Kroxy where to send web traffic. For example, if you own myapp.com, create a route pointing it to your server.</div><div class="empty-state-action"><a href="/routes/new" class="btn btn-primary">Add Your First Route</a></div></div></td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = routes.map(function(route) {
+        var statusBadge = route.enabled
+            ? '<span class="badge badge-success">Active</span>'
+            : '<span class="badge badge-neutral">Disabled</span>';
+
+        var features = [];
+        if (route.require_https) features.push('<span class="badge badge-success">HTTPS</span>');
+        if (route.waf_enabled) features.push('<span class="badge badge-info">WAF</span>');
+        if (route.oidc_enabled) features.push('<span class="badge badge-info">OIDC</span>');
+        if (route.rate_limit) features.push('<span class="badge badge-warning">Rate Limit</span>');
+        var featuresHtml = features.length > 0 ? features.join(' ') : '<span style="color: var(--text-faint);">-</span>';
+
+        return '<tr class="route-row" data-id="' + route.id + '" style="cursor: pointer;">' +
+            '<td><a href="/routes/' + route.id + '" class="route-link">' + escapeHtml(route.domain) + '</a></td>' +
+            '<td class="cell-secondary cell-truncated">' + escapeHtml(route.backend) + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td>' + featuresHtml + '</td>' +
+            '<td>' +
+                '<div class="dropdown">' +
+                    '<button class="btn btn-secondary btn-sm dropdown-toggle" data-route-id="' + route.id + '">' +
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>' +
+                    '</button>' +
+                    '<div id="actions-' + route.id + '" class="dropdown-menu">' +
+                        '<a href="/routes/' + route.id + '" class="dropdown-item">Edit</a>' +
+                        '<button type="button" class="dropdown-item delete-route-btn" data-id="' + route.id + '" data-domain="' + escapeHtml(route.domain) + '" style="width: 100%; text-align: left; background: none; border: none; cursor: pointer;">Delete</button>' +
+                    '</div>' +
+                '</div>' +
+            '</td>' +
+        '</tr>';
+    }).join('');
+
+    // Attach event listeners
+    document.querySelectorAll('.route-row').forEach(function(row) {
+        row.addEventListener('click', function(e) {
+            if (!e.target.closest('.dropdown') && !e.target.classList.contains('route-link')) {
+                window.location.href = '/routes/' + row.dataset.id;
+            }
+        });
+    });
+
+    document.querySelectorAll('.dropdown-toggle').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var menu = document.getElementById('actions-' + btn.dataset.routeId);
+            menu.classList.toggle('active');
+        });
+    });
+
+    document.querySelectorAll('.delete-route-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            openDeleteModal(parseInt(btn.dataset.id), btn.dataset.domain);
+        });
+    });
+}
+
+function updatePagination(total) {
+    var start = (currentPage - 1) * routesPerPage + 1;
+    var end = Math.min(currentPage * routesPerPage, total);
+    document.getElementById('pagination-info').textContent = 'Showing ' + start + '-' + end + ' of ' + total + ' routes';
+
+    document.getElementById('prev-btn').disabled = currentPage <= 1;
+    document.getElementById('next-btn').disabled = currentPage >= totalPages;
+}
+
+function prevPage() {
+    if (currentPage > 1) {
+        currentPage--;
+        loadRoutes();
+    }
+}
+
+function nextPage() {
+    if (currentPage < totalPages) {
+        currentPage++;
+        loadRoutes();
+    }
+}
+
+function openDeleteModal(id, domain) {
+    deleteTargetId = id;
+    document.getElementById('delete-domain').textContent = domain;
+    openModal('delete-modal');
+}
+
+async function confirmDelete() {
+    if (!deleteTargetId) return;
+
+    var btn = document.getElementById('delete-confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/routes/' + deleteTargetId, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            var data = await response.json();
+            throw new Error(data.error || 'Failed to delete route');
+        }
+
+        closeModal('delete-modal');
+        showToast('Route deleted successfully', 'success');
+        loadRoutes();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+    }
+}
+
+// Event listeners
+document.getElementById('refresh-btn').addEventListener('click', loadRoutes);
+document.getElementById('prev-btn').addEventListener('click', prevPage);
+document.getElementById('next-btn').addEventListener('click', nextPage);
+
+document.getElementById('delete-modal-backdrop').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-modal-cancel').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-modal-close').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-confirm-btn').addEventListener('click', confirmDelete);
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dropdown')) {
+        document.querySelectorAll('.dropdown-menu').forEach(function(menu) {
+            menu.classList.remove('active');
+        });
+    }
+});
+
+// Debounced search
+var searchTimeout;
+document.getElementById('filter-search').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(function() {
+        currentPage = 1;
+        loadRoutes();
+    }, 300);
+});
+
+document.getElementById('filter-status').addEventListener('change', function() {
+    currentPage = 1;
+    loadRoutes();
+});
+
+document.getElementById('filter-health').addEventListener('change', function() {
+    currentPage = 1;
+    loadRoutes();
+});
+
+// Load routes on page load
+loadRoutes();
+</script>
+{{ end }}

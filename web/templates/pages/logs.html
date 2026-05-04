@@ -1,0 +1,118 @@
+{{ define "content" }}
+<div style="margin-bottom: 1.5rem;">
+    <h1 class="page-title">Access Logs</h1>
+    <p style="color: var(--text-muted); font-size: 0.875rem;">View recent requests through Kroxy.</p>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">Filter</div>
+    <div class="card-body">
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+                <label class="form-label">Host</label>
+                <input type="text" id="log-host" class="form-input" placeholder="example.com">
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+                <label class="form-label">Method</label>
+                <select id="log-method" class="form-select">
+                    <option value="">All</option>
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+                <button type="button" class="btn btn-primary" onclick="loadLogs()">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="log-loading" class="loading-spinner" style="margin: 2rem auto;"></div>
+
+<div id="log-content" style="display: none;">
+    <div class="card">
+        <div class="card-header">Requests</div>
+        <div class="card-body">
+            <div class="table-scroll">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Method</th>
+                            <th>Host</th>
+                            <th>Path</th>
+                            <th>Status</th>
+                            <th>Duration</th>
+                            <th>Client IP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-table">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="log-empty" style="display: none; text-align: center; padding: 2rem; color: var(--text-muted);">
+                No logs found. Traffic will appear here once requests are processed.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadLogs() {
+    try {
+        document.getElementById('log-loading').style.display = 'block';
+        document.getElementById('log-content').style.display = 'none';
+
+        var params = new URLSearchParams();
+        params.append('limit', '100');
+        var host = document.getElementById('log-host').value;
+        var method = document.getElementById('log-method').value;
+        if (host) params.append('host', host);
+        if (method) params.append('method', method);
+
+        var resp = await fetch('/api/logs?' + params.toString(), { credentials: 'include' });
+        if (!resp.ok) throw new Error('Failed to load logs');
+        var data = await resp.json();
+
+        document.getElementById('log-loading').style.display = 'none';
+        document.getElementById('log-content').style.display = 'block';
+
+        var logs = data.logs || [];
+        if (logs.length === 0) {
+            document.getElementById('log-empty').style.display = 'block';
+            document.getElementById('log-table').innerHTML = '';
+            return;
+        }
+        document.getElementById('log-empty').style.display = 'none';
+
+        var rows = logs.map(function(l) {
+            var statusClass = l.status_code >= 500 ? 'badge badge-danger' : l.status_code >= 400 ? 'badge badge-warning' : 'badge badge-success';
+            return `<tr>
+                <td>${new Date(l.timestamp).toLocaleString()}</td>
+                <td><code>${l.method}</code></td>
+                <td>${escapeHtml(l.host)}</td>
+                <td><code>${escapeHtml(l.uri)}</code></td>
+                <td><span class="${statusClass}">${l.status_code}</span></td>
+                <td>${l.duration_ms}ms</td>
+                <td>${l.remote_addr}</td>
+            </tr>`;
+        }).join('');
+        document.getElementById('log-table').innerHTML = rows;
+    } catch (err) {
+        console.error(err);
+        document.getElementById('log-loading').style.display = 'none';
+        showToast('Failed to load logs: ' + err.message, 'error');
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+loadLogs();
+</script>
+{{ end }}

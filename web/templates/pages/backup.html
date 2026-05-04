@@ -1,0 +1,72 @@
+{{ define "content" }}
+<div style="margin-bottom: 1.5rem;">
+    <h1 class="page-title">Backup & Restore</h1>
+    <p style="color: var(--text-muted); font-size: 0.875rem;">Export your configuration or restore from a previous backup.</p>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">Export Backup</div>
+    <div class="card-body">
+        <p style="margin-bottom: 1rem;">Download a JSON file containing all your routes, certificates, WAF rules, and settings.</p>
+        <a href="/api/backup" class="btn btn-primary">Download Backup</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Import Backup</div>
+    <div class="card-body">
+        <p style="margin-bottom: 1rem;">Restore from a previously exported JSON backup file.</p>
+        <div style="margin-bottom: 1rem;">
+            <input type="file" id="backup-file" accept=".json" class="form-input" style="max-width: 400px;">
+        </div>
+        <button type="button" class="btn btn-primary" id="import-btn" onclick="importBackup()">Import Backup</button>
+        <div id="import-status" style="margin-top: 1rem;"></div>
+    </div>
+</div>
+
+<script>
+async function importBackup() {
+    var fileInput = document.getElementById('backup-file');
+    var file = fileInput.files[0];
+    if (!file) {
+        showToast('Please select a backup file', 'error');
+        return;
+    }
+
+    var btn = document.getElementById('import-btn');
+    btn.disabled = true;
+    btn.textContent = 'Importing...';
+
+    try {
+        var text = await file.text();
+        var data = JSON.parse(text);
+
+        var resp = await fetch('/api/backup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        if (!resp.ok) {
+            var err = await resp.json();
+            throw new Error(err.error || 'Import failed');
+        }
+
+        showToast('Backup imported successfully', 'success');
+        setTimeout(function() {
+            window.location.reload();
+        }, 2000);
+    } catch (err) {
+        console.error(err);
+        showToast('Import failed: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Import Backup';
+    }
+}
+</script>
+{{ end }}

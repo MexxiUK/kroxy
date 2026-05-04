@@ -1,0 +1,12 @@
+Contact: security@kroxy.io
+Expires: 2027-04-07T23:59:00.000Z
+Preferred-Languages: en
+Canonical: https://kroxy.io/.well-known/security.txt
+
+# Reporting Security Issues
+
+Please report security vulnerabilities to security@kroxy.io
+
+We respond within 48 hours and aim to fix critical issues within 14 days.
+
+Please do not disclose issues publicly until a fix is released.
