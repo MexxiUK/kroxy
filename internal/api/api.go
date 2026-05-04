@@ -607,6 +607,13 @@ func generateCSRFToken() string {
 
 // setup handles initial admin account creation (only when no users exist)
 func (a *API) setup(w http.ResponseWriter, r *http.Request) {
+	// Strict rate limiting: setup should only ever be called once per installation.
+	ip := security.GetClientIP(r)
+	if !a.rateLimiter.Allow(ip, 3) {
+		respondError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
+
 	// Prevent race condition where two concurrent requests both see zero users
 	// and create multiple admin accounts (CRIT-005)
 	a.setupMu.Lock()
@@ -2222,33 +2229,48 @@ func (a *API) provisionCertificate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) certAllowed(w http.ResponseWriter, r *http.Request) {
+	// Rate-limit this public endpoint to prevent domain enumeration (LOW-009).
+	ip := security.GetClientIP(r)
+	if !a.rateLimiter.Allow(ip, 10) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+
 	domain := r.URL.Query().Get("domain")
 	if domain == "" {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+
+	// Timing equalization: always fetch both routes and certs before deciding,
+	// so the response time is similar whether the domain exists or not.
+	found := false
 	routes, err := a.store.GetRoutes()
-	if err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-	for _, route := range routes {
-		if route.Domain == domain && route.Enabled {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-	}
-	// Also check certificate records — LE certs may exist before a route
-	certs, err := a.store.GetCertificates()
 	if err == nil {
-		for _, cert := range certs {
-			if cert.Domain == domain && cert.Type == "letsencrypt" {
-				w.WriteHeader(http.StatusOK)
-				return
+		for _, route := range routes {
+			if route.Domain == domain && route.Enabled {
+				found = true
+				break
 			}
 		}
 	}
-	w.WriteHeader(http.StatusForbidden)
+	// Also check certificate records — LE certs may exist before a route
+	if !found {
+		certs, err := a.store.GetCertificates()
+		if err == nil {
+			for _, cert := range certs {
+				if cert.Domain == domain && cert.Type == "letsencrypt" {
+					found = true
+					break
+				}
+			}
+		}
+	}
+	if found {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusForbidden)
+	}
 }
 
 func (a *API) listWAFRules(w http.ResponseWriter, r *http.Request) {
