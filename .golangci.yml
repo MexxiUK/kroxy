@@ -1,0 +1,37 @@
+run:
+  timeout: 5m
+  issues-exit-code: 1
+
+linters:
+  enable:
+    - govet
+    - ineffassign
+    - staticcheck
+    - gosimple
+    - typecheck
+    - structcheck
+    - varcheck
+    - deadcode
+    - prealloc
+    - goconst
+    - gofmt
+    - misspell
+    - unconvert
+    - goimports
+    - nakedret
+    - rowserrcheck
+    - sqlclosecheck
+  disable:
+    - errcheck
+    - unused
+
+linters-settings:
+  gofmt:
+    simplify: true
+  misspell:
+    locale: US
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 50
+  max-same-issues: 10
