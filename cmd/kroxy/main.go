@@ -127,13 +127,13 @@ func main() {
 	})
 	apiServer.SetWAFReloadFunc(func() error {
 		// Rebuild global WAF engine
-			signingKey, _ := crypto.GetWAFSigningKey()
+		signingKey, _ := crypto.GetWAFSigningKey()
 
 		globalWAF, err := waf.New(db, waf.Config{
-			Enabled: true,
-			Mode:    "block",
-			Ruleset: "owasp-crs",
-				SigningKey: signingKey,
+			Enabled:    true,
+			Mode:       "block",
+			Ruleset:    "owasp-crs",
+			SigningKey: signingKey,
 		}, audit.GetLogger(), nil, "block")
 		if err != nil {
 			return err
