@@ -18,7 +18,6 @@ import (
 func newTestServer(t *testing.T) (string, func()) {
 	t.Helper()
 	os.Setenv("KROXY_INSECURE_COOKIES", "true")
-	defer os.Unsetenv("KROXY_INSECURE_COOKIES")
 
 	s, cleanupStore := testutil.NewTestStore(t)
 	a := New(s)
@@ -27,6 +26,7 @@ func newTestServer(t *testing.T) (string, func()) {
 	cleanup := func() {
 		server.Close()
 		cleanupStore()
+		os.Unsetenv("KROXY_INSECURE_COOKIES")
 	}
 	return server.URL, cleanup
 }
