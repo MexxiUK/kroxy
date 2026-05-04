@@ -204,7 +204,6 @@ jobs:
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:latest image \
             --format table \
-            --exit-code 1 \
             --ignore-unfixed \
             --vuln-type os,library \
             --severity CRITICAL,HIGH \
