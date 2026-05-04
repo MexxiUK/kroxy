@@ -20,6 +20,7 @@ import (
 
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/crypto"
+	"github.com/kroxy/kroxy/internal/security"
 	"github.com/kroxy/kroxy/internal/store"
 	"github.com/kroxy/kroxy/internal/totp"
 	"github.com/kroxy/kroxy/internal/validation"
@@ -1335,19 +1336,11 @@ func (a *Auth) RequireStrongAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		// Password-only ("local") - check if client IP is private
-		ip := getIPFromRequest(r)
+		// Password-only ("local") - check if client IP is private.
+		// Use security.GetClientIP to respect trusted proxies and X-Forwarded-For
+		// instead of raw RemoteAddr (HIGH-024).
+		ip := security.GetClientIP(r)
 		parsedIP := net.ParseIP(ip)
-		if parsedIP == nil {
-			// Try to handle host:port format
-			host, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err == nil {
-				parsedIP = net.ParseIP(host)
-			}
-		}
-		if parsedIP == nil {
-			parsedIP = net.ParseIP(r.RemoteAddr)
-		}
 
 		if parsedIP != nil && validation.IsPrivateIP(parsedIP) {
 			// Private IP - allow password-only
