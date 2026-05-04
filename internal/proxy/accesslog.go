@@ -40,11 +40,11 @@ const maxLogEntries = 10000
 // NewLogStore creates an access log store.
 func NewLogStore(logPath string) (*LogStore, error) {
 	dir := filepath.Dir(logPath)
-	if err := os.MkdirAll(dir, 0750); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create log dir: %w", err)
 	}
 
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0640)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open access log: %w", err)
 	}

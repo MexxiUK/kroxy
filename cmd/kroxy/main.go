@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,6 +26,17 @@ import (
 	"github.com/kroxy/kroxy/internal/version"
 	"github.com/kroxy/kroxy/internal/waf"
 )
+
+func isLocalhostAddr(addr string) bool {
+	if addr == "" {
+		return false
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	return host == "127.0.0.1" || host == "::1" || host == "localhost" || host == ""
+}
 
 func main() {
 	cfg, err := config.Load()
@@ -181,9 +193,19 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("API server listening on %s", cfg.AdminAddr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("API server error: %v", err)
+		if cfg.TLSEnabled && cfg.TLSCertPath != "" && cfg.TLSKeyPath != "" {
+			log.Printf("API server listening with TLS on %s", cfg.AdminAddr)
+			if err := server.ListenAndServeTLS(cfg.TLSCertPath, cfg.TLSKeyPath); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("API server error: %v", err)
+			}
+		} else {
+			if !isLocalhostAddr(cfg.AdminAddr) {
+				log.Printf("WARNING: Admin API listening on non-localhost address %s without TLS. This is insecure.", cfg.AdminAddr)
+			}
+			log.Printf("API server listening on %s", cfg.AdminAddr)
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("API server error: %v", err)
+			}
 		}
 	}()
 

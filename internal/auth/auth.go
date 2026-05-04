@@ -71,6 +71,13 @@ type adminTokenAttempt struct {
 	firstFail time.Time
 }
 
+// apiKeyAttempt tracks API key validation failures per IP to prevent bcrypt DoS (CRIT-004)
+type apiKeyAttempt struct {
+	mu        sync.Mutex
+	count     int
+	firstFail time.Time
+}
+
 // distributedAttackTracker tracks credential stuffing attacks (same IP, multiple accounts)
 type distributedAttackTracker struct {
 	mu          sync.Mutex
@@ -122,6 +129,7 @@ type Auth struct {
 	roleCache          sync.Map                  // userID (int) -> *roleCacheEntry
 	sessionMu          sync.Map                  // userID (int) -> *sync.Mutex (for atomic session operations)
 	adminTokenAttempts sync.Map                  // IP -> *adminTokenAttempt // Track failed admin token attempts
+	apiKeyAttempts     sync.Map                  // IP -> *apiKeyAttempt     // Track failed API key attempts (bcrypt DoS protection)
 	distributedAttack  *distributedAttackTracker // Credential stuffing detection
 	pending2FA         sync.Map                  // pendingID -> *pending2FASession
 	twoFARateLimits    sync.Map                  // userID (int) -> *twoFARateLimit
@@ -632,6 +640,13 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 		return nil, errors.New("unsupported authorization type")
 	}
 
+	// Rate-limit API key validation attempts to prevent bcrypt DoS (CRIT-004)
+	ip := getIPFromRequest(r)
+	if !a.checkAPIKeyRateLimit(ip) {
+		log.Printf("AUDIT: API key validation rate limit exceeded for IP=%s", ip)
+		return nil, errors.New("rate limit exceeded")
+	}
+
 	// Look up API key from memory cache first
 	var apiKey *APIKey
 	if value, ok := a.apiKeys.Load(keyID); ok {
@@ -684,6 +699,7 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 
 	// Verify secret using bcrypt (constant-time comparison)
 	if err := bcrypt.CompareHashAndPassword([]byte(apiKey.KeySecretHash), []byte(keySecret)); err != nil {
+		a.recordAPIKeyFailure(ip)
 		log.Printf("AUDIT: API key authentication failed for key_id=%s", keyID)
 		return nil, errors.New("invalid API key secret")
 	}
@@ -776,6 +792,60 @@ func (a *Auth) recordAdminTokenFailure(ip string) {
 	})
 
 	attempt := value.(*adminTokenAttempt)
+	attempt.mu.Lock()
+	defer attempt.mu.Unlock()
+
+	// Reset if window expired
+	if time.Since(attempt.firstFail) > time.Minute {
+		attempt.count = 0
+		attempt.firstFail = time.Now()
+	}
+
+	attempt.count++
+}
+
+// checkAPIKeyRateLimit enforces rate limiting for API key validation attempts (CRIT-004)
+// Returns false if rate limit exceeded, preventing bcrypt DoS.
+func (a *Auth) checkAPIKeyRateLimit(ip string) bool {
+	const maxAttempts = 10
+	const window = time.Minute
+
+	value, ok := a.apiKeyAttempts.Load(ip)
+	if !ok {
+		a.apiKeyAttempts.Store(ip, &apiKeyAttempt{
+			count:     0,
+			firstFail: time.Now(),
+		})
+		return true
+	}
+
+	attempt := value.(*apiKeyAttempt)
+	attempt.mu.Lock()
+	defer attempt.mu.Unlock()
+
+	// Reset if window expired
+	if time.Since(attempt.firstFail) > window {
+		attempt.count = 0
+		attempt.firstFail = time.Now()
+		return true
+	}
+
+	// Check if limit exceeded
+	if attempt.count >= maxAttempts {
+		return false
+	}
+
+	return true
+}
+
+// recordAPIKeyFailure records a failed API key validation attempt for rate limiting
+func (a *Auth) recordAPIKeyFailure(ip string) {
+	value, _ := a.apiKeyAttempts.LoadOrStore(ip, &apiKeyAttempt{
+		count:     0,
+		firstFail: time.Now(),
+	})
+
+	attempt := value.(*apiKeyAttempt)
 	attempt.mu.Lock()
 	defer attempt.mu.Unlock()
 

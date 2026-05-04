@@ -4,11 +4,12 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -20,20 +21,66 @@ var (
 	errInvalidKey     = errors.New("invalid encryption key size")
 )
 
-// GetEncryptionKey returns the encryption key from environment
-// Key must be 16, 24, or 32 bytes for AES-128, AES-192, or AES-256
+// devKeyPath returns the path for the auto-generated development encryption key file.
+func devKeyPath() string {
+	dataDir := os.Getenv("KROXY_DATA_DIR")
+	if dataDir == "" {
+		dataDir = "."
+	}
+	return filepath.Join(dataDir, ".kroxy-encryption-key")
+}
+
+// loadOrGenerateDevKey generates a random 32-byte key for development use
+// and persists it to a file with restricted permissions (0600).
+// This replaces the previous hardcoded dev key (CRIT-002).
+func loadOrGenerateDevKey() ([]byte, error) {
+	keyPath := devKeyPath()
+
+	// If a key file already exists, read it
+	if data, err := os.ReadFile(keyPath); err == nil {
+		keyBytes, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
+		if decodeErr == nil && (len(keyBytes) == 16 || len(keyBytes) == 24 || len(keyBytes) == 32) {
+			return keyBytes, nil
+		}
+		// Invalid file content - fall through to regenerate
+		log.Printf("WARNING: existing dev key file %s is invalid, regenerating", keyPath)
+	}
+
+	// Generate a random 32-byte key
+	keyBytes := make([]byte, 32)
+	if _, err := rand.Read(keyBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate dev encryption key: %w", err)
+	}
+
+	// Persist with 0600 permissions
+	keyDir := filepath.Dir(keyPath)
+	if err := os.MkdirAll(keyDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create key directory: %w", err)
+	}
+	encodedKey := base64.StdEncoding.EncodeToString(keyBytes)
+	if err := os.WriteFile(keyPath, []byte(encodedKey+"\n"), 0600); err != nil {
+		return nil, fmt.Errorf("failed to write dev encryption key: %w", err)
+	}
+
+	log.Printf("WARNING: generated development encryption key at %s. Set KROXY_ENCRYPTION_KEY for production.", keyPath)
+	return keyBytes, nil
+}
+
+// GetEncryptionKey returns the encryption key from environment.
+// Key must be 16, 24, or 32 bytes for AES-128, AES-192, or AES-256.
+// In non-production mode without KROXY_ENCRYPTION_KEY set, a random dev key
+// is generated once and persisted to a file (CRIT-002 fix).
 func GetEncryptionKey() ([]byte, error) {
 	var err error
 	encryptionKeyOnce.Do(func() {
 		key := os.Getenv("KROXY_ENCRYPTION_KEY")
 		if key == "" {
-			// Derive a stable development key so encryption always works in dev mode
-			if os.Getenv("KROXY_PRODUCTION") != "true" {
-				h := sha256.Sum256([]byte("kroxy-dev-key-v1"))
-				encryptionKey = h[:32]
+			if os.Getenv("KROXY_PRODUCTION") == "true" {
+				err = ErrNoKey
 				return
 			}
-			err = ErrNoKey
+			// Dev mode: generate and persist a random key instead of using a hardcoded one
+			encryptionKey, err = loadOrGenerateDevKey()
 			return
 		}
 
@@ -109,14 +156,6 @@ func Decrypt(ciphertext string) (string, error) {
 		return "", nil
 	}
 
-	// Check for plaintext marker from development mode
-	if strings.HasPrefix(ciphertext, "PLAIN:") {
-		if os.Getenv("KROXY_PRODUCTION") == "true" {
-			return "", errors.New("refusing to decrypt plaintext-stored secret in production mode - re-encrypt with KROXY_ENCRYPTION_KEY set")
-		}
-		return ciphertext[6:], nil
-	}
-
 	key, err := GetEncryptionKey()
 	if err != nil {
 		return "", err
@@ -124,11 +163,7 @@ func Decrypt(ciphertext string) (string, error) {
 
 	data, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
-		// If decode fails, might be plaintext from dev mode
-		if os.Getenv("KROXY_PRODUCTION") == "true" {
-			return "", errors.New("invalid ciphertext format in production mode")
-		}
-		return ciphertext, nil
+		return "", errors.New("invalid ciphertext format")
 	}
 
 	block, err := aes.NewCipher(key)

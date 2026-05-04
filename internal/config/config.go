@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -73,8 +74,19 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Secure-by-default: admin API binds to localhost unless explicitly configured.
+	// This prevents accidental exposure of the admin API to the network.
+	adminAddr := getEnv("KROXY_ADMIN", "127.0.0.1:8081")
+
+	// In production, enforce that admin either uses TLS or binds to localhost/loopback.
+	if productionMode {
+		if !tlsEnabled && !isLocalhost(adminAddr) {
+			return nil, fmt.Errorf("in production mode, admin API must use TLS or bind to localhost (got: %s)", adminAddr)
+		}
+	}
+
 	cfg := &Config{
-		AdminAddr:            getEnv("KROXY_ADMIN", ":8081"),
+		AdminAddr:            adminAddr,
 		DatabasePath:         databasePath,
 		ProxyAddr:            getEnv("KROXY_PROXY", ":80"),
 		HTTPSAddr:            getEnv("KROXY_HTTPS_ADDR", ":443"),
@@ -93,6 +105,21 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func isLocalhost(addr string) bool {
+	// Check if the address binds to a loopback interface only.
+	// Handles forms like "127.0.0.1:8081", "[::1]:8081", "localhost:8081".
+	if addr == "" {
+		return false
+	}
+	// Strip port if present
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		// No port - treat entire string as host
+		host = addr
+	}
+	return host == "127.0.0.1" || host == "::1" || host == "localhost" || host == ""
 }
 
 func getEnv(key, defaultVal string) string {

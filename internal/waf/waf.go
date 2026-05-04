@@ -545,9 +545,16 @@ func createWAFEngine(cfg Config, s *store.Store, routeID *int) (coraza.WAF, erro
 				if rule.Exclusions != "" {
 					for _, ruleID := range strings.Split(rule.Exclusions, ",") {
 						ruleID = strings.TrimSpace(ruleID)
-						if ruleID != "" {
-							directives.WriteString(fmt.Sprintf("SecRuleRemoveById %s\n", ruleID))
+						if ruleID == "" {
+							continue
 						}
+						// Defense-in-depth: validate each exclusion ID is purely numeric
+						// to prevent directive injection via the exclusions field.
+						if _, err := strconv.Atoi(ruleID); err != nil {
+							log.Printf("Warning: skipping invalid WAF exclusion ID %q in rule %s", ruleID, rule.Name)
+							continue
+						}
+						directives.WriteString(fmt.Sprintf("SecRuleRemoveById %s\n", ruleID))
 					}
 				}
 				if rule.Enabled {
