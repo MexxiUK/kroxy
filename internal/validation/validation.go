@@ -47,7 +47,7 @@ var (
 		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*pass\b`),
 		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*nolog\b`),
 		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*noauditlog\b`),
-		regexp.MustCompile(`(?i)secaction[^"]*(?:pass|nolog|noauditlog)`),
+		regexp.MustCompile(`(?i)secaction.*(?:pass|nolog|noauditlog)\b`),
 	}
 )
 
