@@ -1,0 +1,338 @@
+{{ define "oidc" }}
+<div class="page-header-row">
+    <div>
+        <h1 class="page-title">Sign-In Providers</h1>
+        <p class="page-subtitle">Let your team sign in with their Google, Microsoft, or Okta accounts</p>
+    </div>
+    <button type="button" class="btn btn-primary" id="add-provider-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Add Provider
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <div class="table-scroll">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Issuer</th>
+                    <th>Status</th>
+                    <th class="col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="providers-table">
+                <tr>
+                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="delete-modal" class="modal">
+    <div class="modal-backdrop" id="delete-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header" style="color: var(--rose);">Delete Provider</div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete <strong id="delete-provider-name"></strong>? Users who sign in with this provider will lose access.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="delete-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-danger" id="delete-confirm-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div id="add-modal" class="modal modal-lg">
+    <div class="modal-backdrop" id="add-modal-backdrop"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <span id="modal-title">Add OIDC Provider</span>
+            <button class="modal-close" id="add-modal-close">&times;</button>
+        </div>
+        <form id="provider-form">
+            <div class="modal-body">
+                <!-- Quick Setup Presets -->
+                <div id="preset-section" class="form-group">
+                    <label class="form-label">Quick Setup</label>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="preset-google" style="display: flex; align-items: center; gap: 0.375rem;">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.23H2.18C1.43 8.88 1 10.69 1 12.59s.43 3.71 1.18 5.36l2.85-2.22.81-.64z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.23l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                            Google
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="preset-microsoft" style="display: flex; align-items: center; gap: 0.375rem;">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><rect fill="#F25022" x="1" y="1" width="10" height="10"/><rect fill="#7FBA00" x="13" y="1" width="10" height="10"/><rect fill="#00A4EF" x="1" y="13" width="10" height="10"/><rect fill="#FFB900" x="13" y="13" width="10" height="10"/></svg>
+                            Microsoft
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="preset-okta" style="display: flex; align-items: center; gap: 0.375rem;">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10" fill="#007DC1"/><circle cx="12" cy="12" r="5" fill="white"/></svg>
+                            Okta
+                        </button>
+                    </div>
+                </div>
+                <div class="callout callout-info" style="margin-bottom: 1rem;">
+                    <strong>Steps to set up Single Sign-On:</strong>
+                    <ol style="margin: 0.5rem 0 0 1.25rem; font-size: 0.8125rem; color: var(--blue);">
+                        <li>Register your app with your identity provider</li>
+                        <li>Copy the Client ID and Client Secret they give you</li>
+                        <li>Paste them in the fields below</li>
+                    </ol>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="provider-name">Name *</label>
+                    <input type="text" id="provider-name" class="form-input" placeholder="e.g., Google" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="provider-issuer">Provider URL *</label>
+                    <input type="url" id="provider-issuer" class="form-input" placeholder="https://accounts.google.com" required>
+                    <p class="form-hint">The URL provided by your SSO provider (e.g., https://accounts.google.com)</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="provider-client-id">Client ID *</label>
+                    <input type="text" id="provider-client-id" class="form-input" required>
+                    <p class="form-hint">Found in your provider's developer console</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="provider-client-secret">Client Secret *</label>
+                    <input type="password" id="provider-client-secret" class="form-input" required>
+                    <p class="form-hint" id="secret-hint">Leave empty to keep existing secret</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="provider-redirect-url">Redirect URL</label>
+                    <input type="url" id="provider-redirect-url" class="form-input" placeholder="https://your-domain.com/api/oauth/callback">
+                    <p class="form-hint">Use this URL when registering your app with the provider. Copy it exactly as shown.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="add-modal-cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="submit-btn">Create Provider</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+var providers = [];
+var editingId = null;
+
+async function loadProviders() {
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/oidc', {
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error('Failed to load providers');
+        }
+
+        var data = await response.json();
+        providers = data.providers || [];
+        renderProviders();
+    } catch (err) {
+        console.error('Failed to load providers:', err);
+        document.getElementById('providers-table').innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--rose); padding: 2rem;">Failed to load providers</td></tr>';
+    }
+}
+
+function renderProviders() {
+    var tbody = document.getElementById('providers-table');
+
+    if (providers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="empty-state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div><div class="empty-state-title">No sign-in providers yet</div><div class="empty-state-text">Adding a provider lets your team sign in with their work accounts — more secure and convenient than separate passwords.</div><div class="empty-state-action"><button type="button" class="btn btn-primary" onclick="openAddModal()">Add a Provider</button></div></div></td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = providers.map(function(provider) {
+        return '<tr>' +
+            '<td style="font-weight: 500;">' + provider.name + '</td>' +
+            '<td style="color: var(--text-muted); font-family: \'JetBrains Mono\', monospace; font-size: 0.875rem;">' + provider.issuer + '</td>' +
+            '<td>' + (provider.enabled ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-neutral">Disabled</span>') + '</td>' +
+            '<td>' +
+                '<div style="display: flex; gap: 0.5rem;">' +
+                    '<button type="button" class="btn btn-secondary btn-sm edit-provider-btn" data-id="' + provider.id + '">Edit</button>' +
+                    '<button type="button" class="btn btn-danger btn-sm delete-provider-btn" data-id="' + provider.id + '">Delete</button>' +
+                '</div>' +
+            '</td>' +
+        '</tr>';
+    }).join('');
+
+    document.querySelectorAll('.edit-provider-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { editProvider(parseInt(btn.dataset.id)); });
+    });
+    document.querySelectorAll('.delete-provider-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { deleteProvider(parseInt(btn.dataset.id)); });
+    });
+}
+
+function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add OIDC Provider';
+    document.getElementById('provider-name').value = '';
+    document.getElementById('provider-issuer').value = '';
+    document.getElementById('provider-client-id').value = '';
+    document.getElementById('provider-client-secret').value = '';
+    document.getElementById('provider-redirect-url').value = window.location.origin + '/api/oauth/callback';
+    document.getElementById('provider-client-secret').required = true;
+    document.getElementById('secret-hint').style.display = 'none';
+    document.getElementById('submit-btn').textContent = 'Create Provider';
+    document.getElementById('preset-section').style.display = 'block';
+    openModal('add-modal');
+}
+
+function editProvider(id) {
+    var provider = providers.find(function(p) { return p.id === id; });
+    if (!provider) return;
+
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit OIDC Provider';
+    document.getElementById('provider-name').value = provider.name;
+    document.getElementById('provider-issuer').value = provider.issuer;
+    document.getElementById('provider-client-id').value = provider.client_id;
+    document.getElementById('provider-client-secret').value = '';
+    document.getElementById('provider-client-secret').required = false;
+    document.getElementById('provider-redirect-url').value = provider.redirect_url || (window.location.origin + '/api/oauth/callback');
+    document.getElementById('secret-hint').style.display = 'block';
+    document.getElementById('submit-btn').textContent = 'Save Changes';
+    document.getElementById('preset-section').style.display = 'none';
+    openModal('add-modal');
+}
+
+async function handleSubmit(e) {
+    e.preventDefault();
+
+    var btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    var data = {
+        name: document.getElementById('provider-name').value.trim(),
+        issuer: document.getElementById('provider-issuer').value.trim(),
+        client_id: document.getElementById('provider-client-id').value.trim(),
+        client_secret: document.getElementById('provider-client-secret').value,
+        redirect_url: document.getElementById('provider-redirect-url').value.trim()
+    };
+
+    if (editingId && !data.client_secret) {
+        delete data.client_secret;
+    }
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var url = editingId ? '/api/oidc/' + editingId : '/api/oidc';
+        var method = editingId ? 'PUT' : 'POST';
+
+        var response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to save provider');
+        }
+
+        closeModal('add-modal');
+        showToast('Provider ' + (editingId ? 'updated' : 'created') + ' successfully', 'success');
+        loadProviders();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = editingId ? 'Save Changes' : 'Create Provider';
+    }
+
+    return false;
+}
+
+var deleteProviderId = null;
+
+async function deleteProvider(id) {
+    var provider = providers.find(function(p) { return p.id === id; });
+    document.getElementById('delete-provider-name').textContent = provider ? provider.name : 'this provider';
+    deleteProviderId = id;
+    openModal('delete-modal');
+}
+
+async function confirmDeleteProvider() {
+    if (!deleteProviderId) return;
+    var btn = document.getElementById('delete-confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/oidc/' + deleteProviderId, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to delete provider');
+        }
+
+        closeModal('delete-modal');
+        showToast('Provider deleted', 'success');
+        loadProviders();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+    }
+}
+
+// Event listeners
+document.getElementById('add-provider-btn').addEventListener('click', openAddModal);
+document.getElementById('add-modal-backdrop').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('add-modal-cancel').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('add-modal-close').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('provider-form').addEventListener('submit', handleSubmit);
+
+document.getElementById('delete-modal-backdrop').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-modal-cancel').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-confirm-btn').addEventListener('click', confirmDeleteProvider);
+
+// Preset buttons
+document.getElementById('preset-google').addEventListener('click', function() {
+    document.getElementById('provider-name').value = 'Google';
+    document.getElementById('provider-issuer').value = 'https://accounts.google.com';
+    document.getElementById('provider-redirect-url').value = window.location.origin + '/api/oauth/callback';
+    document.getElementById('provider-client-id').focus();
+});
+
+document.getElementById('preset-microsoft').addEventListener('click', function() {
+    document.getElementById('provider-name').value = 'Microsoft';
+    document.getElementById('provider-issuer').value = 'https://login.microsoftonline.com/common/v2.0';
+    document.getElementById('provider-redirect-url').value = window.location.origin + '/api/oauth/callback';
+    document.getElementById('provider-client-id').focus();
+});
+
+document.getElementById('preset-okta').addEventListener('click', function() {
+    document.getElementById('provider-name').value = 'Okta';
+    document.getElementById('provider-issuer').value = '';
+    document.getElementById('provider-redirect-url').value = window.location.origin + '/api/oauth/callback';
+    document.getElementById('provider-issuer').focus();
+    showToast('Enter your Okta tenant domain (e.g., https://your-tenant.okta.com)', 'info');
+});
+
+loadProviders();
+</script>
+{{ end }}

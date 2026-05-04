@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kroxy-config
+  namespace: kroxy
+  labels:
+    app.kubernetes.io/name: kroxy
+    app.kubernetes.io/component: config
+data:
+  KROXY_PROXY: ":80"
+  KROXY_ADMIN: "0.0.0.0:8080"
+  KROXY_DB: "/data/kroxy.db"
+  KROXY_PRODUCTION: "true"
+  KROXY_ENABLE_METRICS: "true"

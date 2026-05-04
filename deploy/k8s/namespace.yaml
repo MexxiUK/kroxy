@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kroxy
+  labels:
+    app.kubernetes.io/name: kroxy
+    app.kubernetes.io/component: namespace

@@ -1,0 +1,111 @@
+{{ define "content" }}
+<div style="margin-bottom: 1.5rem;">
+    <h1 class="page-title">Backend Health</h1>
+    <p style="color: var(--text-muted); font-size: 0.875rem;">Monitor the health of your backend servers.</p>
+</div>
+
+<div id="health-loading" class="loading-spinner" style="margin: 2rem auto;"></div>
+
+<div id="health-content" style="display: none;">
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">Health Summary</div>
+        <div class="card-body">
+            <div class="stats-grid" id="health-summary">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Backend Status</div>
+        <div class="card-body">
+            <div class="table-scroll">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th>Backend</th>
+                            <th>Status</th>
+                            <th>Response Time</th>
+                            <th>Last Check</th>
+                            <th>Failures</th>
+                        </tr>
+                    </thead>
+                    <tbody id="health-table">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="health-empty" style="display: none; text-align: center; padding: 2rem; color: var(--text-muted);">
+                No routes configured yet.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadHealth() {
+    try {
+        var resp = await fetch('/api/health/backends', { credentials: 'include' });
+        if (!resp.ok) throw new Error('Failed to load health status');
+        var data = await resp.json();
+
+        document.getElementById('health-loading').style.display = 'none';
+        document.getElementById('health-content').style.display = 'block';
+
+        var backends = data.backends || [];
+        var healthy = backends.filter(function(b) { return b.healthy; }).length;
+        var unhealthy = backends.filter(function(b) { return !b.healthy; }).length;
+
+        document.getElementById('health-summary').innerHTML = `
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--success);">${healthy}</div>
+                <div class="stat-label">Healthy</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--danger);">${unhealthy}</div>
+                <div class="stat-label">Unhealthy</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${backends.length}</div>
+                <div class="stat-label">Total</div>
+            </div>
+        `;
+
+        if (backends.length === 0) {
+            document.getElementById('health-empty').style.display = 'block';
+            return;
+        }
+        document.getElementById('health-empty').style.display = 'none';
+
+        var rows = backends.map(function(b) {
+            var statusClass = b.healthy ? 'badge badge-success' : 'badge badge-danger';
+            var statusText = b.healthy ? 'Healthy' : 'Unhealthy';
+            var lastCheck = b.last_checked ? new Date(b.last_checked).toLocaleString() : 'Never';
+            var responseTime = b.response_time_ms ? b.response_time_ms + 'ms' : '-';
+            return `<tr>
+                <td>${escapeHtml(b.domain)}</td>
+                <td><code>${escapeHtml(b.backend)}</code></td>
+                <td><span class="${statusClass}">${statusText}</span></td>
+                <td>${responseTime}</td>
+                <td>${lastCheck}</td>
+                <td>${b.fail_count || 0}</td>
+            </tr>`;
+        }).join('');
+        document.getElementById('health-table').innerHTML = rows;
+    } catch (err) {
+        console.error(err);
+        document.getElementById('health-loading').style.display = 'none';
+        showToast('Failed to load health status: ' + err.message, 'error');
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+loadHealth();
+setInterval(loadHealth, 30000); // Refresh every 30s
+</script>
+{{ end }}

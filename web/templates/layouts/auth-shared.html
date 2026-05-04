@@ -1,0 +1,136 @@
+{{ define "auth-css" }}
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-elevated: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --accent: #16a34a;
+            --accent-dim: rgba(22,163,74,0.05);
+            --emerald: #059669;
+            --rose: #dc2626;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: #f8fafc;
+            background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(22,163,74,0.06), transparent);
+            background-size: 100% 100%;
+            color: #0f172a;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .auth-card { width: 100%; max-width: 28rem; position: relative; z-index: 1; }
+        .logo { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 2rem; }
+        .logo-icon { width: 48px; height: 48px; flex-shrink: 0; }
+        .logo-text { font-size: 1.75rem; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
+        .logo-subtitle { color: #64748b; font-size: 0.9375rem; margin-top: 0.25rem; text-align: center; }
+        .card {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 10px 15px -3px rgba(0,0,0,0.04);
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(22,163,74,0.25), transparent);
+        }
+        .card-header { text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #f1f5f9; }
+        .card-header h1 { font-size: 1.25rem; font-weight: 600; color: #0f172a; margin-bottom: 0.25rem; }
+        .card-header p { color: #64748b; font-size: 0.875rem; }
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 0.875rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+        .error:empty, .success:empty { display: none; }
+        .success {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: #059669;
+            padding: 0.875rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+        .form-group { margin-bottom: 1.25rem; }
+        .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #475569; margin-bottom: 0.5rem; }
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 0.9375rem;
+            color: #0f172a;
+            transition: all 0.2s ease;
+        }
+        .form-input::placeholder { color: #94a3b8; }
+        .form-input:focus {
+            outline: none;
+            border-color: #16a34a;
+            box-shadow: 0 0 0 3px rgba(22,163,74,0.1);
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-primary {
+            background: #16a34a;
+            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .btn-primary:hover {
+            background: #15803d;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+            transform: translateY(-1px);
+        }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .btn-secondary {
+            background: #ffffff;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+        .btn-secondary:hover { background: #f8fafc; color: #0f172a; }
+        .footer { text-align: center; margin-top: 1.5rem; font-size: 0.875rem; color: #64748b; }
+        .footer a { color: #16a34a; text-decoration: none; font-weight: 500; }
+        .footer a:hover { text-decoration: underline; }
+        .password-field { position: relative; }
+        .password-field .form-input { padding-right: 2.5rem; }
+        .password-toggle {
+            position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%);
+            background: none; border: none; cursor: pointer; color: #94a3b8;
+            padding: 0; display: flex; align-items: center; justify-content: center;
+            width: 24px; height: 24px; line-height: 1;
+            transition: color 0.15s;
+        }
+        .password-toggle:hover { color: #64748b; }
+{{ end }}

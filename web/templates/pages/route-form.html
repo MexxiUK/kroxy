@@ -1,0 +1,559 @@
+{{ define "route-form" }}
+<div style="margin-bottom: 1.5rem;">
+    <a href="/routes" class="page-back">
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        Back to Routes
+    </a>
+    <h1 class="page-title">{{ if .Route }}Edit Route{{ else }}Add Route{{ end }}</h1>
+    <p style="color: var(--text-muted); font-size: 0.875rem;">{{ if .Route }}Update your route settings{{ else }}Connect a website to Kroxy{{ end }}</p>
+</div>
+
+<form id="routeForm">
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">Basic Configuration</div>
+        <div class="card-body">
+            <div style="display: grid; gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label" for="domain">Your Website Domain *</label>
+                    <input type="text" id="domain" name="domain" class="form-input" placeholder="myapp.com" required value="{{ if .Route }}{{ .Route.Domain }}{{ end }}">
+                    <p class="form-hint">The web address people type to visit your site (e.g., myapp.com)</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="backend">Where to Send Traffic *</label>
+                    <input type="url" id="backend" name="backend" class="form-input" placeholder="http://localhost:3000" required value="{{ if .Route }}{{ .Route.Backend }}{{ end }}">
+                    <p class="form-hint">The address of the server running your app (e.g., http://localhost:3000 for a local app)</p>
+                </div>
+                <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="enabled" name="enabled" {{ if .Route }}{{ if .Route.Enabled }}checked{{ end }}{{ else }}checked{{ end }}>
+                        <label for="enabled">Route is active</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="require_https" name="require_https" {{ if .Route }}{{ if .Route.RequireHTTPS }}checked{{ end }}{{ end }}>
+                        <label for="require_https">Require HTTPS</label>
+                    </div>
+                    <p class="form-hint">When enabled, HTTP requests to this route are automatically redirected to HTTPS. The route will not work over plain HTTP.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Section -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <div id="security-toggle" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                <span>Security</span>
+                <svg aria-hidden="true" id="security-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.15s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+        </div>
+        <div id="security-section" class="card-body" {{ if not .Route }}style="display: block;"{{ else }}style="display: none;"{{ end }}>
+            <div class="callout callout-info" style="margin-bottom: 1rem;">
+                <span class="callout-icon">&#128274;</span>
+                <span>We recommend enabling the firewall for any public website to block hackers automatically.</span>
+            </div>
+            <div style="display: grid; gap: 1rem;">
+                <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="waf_enabled" name="waf_enabled" {{ if .Route }}{{ if .Route.WAFEnabled }}checked{{ end }}{{ else }}checked{{ end }}>
+                        <label for="waf_enabled">Enable Firewall (WAF)</label>
+                    </div>
+                    <p class="form-hint">Block common hacking attempts automatically. Strongly recommended for public websites.</p>
+                </div>
+                <div id="waf-mode-config" style="margin-left: 1.5rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="waf_mode">Firewall Mode</label>
+                        <select id="waf_mode" name="waf_mode" class="form-select" style="max-width: 280px;">
+                            <option value="block" {{ if .Route }}{{ if eq .Route.WAFMode "block" }}selected{{ end }}{{ else }}selected{{ end }}>Block - Reject malicious requests</option>
+                            <option value="detect" {{ if .Route }}{{ if eq .Route.WAFMode "detect" }}selected{{ end }}{{ end }}>Detect Only - Log without blocking</option>
+                        </select>
+                        <p class="form-hint">Detect Only mode is useful for testing: attacks are logged but allowed through. Switch to Block once you've verified no legitimate traffic is flagged.</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="waf_paranoia_level">Paranoia Level</label>
+                        <select id="waf_paranoia_level" name="waf_paranoia_level" class="form-select" style="max-width: 280px;">
+                            <option value="0" {{ if .Route }}{{ if eq .Route.WAFParanoiaLevel 0 }}selected{{ end }}{{ else }}selected{{ end }}>Use global setting</option>
+                            <option value="1" {{ if .Route }}{{ if eq .Route.WAFParanoiaLevel 1 }}selected{{ end }}{{ end }}>PL1 - Conservative</option>
+                            <option value="2" {{ if .Route }}{{ if eq .Route.WAFParanoiaLevel 2 }}selected{{ end }}{{ end }}>PL2 - Balanced (recommended)</option>
+                            <option value="3" {{ if .Route }}{{ if eq .Route.WAFParanoiaLevel 3 }}selected{{ end }}{{ end }}>PL3 - Aggressive</option>
+                        </select>
+                        <p class="form-hint">Higher paranoia levels catch more attacks but may cause false positives. PL2 is recommended for most sites.</p>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="bot_protection">Bot Protection</label>
+                    <select id="bot_protection" name="bot_protection" class="form-select" style="max-width: 280px;">
+                        <option value="off" {{ if .Route }}{{ if eq .Route.BotProtection "off" }}selected{{ end }}{{ else }}selected{{ end }}>Off</option>
+                        <option value="passive" {{ if .Route }}{{ if eq .Route.BotProtection "passive" }}selected{{ end }}{{ end }}>Passive — Block obvious bots</option>
+                        <option value="challenge" {{ if .Route }}{{ if eq .Route.BotProtection "challenge" }}selected{{ end }}{{ end }}>Challenge — JavaScript proof-of-work</option>
+                    </select>
+                    <p class="form-hint">Passive blocks known bot signatures. Challenge serves a lightweight JavaScript proof-of-work to suspicious clients.</p>
+                </div>
+                <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="rate_limit_enabled" name="rate_limit_enabled" {{ if .Route }}{{ if .Route.RateLimit }}checked{{ end }}{{ end }}>
+                        <label for="rate_limit_enabled">Enable Rate Limiting</label>
+                    </div>
+                </div>
+                <div id="rate_limit_config" style="display: none; margin-left: 1.5rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="rate_limit">Requests per minute</label>
+                        <input type="number" id="rate_limit_value" name="rate_limit_value" class="form-input" style="max-width: 200px;" min="1" value="{{ if .Route }}{{ .Route.RateLimit }}{{ else }}60{{ end }}">
+                        <p class="form-hint">Typical values: 60 for normal websites, 600 for APIs</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WAF Rules Section (only shown when editing) -->
+    {{ if .Route }}
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <div id="waf-rules-toggle" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                <span>Firewall Rules for This Route</span>
+                <svg aria-hidden="true" id="waf-rules-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.15s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+        </div>
+        <div id="waf-rules-section" class="card-body" style="display: none;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                <p style="color: var(--text-muted); font-size: 0.875rem;">These rules only apply to this route. Global rules also apply and can be managed on the <a href="/waf" style="color: var(--accent);">Firewall page</a>.</p>
+                <button type="button" class="btn btn-primary btn-sm" id="route-add-waf-btn">Add Rule</button>
+            </div>
+            <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;"></th>
+                        <th>Name</th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="route-waf-table">
+                    <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 1rem;">Loading...</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+    {{ end }}
+
+    <!-- Geofencing Section -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <div id="geo-toggle" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                <span>Geofencing</span>
+                <svg aria-hidden="true" id="geo-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.15s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+        </div>
+        <div id="geo-section" class="card-body" style="display: none;">
+            <div class="callout callout-info" style="margin-bottom: 1rem;">
+                <span>Control which countries can or cannot access this route. This helps protect against traffic from regions where you don't operate.</span>
+            </div>
+            <div style="display: grid; gap: 1.5rem;">
+                <div class="form-group">
+                    <label class="form-label">Block Countries</label>
+                    <p class="form-hint">Visitors from these countries will be blocked</p>
+                    <div id="block-countries-chips" style="display: flex; flex-wrap: wrap; gap: 0.375rem; margin-bottom: 0.5rem; min-height: 1.5rem;"></div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <select id="block-country-select" class="form-select" style="flex: 1;"></select>
+                        <button type="button" class="btn btn-secondary btn-sm" id="add-block-country-btn">Add</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Allow Only Countries</label>
+                    <p class="form-hint">Only visitors from these countries will be allowed. If set, this overrides the block list.</p>
+                    <div id="allow-countries-chips" style="display: flex; flex-wrap: wrap; gap: 0.375rem; margin-bottom: 0.5rem; min-height: 1.5rem;"></div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <select id="allow-country-select" class="form-select" style="flex: 1;"></select>
+                        <button type="button" class="btn btn-secondary btn-sm" id="add-allow-country-btn">Add</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Authentication Section -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <div id="auth-toggle" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                <span>Authentication</span>
+                <svg aria-hidden="true" id="auth-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.15s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+        </div>
+        <div id="auth-section" class="card-body" style="display: none;">
+            <div style="display: grid; gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">Authentication Type</label>
+                    <div style="display: grid; gap: 0.75rem;">
+                        <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem;">
+                            <input type="radio" name="auth_type" value="none" {{ if not .Route }}checked{{ else }}{{ if not .Route.OIDCEnabled }}checked{{ end }}{{ end }} class="auth-type-radio" style="margin-top: 2px;">
+                            <div>
+                                <div style="font-weight: 500;">No sign-in required</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Anyone can visit this website (public website)</div>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem;">
+                            <input type="radio" name="auth_type" value="api_key" {{ if .Route }}checked{{ end }} class="auth-type-radio" style="margin-top: 2px;">
+                            <div>
+                                <div style="font-weight: 500;">Require a secret key</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">For APIs and services that need an access key</div>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem;">
+                            <input type="radio" name="auth_type" value="oidc" {{ if .Route }}{{ if .Route.OIDCEnabled }}checked{{ end }}{{ end }} class="auth-type-radio" style="margin-top: 2px;">
+                            <div>
+                                <div style="font-weight: 500;">Require sign-in with Google, Microsoft, or Okta</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">For private apps — users sign in with their work account</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <div id="oidc-config" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label" for="oidc_provider">Sign-In Provider</label>
+                        {{ if .OIDCProviders }}
+                        <select id="oidc_provider" name="oidc_provider" class="form-select" style="max-width: 300px;">
+                            <option value="">Select provider...</option>
+                            {{ range .OIDCProviders }}
+                            <option value="{{ .ID }}" {{ if $.Route }}{{ if eq $.Route.OIDCProviderID .ID }}selected{{ end }}{{ end }}>{{ .Name }}</option>
+                            {{ end }}
+                        </select>
+                        {{ else }}
+                        <div class="callout callout-info" style="margin-top: 0.5rem;">
+                            <span>No sign-in providers configured yet.</span>
+                            <a href="/users/oidc" style="color: var(--accent); margin-left: 0.25rem;">Set up a provider &rarr;</a>
+                        </div>
+                        {{ end }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div style="display: flex; gap: 0.75rem;">
+        <a href="/routes" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="submitBtn">{{ if .Route }}Save Changes{{ else }}Create Route{{ end }}</button>
+    </div>
+</form>
+
+<div id="error-modal" class="modal">
+    <div class="modal-backdrop" id="error-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header" style="color: var(--rose);">Error</div>
+        <div class="modal-body">
+            <p id="error-message"></p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" id="error-modal-ok">OK</button>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+var routeId = {{ if .Route }}{{ .Route.ID }}{{ else }}null{{ end }};
+
+// Country list (ISO 3166-1 alpha-2)
+var countries = [
+    {code:'AF',name:'Afghanistan'},{code:'AL',name:'Albania'},{code:'DZ',name:'Algeria'},{code:'AD',name:'Andorra'},{code:'AO',name:'Angola'},{code:'AG',name:'Antigua and Barbuda'},{code:'AR',name:'Argentina'},{code:'AM',name:'Armenia'},{code:'AU',name:'Australia'},{code:'AT',name:'Austria'},{code:'AZ',name:'Azerbaijan'},{code:'BS',name:'Bahamas'},{code:'BH',name:'Bahrain'},{code:'BD',name:'Bangladesh'},{code:'BB',name:'Barbados'},{code:'BY',name:'Belarus'},{code:'BE',name:'Belgium'},{code:'BZ',name:'Belize'},{code:'BJ',name:'Benin'},{code:'BT',name:'Bhutan'},{code:'BO',name:'Bolivia'},{code:'BA',name:'Bosnia and Herzegovina'},{code:'BW',name:'Botswana'},{code:'BR',name:'Brazil'},{code:'BN',name:'Brunei'},{code:'BG',name:'Bulgaria'},{code:'BF',name:'Burkina Faso'},{code:'BI',name:'Burundi'},{code:'KH',name:'Cambodia'},{code:'CM',name:'Cameroon'},{code:'CA',name:'Canada'},{code:'CV',name:'Cape Verde'},{code:'CF',name:'Central African Republic'},{code:'TD',name:'Chad'},{code:'CL',name:'Chile'},{code:'CN',name:'China'},{code:'CO',name:'Colombia'},{code:'KM',name:'Comoros'},{code:'CG',name:'Congo'},{code:'CD',name:'Congo (DRC)'},{code:'CR',name:'Costa Rica'},{code:'HR',name:'Croatia'},{code:'CU',name:'Cuba'},{code:'CY',name:'Cyprus'},{code:'CZ',name:'Czech Republic'},{code:'DK',name:'Denmark'},{code:'DJ',name:'Djibouti'},{code:'DM',name:'Dominica'},{code:'DO',name:'Dominican Republic'},{code:'EC',name:'Ecuador'},{code:'EG',name:'Egypt'},{code:'SV',name:'El Salvador'},{code:'GQ',name:'Equatorial Guinea'},{code:'ER',name:'Eritrea'},{code:'EE',name:'Estonia'},{code:'SZ',name:'Eswatini'},{code:'ET',name:'Ethiopia'},{code:'FJ',name:'Fiji'},{code:'FI',name:'Finland'},{code:'FR',name:'France'},{code:'GA',name:'Gabon'},{code:'GM',name:'Gambia'},{code:'GE',name:'Georgia'},{code:'DE',name:'Germany'},{code:'GH',name:'Ghana'},{code:'GR',name:'Greece'},{code:'GD',name:'Grenada'},{code:'GT',name:'Guatemala'},{code:'GN',name:'Guinea'},{code:'GW',name:'Guinea-Bissau'},{code:'GY',name:'Guyana'},{code:'HT',name:'Haiti'},{code:'HN',name:'Honduras'},{code:'HU',name:'Hungary'},{code:'IS',name:'Iceland'},{code:'IN',name:'India'},{code:'ID',name:'Indonesia'},{code:'IR',name:'Iran'},{code:'IQ',name:'Iraq'},{code:'IE',name:'Ireland'},{code:'IL',name:'Israel'},{code:'IT',name:'Italy'},{code:'JM',name:'Jamaica'},{code:'JP',name:'Japan'},{code:'JO',name:'Jordan'},{code:'KZ',name:'Kazakhstan'},{code:'KE',name:'Kenya'},{code:'KI',name:'Kiribati'},{code:'KP',name:'Korea (North)'},{code:'KR',name:'Korea (South)'},{code:'KW',name:'Kuwait'},{code:'KG',name:'Kyrgyzstan'},{code:'LA',name:'Laos'},{code:'LV',name:'Latvia'},{code:'LB',name:'Lebanon'},{code:'LS',name:'Lesotho'},{code:'LR',name:'Liberia'},{code:'LY',name:'Libya'},{code:'LI',name:'Liechtenstein'},{code:'LT',name:'Lithuania'},{code:'LU',name:'Luxembourg'},{code:'MG',name:'Madagascar'},{code:'MW',name:'Malawi'},{code:'MY',name:'Malaysia'},{code:'MV',name:'Maldives'},{code:'ML',name:'Mali'},{code:'MT',name:'Malta'},{code:'MH',name:'Marshall Islands'},{code:'MR',name:'Mauritania'},{code:'MU',name:'Mauritius'},{code:'MX',name:'Mexico'},{code:'FM',name:'Micronesia'},{code:'MD',name:'Moldova'},{code:'MC',name:'Monaco'},{code:'MN',name:'Mongolia'},{code:'ME',name:'Montenegro'},{code:'MA',name:'Morocco'},{code:'MZ',name:'Mozambique'},{code:'MM',name:'Myanmar'},{code:'NA',name:'Namibia'},{code:'NR',name:'Nauru'},{code:'NP',name:'Nepal'},{code:'NL',name:'Netherlands'},{code:'NZ',name:'New Zealand'},{code:'NI',name:'Nicaragua'},{code:'NE',name:'Niger'},{code:'NG',name:'Nigeria'},{code:'MK',name:'North Macedonia'},{code:'NO',name:'Norway'},{code:'OM',name:'Oman'},{code:'PK',name:'Pakistan'},{code:'PW',name:'Palau'},{code:'PA',name:'Panama'},{code:'PG',name:'Papua New Guinea'},{code:'PY',name:'Paraguay'},{code:'PE',name:'Peru'},{code:'PH',name:'Philippines'},{code:'PL',name:'Poland'},{code:'PT',name:'Portugal'},{code:'QA',name:'Qatar'},{code:'RO',name:'Romania'},{code:'RU',name:'Russia'},{code:'RW',name:'Rwanda'},{code:'KN',name:'Saint Kitts and Nevis'},{code:'LC',name:'Saint Lucia'},{code:'VC',name:'Saint Vincent'},{code:'WS',name:'Samoa'},{code:'SM',name:'San Marino'},{code:'ST',name:'Sao Tome and Principe'},{code:'SA',name:'Saudi Arabia'},{code:'SN',name:'Senegal'},{code:'RS',name:'Serbia'},{code:'SC',name:'Seychelles'},{code:'SL',name:'Sierra Leone'},{code:'SG',name:'Singapore'},{code:'SK',name:'Slovakia'},{code:'SI',name:'Slovenia'},{code:'SB',name:'Solomon Islands'},{code:'SO',name:'Somalia'},{code:'ZA',name:'South Africa'},{code:'SS',name:'South Sudan'},{code:'ES',name:'Spain'},{code:'LK',name:'Sri Lanka'},{code:'SD',name:'Sudan'},{code:'SR',name:'Suriname'},{code:'SE',name:'Sweden'},{code:'CH',name:'Switzerland'},{code:'SY',name:'Syria'},{code:'TW',name:'Taiwan'},{code:'TJ',name:'Tajikistan'},{code:'TZ',name:'Tanzania'},{code:'TH',name:'Thailand'},{code:'TL',name:'Timor-Leste'},{code:'TG',name:'Togo'},{code:'TO',name:'Tonga'},{code:'TT',name:'Trinidad and Tobago'},{code:'TN',name:'Tunisia'},{code:'TR',name:'Turkey'},{code:'TM',name:'Turkmenistan'},{code:'TV',name:'Tuvalu'},{code:'UG',name:'Uganda'},{code:'UA',name:'Ukraine'},{code:'AE',name:'United Arab Emirates'},{code:'GB',name:'United Kingdom'},{code:'US',name:'United States'},{code:'UY',name:'Uruguay'},{code:'UZ',name:'Uzbekistan'},{code:'VU',name:'Vanuatu'},{code:'VA',name:'Vatican City'},{code:'VE',name:'Venezuela'},{code:'VN',name:'Vietnam'},{code:'YE',name:'Yemen'},{code:'ZM',name:'Zambia'},{code:'ZW',name:'Zimbabwe'}
+];
+
+var blockCountries = [];
+var allowCountries = [];
+
+// Parse existing country data from route
+{{ if .Route }}
+{{ if .Route.BlockCountries }}blockCountries = '{{ .Route.BlockCountries }}'.split(',').filter(function(c) { return c; });{{ end }}
+{{ if .Route.AllowCountries }}allowCountries = '{{ .Route.AllowCountries }}'.split(',').filter(function(c) { return c; });{{ end }}
+{{ end }}
+
+function populateCountrySelects() {
+    var blockSelect = document.getElementById('block-country-select');
+    var allowSelect = document.getElementById('allow-country-select');
+
+    countries.forEach(function(c) {
+        var opt1 = document.createElement('option');
+        opt1.value = c.code;
+        opt1.textContent = c.name + ' (' + c.code + ')';
+        blockSelect.appendChild(opt1);
+
+        var opt2 = document.createElement('option');
+        opt2.value = c.code;
+        opt2.textContent = c.name + ' (' + c.code + ')';
+        allowSelect.appendChild(opt2);
+    });
+}
+
+function getCountryName(code) {
+    var c = countries.find(function(c) { return c.code === code; });
+    return c ? c.name : code;
+}
+
+function renderCountryChips() {
+    var blockChips = document.getElementById('block-countries-chips');
+    blockChips.innerHTML = blockCountries.map(function(code) {
+        return '<span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: rgba(244,63,94,0.15); color: var(--rose); border-radius: 9999px; font-size: 0.8125rem;">' +
+            escapeHtml(getCountryName(code)) +
+            '<button type="button" data-remove-country="' + code + '" style="background: none; border: none; cursor: pointer; color: var(--rose); padding: 0; line-height: 1;">&times;</button>' +
+        '</span>';
+    }).join('');
+
+    var allowChips = document.getElementById('allow-countries-chips');
+    allowChips.innerHTML = allowCountries.map(function(code) {
+        return '<span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: rgba(16,185,129,0.15); color: var(--emerald); border-radius: 9999px; font-size: 0.8125rem;">' +
+            escapeHtml(getCountryName(code)) +
+            '<button type="button" data-remove-country="' + code + '" style="background: none; border: none; cursor: pointer; color: var(--emerald); padding: 0; line-height: 1;">&times;</button>' +
+        '</span>';
+    }).join('');
+}
+
+function addBlockCountry() {
+    var select = document.getElementById('block-country-select');
+    var code = select.value;
+    if (code && blockCountries.indexOf(code) === -1) {
+        blockCountries.push(code);
+        renderCountryChips();
+    }
+    select.value = '';
+}
+
+function addAllowCountry() {
+    var select = document.getElementById('allow-country-select');
+    var code = select.value;
+    if (code && allowCountries.indexOf(code) === -1) {
+        allowCountries.push(code);
+        renderCountryChips();
+    }
+    select.value = '';
+}
+
+function removeBlockCountry(code) {
+    blockCountries = blockCountries.filter(function(c) { return c !== code; });
+    renderCountryChips();
+}
+
+function removeAllowCountry(code) {
+    allowCountries = allowCountries.filter(function(c) { return c !== code; });
+    renderCountryChips();
+}
+
+function toggleSection(name) {
+    var section = document.getElementById(name + '-section');
+    var chevron = document.getElementById(name + '-chevron');
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+        chevron.style.transform = 'rotate(180deg)';
+    } else {
+        section.style.display = 'none';
+        chevron.style.transform = 'rotate(0deg)';
+    }
+}
+
+function toggleRateLimit() {
+    var enabled = document.getElementById('rate_limit_enabled').checked;
+    document.getElementById('rate_limit_config').style.display = enabled ? 'block' : 'none';
+}
+
+function toggleWAFMode() {
+    var enabled = document.getElementById('waf_enabled').checked;
+    document.getElementById('waf-mode-config').style.display = enabled ? 'block' : 'none';
+}
+
+function updateAuthConfig() {
+    var authType = document.querySelector('input[name="auth_type"]:checked').value;
+    document.getElementById('oidc-config').style.display = authType === 'oidc' ? 'block' : 'none';
+}
+
+async function handleSubmit(e) {
+    e.preventDefault();
+
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    var authType = document.querySelector('input[name="auth_type"]:checked').value;
+
+    var data = {
+        domain: document.getElementById('domain').value.trim(),
+        backend: document.getElementById('backend').value.trim(),
+        enabled: document.getElementById('enabled').checked,
+        require_https: document.getElementById('require_https').checked,
+        waf_enabled: document.getElementById('waf_enabled').checked,
+        waf_mode: document.getElementById('waf_mode').value,
+        waf_paranoia_level: parseInt(document.getElementById('waf_paranoia_level').value) || 0,
+        bot_protection: document.getElementById('bot_protection').value,
+        rate_limit: null,
+        oidc_enabled: authType === 'oidc',
+        oidc_provider_id: null,
+        block_countries: blockCountries.join(','),
+        allow_countries: allowCountries.join(',')
+    };
+
+    if (document.getElementById('rate_limit_enabled').checked) {
+        data.rate_limit = parseInt(document.getElementById('rate_limit_value').value) || 60;
+    }
+
+    if (authType === 'oidc') {
+        data.oidc_provider_id = parseInt(document.getElementById('oidc_provider').value) || null;
+    }
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var url = routeId ? '/api/routes/' + routeId : '/api/routes';
+        var method = routeId ? 'PUT' : 'POST';
+
+        var response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to save route');
+        }
+
+        showToast('Route ' + (routeId ? 'updated' : 'created') + ' successfully', 'success');
+        window.location.href = '/routes';
+    } catch (err) {
+        document.getElementById('error-message').textContent = err.message;
+        openModal('error-modal');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = routeId ? 'Save Changes' : 'Create Route';
+    }
+
+    return false;
+}
+
+// Event listeners
+document.getElementById('security-toggle').addEventListener('click', function() { toggleSection('security'); });
+document.getElementById('auth-toggle').addEventListener('click', function() { toggleSection('auth'); });
+document.getElementById('geo-toggle').addEventListener('click', function() { toggleSection('geo'); });
+document.getElementById('rate_limit_enabled').addEventListener('change', toggleRateLimit);
+document.getElementById('waf_enabled').addEventListener('change', toggleWAFMode);
+document.querySelectorAll('.auth-type-radio').forEach(function(radio) {
+    radio.addEventListener('change', updateAuthConfig);
+});
+document.getElementById('routeForm').addEventListener('submit', handleSubmit);
+
+document.getElementById('error-modal-backdrop').addEventListener('click', function() { closeModal('error-modal'); });
+document.getElementById('error-modal-ok').addEventListener('click', function() { closeModal('error-modal'); });
+
+document.getElementById('add-block-country-btn').addEventListener('click', addBlockCountry);
+document.getElementById('add-allow-country-btn').addEventListener('click', addAllowCountry);
+
+document.getElementById('block-countries-chips').addEventListener('click', function(e) {
+    var chip = e.target.closest('[data-remove-country]');
+    if (chip) removeBlockCountry(chip.dataset.removeCountry);
+});
+document.getElementById('allow-countries-chips').addEventListener('click', function(e) {
+    var chip = e.target.closest('[data-remove-country]');
+    if (chip) removeAllowCountry(chip.dataset.removeCountry);
+});
+
+// WAF rules for this route (only when editing)
+{{ if .Route }}
+var routeWafRules = [];
+
+document.getElementById('waf-rules-toggle').addEventListener('click', function() {
+    toggleSection('waf-rules');
+    if (routeWafRules.length === 0) loadRouteWafRules();
+});
+
+async function loadRouteWafRules() {
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/waf/rules?route_id=' + routeId, {
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+        if (!response.ok) throw new Error('Failed to load rules');
+        var data = await response.json();
+        routeWafRules = Array.isArray(data) ? data : (data.rules || []);
+        renderRouteWafRules();
+    } catch (err) {
+        document.getElementById('route-waf-table').innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--rose); padding: 1rem;">Failed to load rules</td></tr>';
+    }
+}
+
+function renderRouteWafRules() {
+    var tbody = document.getElementById('route-waf-table');
+    var routeOnly = routeWafRules.filter(function(r) { return r.route_id === routeId; });
+    if (routeOnly.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 1rem;">No route-specific rules. Global rules still apply. <a href="/waf" style="color: var(--accent);">Manage all rules &rarr;</a></td></tr>';
+        return;
+    }
+    tbody.innerHTML = routeOnly.map(function(rule) {
+        return '<tr style="' + (!rule.enabled ? 'opacity: 0.5;' : '') + '">' +
+            '<td><label class="toggle-switch"><input type="checkbox" role="switch" aria-checked="' + (rule.enabled ? 'true' : 'false') + '" ' + (rule.enabled ? 'checked' : '') + ' data-action="toggle" data-id="' + rule.id + '"><span class="toggle-slider"></span></label></td>' +
+            '<td>' + escapeHtml(rule.name) + '</td>' +
+            '<td><button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="' + rule.id + '">Del</button></td>' +
+        '</tr>';
+    }).join('');
+}
+
+async function toggleRouteWafRule(id, enabled) {
+    var rule = routeWafRules.find(function(r) { return r.id === id; });
+    if (!rule) return;
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        await fetch('/api/waf/rules/' + id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            credentials: 'include',
+            body: JSON.stringify({ name: rule.name, rule: rule.rule, enabled: enabled, mode: rule.mode || 'block', exclusions: rule.exclusions || '', route_id: rule.route_id })
+        });
+        rule.enabled = enabled;
+        renderRouteWafRules();
+    } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function deleteRouteWafRule(id) {
+    if (!confirm('Delete this rule?')) return;
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        await fetch('/api/waf/rules/' + id, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+        routeWafRules = routeWafRules.filter(function(r) { return r.id !== id; });
+        renderRouteWafRules();
+        showToast('Rule deleted', 'success');
+    } catch (err) { showToast(err.message, 'error'); }
+}
+
+document.getElementById('route-add-waf-btn').addEventListener('click', function() {
+    window.location.href = '/waf';
+});
+
+document.getElementById('route-waf-table').addEventListener('click', function(e) {
+    var el = e.target.closest('[data-action]');
+    if (!el) return;
+    var id = parseInt(el.dataset.id);
+    if (el.dataset.action === 'delete') deleteRouteWafRule(id);
+});
+document.getElementById('route-waf-table').addEventListener('change', function(e) {
+    var el = e.target.closest('[data-action]');
+    if (!el) return;
+    var id = parseInt(el.dataset.id);
+    if (el.dataset.action === 'toggle') toggleRouteWafRule(id, el.checked);
+});
+{{ end }}
+
+// Initialize
+updateAuthConfig();
+toggleRateLimit();
+toggleWAFMode();
+populateCountrySelects();
+renderCountryChips();
+</script>
+{{ end }}

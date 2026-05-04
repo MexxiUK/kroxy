@@ -1,0 +1,400 @@
+{{ define "ip-lists" }}
+<div class="page-header-row">
+    <div>
+        <h1 class="page-title">IP Lists</h1>
+        <p class="page-subtitle">Control which IP addresses can access your sites</p>
+    </div>
+</div>
+
+<div class="grid grid-2" style="gap: 1.5rem;">
+    <!-- Allowlist -->
+    <div class="card">
+        <div class="card-header">
+            <div class="flex flex-between" style="flex-wrap: wrap; gap: 0.5rem;">
+                <div>
+                    <span>Allowlist</span>
+                    <span class="text-sm text-gray" style="margin-left: 0.5rem;">Only these IPs can access your site</span>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="add-whitelist-btn">Add IP</button>
+            </div>
+        </div>
+        <div class="card-body card-body-flush">
+            <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>IP Address</th>
+                        <th>Added</th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="whitelist-table">
+                    <tr>
+                        <td colspan="3" class="cell-center cell-secondary" style="padding: 1rem;">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Blocklist -->
+    <div class="card">
+        <div class="card-header">
+            <div class="flex flex-between" style="flex-wrap: wrap; gap: 0.5rem;">
+                <div>
+                    <span>Blocklist</span>
+                    <span class="text-sm text-gray" style="margin-left: 0.5rem;">These IPs are banned from all your sites</span>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="add-blacklist-btn">Add IP</button>
+            </div>
+        </div>
+        <div class="card-body card-body-flush">
+            <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>IP Address</th>
+                        <th>Added</th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="blacklist-table">
+                    <tr>
+                        <td colspan="3" class="cell-center cell-secondary" style="padding: 1rem;">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Whitelist Modal -->
+<div id="whitelist-modal" class="modal ip-modal">
+    <div class="modal-backdrop" id="whitelist-modal-backdrop"></div>
+    <div class="modal-content ip-modal-content" style="max-width: 28rem; border: none; background: #fff; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
+        <div class="ip-modal-header ip-modal-header-allow">
+            <div class="ip-modal-icon-wrap">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+            </div>
+            <div>
+                <div class="ip-modal-title">Add to Allowlist</div>
+                <div class="ip-modal-subtitle">Trusted IPs that can access your sites</div>
+            </div>
+        </div>
+        <form id="whitelist-form">
+            <div class="modal-body" style="padding: 1.5rem;">
+                <div class="form-group">
+                    <label class="form-label" for="whitelist-ip">IP Address *</label>
+                    <input type="text" id="whitelist-ip" class="form-input" placeholder="192.168.1.0/24" required>
+                    <p class="form-hint">Single IP (e.g., 192.168.1.1) or range (e.g., 192.168.1.0/24 = all from .1 to .254)</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="whitelist-note">Reason</label>
+                    <input type="text" id="whitelist-note" class="form-input" placeholder="e.g., Office network">
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid #f1f5f9; padding: 1rem 1.5rem; background: #fafafa;">
+                <button type="button" class="btn btn-secondary" id="whitelist-modal-cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="whitelist-btn">Add to Allowlist</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Blacklist Modal -->
+<div id="blacklist-modal" class="modal ip-modal">
+    <div class="modal-backdrop" id="blacklist-modal-backdrop"></div>
+    <div class="modal-content ip-modal-content" style="max-width: 28rem; border: none; background: #fff; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
+        <div class="ip-modal-header ip-modal-header-block">
+            <div class="ip-modal-icon-wrap">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            </div>
+            <div>
+                <div class="ip-modal-title">Add to Blocklist</div>
+                <div class="ip-modal-subtitle">Banned IPs that cannot access your sites</div>
+            </div>
+        </div>
+        <form id="blacklist-form">
+            <div class="modal-body" style="padding: 1.5rem;">
+                <div class="form-group">
+                    <label class="form-label" for="blacklist-ip">IP Address *</label>
+                    <input type="text" id="blacklist-ip" class="form-input" placeholder="192.168.1.100" required>
+                    <p class="form-hint">Single IP (e.g., 192.168.1.1) or range (e.g., 192.168.1.0/24 = all from .1 to .254)</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="blacklist-note">Reason</label>
+                    <input type="text" id="blacklist-note" class="form-input" placeholder="e.g., Known attacker">
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid #f1f5f9; padding: 1rem 1.5rem; background: #fafafa;">
+                <button type="button" class="btn btn-secondary" id="blacklist-modal-cancel">Cancel</button>
+                <button type="submit" class="btn btn-danger" id="blacklist-btn">Add to Blocklist</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="delete-modal" class="modal ip-modal">
+    <div class="modal-backdrop" id="delete-modal-backdrop"></div>
+    <div class="modal-content ip-modal-content" style="max-width: 28rem; border: none; background: #fff; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
+        <div class="ip-modal-header" style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-left: 4px solid #ef4444;">
+            <div class="ip-modal-icon-wrap" style="color: #ef4444;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </div>
+            <div>
+                <div class="ip-modal-title">Remove IP Address</div>
+                <div class="ip-modal-subtitle">This action cannot be undone</div>
+            </div>
+        </div>
+        <div class="modal-body" style="padding: 1.5rem;">
+            <p style="margin: 0; color: #475569;">Are you sure you want to remove this IP address?</p>
+        </div>
+        <div class="modal-footer" style="border-top: 1px solid #f1f5f9; padding: 1rem 1.5rem; background: #fafafa;">
+            <button type="button" class="btn btn-secondary" id="delete-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-danger" id="delete-confirm-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<style nonce="{{ nonce }}">
+/* IP Modal Brand Styles */
+.ip-modal .modal-content {
+    border: none;
+    background: #fff;
+    overflow: hidden;
+}
+.ip-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+.ip-modal-header-allow {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border-left: 4px solid #10b981;
+}
+.ip-modal-header-block {
+    background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
+    border-left: 4px solid #f43f5e;
+}
+.ip-modal-icon-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.ip-modal-header-allow .ip-modal-icon-wrap {
+    color: #10b981;
+}
+.ip-modal-header-block .ip-modal-icon-wrap {
+    color: #f43f5e;
+}
+.ip-modal-title {
+    font-weight: 700;
+    font-size: 1.0625rem;
+    color: #0f172a;
+    line-height: 1.3;
+}
+.ip-modal-subtitle {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin-top: 0.125rem;
+}
+</style>
+
+<script nonce="{{ nonce }}">
+async function loadIPLists() {
+    var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+    try {
+        var response = await fetch('/api/whitelists', {
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            var data = await response.json();
+            renderIPList('whitelist-table', data.whitelists || [], 'whitelist');
+        }
+    } catch (err) {
+        console.error('Failed to load whitelist:', err);
+    }
+
+    try {
+        var response = await fetch('/api/blacklists', {
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            var data = await response.json();
+            renderIPList('blacklist-table', data.blacklists || [], 'blacklist');
+        }
+    } catch (err) {
+        console.error('Failed to load blacklist:', err);
+    }
+}
+
+function renderIPList(tableId, items, type) {
+    var tbody = document.getElementById(tableId);
+
+    if (items.length === 0) {
+        if (type === 'whitelist') {
+            tbody.innerHTML = '<tr><td colspan="3"><div class="empty-state" style="padding: 1.5rem;"><div class="empty-state-title" style="font-size: 0.875rem;">Allowlist is empty</div><div class="empty-state-text" style="font-size: 0.75rem;">All IP addresses are allowed by default. Add IPs to restrict access.</div></div></td></tr>';
+        } else {
+            tbody.innerHTML = '<tr><td colspan="3"><div class="empty-state" style="padding: 1.5rem;"><div class="empty-state-title" style="font-size: 0.875rem;">Blocklist is empty</div><div class="empty-state-text" style="font-size: 0.75rem;">No IP addresses are banned. Add IPs to block known attackers.</div></div></td></tr>';
+        }
+        return;
+    }
+
+    tbody.innerHTML = items.map(function(item) {
+        return '<tr>' +
+            '<td style="font-family: \'JetBrains Mono\', monospace;">' + escapeHtml(item.value) + '</td>' +
+            '<td style="color: var(--text-muted);">' + formatDate(item.created_at) + '</td>' +
+            '<td>' +
+                '<button type="button" class="btn btn-danger btn-sm delete-ip-btn" data-type="' + type + '" data-id="' + item.id + '">Delete</button>' +
+            '</td>' +
+        '</tr>';
+    }).join('');
+
+    document.querySelectorAll('.delete-ip-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { openIPDeleteModal(btn.dataset.type, parseInt(btn.dataset.id)); });
+    });
+}
+
+async function addWhitelist(e) {
+    e.preventDefault();
+    var btn = document.getElementById('whitelist-btn');
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/whitelists', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                type: 'ip',
+                value: document.getElementById('whitelist-ip').value.trim()
+            })
+        });
+
+        var result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Failed to add');
+
+        closeModal('whitelist-modal');
+        showToast('IP added to allowlist', 'success');
+        loadIPLists();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Add';
+    }
+
+    return false;
+}
+
+async function addBlacklist(e) {
+    e.preventDefault();
+    var btn = document.getElementById('blacklist-btn');
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/blacklists', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                type: 'ip',
+                value: document.getElementById('blacklist-ip').value.trim()
+            })
+        });
+
+        var result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Failed to add');
+
+        closeModal('blacklist-modal');
+        showToast('IP added to blocklist', 'success');
+        loadIPLists();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Add';
+    }
+
+    return false;
+}
+
+var deleteTarget = null;
+
+function openIPDeleteModal(type, id) {
+    deleteTarget = { type: type, id: id };
+    openModal('delete-modal');
+}
+
+async function confirmDeleteIP() {
+    if (!deleteTarget) return;
+    var btn = document.getElementById('delete-confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var endpoint = deleteTarget.type === 'whitelist' ? '/api/whitelists/' : '/api/blacklists/';
+        var response = await fetch(endpoint + deleteTarget.id, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (!response.ok) throw new Error('Failed to delete');
+
+        closeModal('delete-modal');
+        showToast('IP removed', 'success');
+        loadIPLists();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+    }
+}
+
+// Event listeners
+document.getElementById('add-whitelist-btn').addEventListener('click', function() { openModal('whitelist-modal'); });
+document.getElementById('whitelist-modal-backdrop').addEventListener('click', function() { closeModal('whitelist-modal'); });
+document.getElementById('whitelist-modal-cancel').addEventListener('click', function() { closeModal('whitelist-modal'); });
+document.getElementById('whitelist-form').addEventListener('submit', addWhitelist);
+
+document.getElementById('add-blacklist-btn').addEventListener('click', function() { openModal('blacklist-modal'); });
+document.getElementById('blacklist-modal-backdrop').addEventListener('click', function() { closeModal('blacklist-modal'); });
+document.getElementById('blacklist-modal-cancel').addEventListener('click', function() { closeModal('blacklist-modal'); });
+document.getElementById('blacklist-form').addEventListener('submit', addBlacklist);
+
+document.getElementById('delete-modal-backdrop').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-modal-cancel').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-confirm-btn').addEventListener('click', confirmDeleteIP);
+
+loadIPLists();
+</script>
+{{ end }}

@@ -1,0 +1,47 @@
+# Kroxy + Django/Gunicorn with automatic HTTPS (Let's Encrypt)
+#
+# Usage:
+#   1. Update KROXY_ACME_EMAIL to your email
+#   2. docker compose up -d
+#   3. Create a route via the admin API:
+#      curl -X POST http://localhost:8080/api/routes \
+#        -H "Content-Type: application/json" \
+#        -d '{"domain":"yourdomain.com","backend":"http://django:8000","waf_enabled":true}'
+#
+version: "3.8"
+
+services:
+  kroxy:
+    image: kroxy/kroxy:latest
+    container_name: kroxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - kroxy-data:/data
+      - kroxy-certs:/home/kroxy/.local/share/caddy
+    environment:
+      - KROXY_PROXY=:80
+      - KROXY_HTTPS_ADDR=:443
+      - KROXY_ADMIN=:8080
+      - KROXY_DB=/data/kroxy.db
+      - KROXY_TLS_ENABLED=true
+      - KROXY_AUTO_HTTPS=true
+      - KROXY_ACME_EMAIL=admin@example.com
+    depends_on:
+      django:
+        condition: service_started
+
+  django:
+    build: .
+    container_name: django-app
+    restart: unless-stopped
+    environment:
+      - DJANGO_SETTINGS_MODULE=myproject.settings
+      - ALLOWED_HOSTS=yourdomain.com
+
+volumes:
+  kroxy-data:
+  kroxy-certs:

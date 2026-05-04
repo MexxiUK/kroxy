@@ -1,0 +1,292 @@
+{{ define "settings" }}
+<div class="page-header-row">
+    <div>
+        <h1 class="page-title">Settings</h1>
+        <p class="page-subtitle">Configure Kroxy's general settings</p>
+    </div>
+</div>
+
+<div style="display: grid; gap: 1.5rem;">
+    <!-- General Settings -->
+    <div class="card">
+        <div class="card-header">General</div>
+        <div class="card-body">
+            <form id="generalForm">
+                <div style="display: grid; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="app-name">Application Name</label>
+                        <input type="text" id="app-name" class="form-input" style="max-width: 400px;" value="{{ .Settings.AppName }}">
+                        <p class="form-hint">The name shown in the browser tab and login page</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="admin-email">Admin Contact Email</label>
+                        <input type="email" id="admin-email" class="form-input" style="max-width: 400px;" value="{{ .Settings.AdminEmail }}">
+                        <p class="form-hint">Where system notifications and alerts are sent</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="log-level">Log Level</label>
+                        <select id="log-level" class="form-select" style="max-width: 200px;">
+                            <option value="debug" {{ if eq .Settings.LogLevel "debug" }}selected{{ end }}>Debug</option>
+                            <option value="info" {{ if eq .Settings.LogLevel "info" }}selected{{ end }}>Info</option>
+                            <option value="warn" {{ if eq .Settings.LogLevel "warn" }}selected{{ end }}>Warn</option>
+                            <option value="error" {{ if eq .Settings.LogLevel "error" }}selected{{ end }}>Error</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button type="submit" class="btn btn-primary" id="general-btn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Security Settings -->
+    <div class="card">
+        <div class="card-header">Security</div>
+        <div class="card-body">
+            <form id="securityForm">
+                <div style="display: grid; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label">Session Duration</label>
+                        <p class="form-hint" style="margin-bottom: 0.375rem;">How long users stay signed in before needing to log in again</p>
+                        <select id="session-duration" class="form-select" style="max-width: 200px;">
+                            <option value="1h" {{ if eq .Settings.SessionDuration "1h" }}selected{{ end }}>1 hour</option>
+                            <option value="6h" {{ if eq .Settings.SessionDuration "6h" }}selected{{ end }}>6 hours</option>
+                            <option value="24h" {{ if eq .Settings.SessionDuration "24h" }}selected{{ end }}>1 day</option>
+                            <option value="7d" {{ if eq .Settings.SessionDuration "7d" }}selected{{ end }}>1 week</option>
+                            <option value="30d" {{ if eq .Settings.SessionDuration "30d" }}selected{{ end }}>30 days</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="require-2fa" {{ if .Settings.Require2FA }}checked{{ end }}>
+                            <label for="require-2fa">Require two-factor authentication for admin accounts</label>
+                        </div>
+                        <p class="form-hint">Adds an extra layer of security — admins must enter a code from their phone when signing in</p>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="audit-logging" {{ if .Settings.AuditLogging }}checked{{ end }}>
+                            <label for="audit-logging">Enable audit logging</label>
+                        </div>
+                        <p class="form-hint">Keeps a record of who did what, useful for investigating security incidents</p>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button type="submit" class="btn btn-primary" id="security-btn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Network Settings -->
+    <div class="card">
+        <div class="card-header">Network</div>
+        <div class="card-body">
+            <form id="networkForm">
+                <div style="display: grid; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="listen-port">Listen Port</label>
+                        <input type="number" id="listen-port" class="form-input" style="max-width: 120px;" value="{{ .Settings.ListenPort }}" min="1" max="65535">
+                        <p class="form-hint">The port Kroxy listens on for incoming traffic (default: 8080)</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="max-connections">Max Connections</label>
+                        <input type="number" id="max-connections" class="form-input" style="max-width: 120px;" value="{{ .Settings.MaxConnections }}" min="1">
+                        <p class="form-hint">Maximum concurrent connections per route</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="timeout">Request Timeout (seconds)</label>
+                        <input type="number" id="timeout" class="form-input" style="max-width: 120px;" value="{{ .Settings.Timeout }}" min="1">
+                        <p class="form-hint">How long to wait for a backend server before giving up</p>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button type="submit" class="btn btn-primary" id="network-btn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="card card-danger">
+        <div class="card-header">Danger Zone</div>
+        <div class="card-body">
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">These actions are irreversible. Please proceed with caution.</p>
+            <button type="button" class="btn btn-danger" id="reset-settings-btn">Reset All Settings</button>
+        </div>
+    </div>
+</div>
+
+<!-- Reset Confirmation Modal -->
+<div id="reset-modal" class="modal">
+    <div class="modal-backdrop" id="reset-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header" style="color: var(--rose);">Reset All Settings</div>
+        <div class="modal-body">
+            <p>Are you sure you want to reset all settings to their default values? This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="reset-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-danger" id="reset-confirm-btn">Reset Settings</button>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+async function saveGeneral(e) {
+    e.preventDefault();
+    var btn = document.getElementById('general-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    var data = {
+        app_name: document.getElementById('app-name').value.trim(),
+        admin_email: document.getElementById('admin-email').value.trim(),
+        log_level: document.getElementById('log-level').value
+    };
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/settings/general', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to save settings');
+        }
+
+        showToast('Settings saved', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+    }
+
+    return false;
+}
+
+async function saveSecurity(e) {
+    e.preventDefault();
+    var btn = document.getElementById('security-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    var data = {
+        session_duration: document.getElementById('session-duration').value,
+        require_2fa: document.getElementById('require-2fa').checked,
+        audit_logging: document.getElementById('audit-logging').checked
+    };
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/settings/security', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to save settings');
+        }
+
+        showToast('Security settings saved', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+    }
+
+    return false;
+}
+
+async function saveNetwork(e) {
+    e.preventDefault();
+    var btn = document.getElementById('network-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    var data = {
+        listen_port: parseInt(document.getElementById('listen-port').value) || 8080,
+        max_connections: parseInt(document.getElementById('max-connections').value) || 1000,
+        timeout: parseInt(document.getElementById('timeout').value) || 30
+    };
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/settings/network', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to save settings');
+        }
+
+        showToast('Network settings saved', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+    }
+
+    return false;
+}
+
+async function resetSettings() {
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/settings/reset', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to reset settings');
+        }
+
+        closeModal('reset-modal');
+        showToast('Settings reset to defaults', 'success');
+        setTimeout(function() { window.location.reload(); }, 1000);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Event listeners
+document.getElementById('generalForm').addEventListener('submit', saveGeneral);
+document.getElementById('securityForm').addEventListener('submit', saveSecurity);
+document.getElementById('networkForm').addEventListener('submit', saveNetwork);
+document.getElementById('reset-settings-btn').addEventListener('click', function() { openModal('reset-modal'); });
+document.getElementById('reset-modal-backdrop').addEventListener('click', function() { closeModal('reset-modal'); });
+document.getElementById('reset-modal-cancel').addEventListener('click', function() { closeModal('reset-modal'); });
+document.getElementById('reset-confirm-btn').addEventListener('click', resetSettings);
+</script>
+{{ end }}

@@ -1,0 +1,167 @@
+{{ define "2fa" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="csrf-token" content="{{ .CSRFToken }}">
+    <title>Two-Factor Authentication - Kroxy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style nonce="{{ nonce }}">
+        {{ template "auth-css" }}
+        .btn { width: 100%; }
+        .form-input { text-align: center; letter-spacing: 0.5em; font-size: 1.25rem; font-family: 'JetBrains Mono', monospace; }
+        .icon-shield {
+            display: inline-block; width: 48px; height: 48px;
+            margin-bottom: 0.75rem;
+        }
+        .attempts-remaining { font-size: 0.75rem; color: #64748b; margin-top: 0.5rem; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <div class="logo">
+            <svg aria-hidden="true" class="logo-icon" width="48" height="48" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="32" height="32" rx="8" fill="rgba(22,163,74,0.1)"/>
+                <path d="M16 4 L26 8 L26 16 Q26 26 16 29 Q6 26 6 16 L6 8 Z" stroke="#16a34a" stroke-width="2" fill="none"/>
+                <circle cx="11" cy="13" r="2.5" fill="#16a34a"/>
+                <circle cx="21" cy="13" r="2.5" fill="#16a34a"/>
+                <circle cx="16" cy="22" r="2.5" fill="#16a34a"/>
+                <line x1="11" y1="13" x2="21" y2="13" stroke="#16a34a" stroke-width="2"/>
+                <line x1="11" y1="13" x2="16" y2="22" stroke="#16a34a" stroke-width="2"/>
+                <line x1="21" y1="13" x2="16" y2="22" stroke="#16a34a" stroke-width="2"/>
+            </svg>
+            <div>
+                <div class="logo-text">Kroxy</div>
+                <div class="logo-subtitle">Two-factor authentication</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <svg role="img" aria-label="Verified identity" class="icon-shield" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="M9 12l2 2 4-4"/>
+                </svg>
+                <h1>Verify your identity</h1>
+                <p>Enter the 6-digit code from your authenticator app</p>
+            </div>
+
+            <div id="error" class="error" style="display: none;"></div>
+
+            <form id="tfaForm" action="javascript:void(0)">
+                <div class="form-group">
+                    <label class="form-label" for="code">Authentication code</label>
+                    <input type="text" id="code" name="code" class="form-input" placeholder="000000" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required autofocus>
+                </div>
+
+                <button type="button" class="btn btn-primary" id="submitBtn">
+                    Verify
+                </button>
+            </form>
+
+            <p class="footer">
+                <a href="/login">Sign in with a different account</a>
+            </p>
+        </div>
+    </div>
+
+    <script nonce="{{ nonce }}">
+        const errorDiv = document.getElementById('error');
+        const submitBtn = document.getElementById('submitBtn');
+        const codeInput = document.getElementById('code');
+
+        async function verifyCode() {
+            const code = codeInput.value.trim();
+            if (code.length !== 6) {
+                showError('Please enter a 6-digit code');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Verifying...';
+            errorDiv.style.display = 'none';
+
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const pendingID = getCookie('kroxy_pending_2fa');
+
+                const response = await fetch('/api/auth/2fa/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken
+                    },
+                    body: JSON.stringify({
+                        pending_id: pendingID || '',
+                        code: code
+                    }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const params = new URLSearchParams(window.location.search);
+                    const redirect = params.get('redirect') || '/dashboard';
+                    const safeRedirect = redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/dashboard';
+                    window.location.href = safeRedirect;
+                } else {
+                    showError(data.error || 'Invalid code. Please try again.');
+                    codeInput.value = '';
+                    codeInput.focus();
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Verify';
+                }
+            } catch (err) {
+                showError('Network error. Please try again.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Verify';
+            }
+        }
+
+        codeInput.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length === 6) {
+                verifyCode();
+            }
+        });
+
+        codeInput.addEventListener('paste', function() {
+            setTimeout(function() {
+                codeInput.value = codeInput.value.replace(/[^0-9]/g, '');
+                if (codeInput.value.length === 6) {
+                    verifyCode();
+                }
+            }, 10);
+        });
+
+        codeInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                verifyCode();
+            }
+        });
+
+        submitBtn.addEventListener('click', function() {
+            verifyCode();
+        });
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function getCookie(name) {
+            const value = '; ' + document.cookie;
+            const parts = value.split('; ' + name + '=');
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        }
+    </script>
+</body>
+</html>
+{{ end }}

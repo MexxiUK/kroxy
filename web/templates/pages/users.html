@@ -1,0 +1,352 @@
+{{ define "users" }}
+<div class="page-header-row">
+    <div>
+        <h1 class="page-title">Users</h1>
+        <p class="page-subtitle">Manage who can access the admin panel</p>
+    </div>
+    <div class="page-header-actions">
+        <button type="button" class="btn btn-primary" id="add-user-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add User
+        </button>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <div class="table-scroll">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Created</th>
+                    <th>Last Login</th>
+                    <th class="col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="users-table">
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading users...</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div id="add-modal" class="modal">
+    <div class="modal-backdrop" id="add-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header">Add User</div>
+        <form id="addForm">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="user-name">First Name <span style="color: var(--text-muted);">(optional)</span></label>
+                    <input type="text" id="user-name" class="form-input" placeholder="Their name">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="user-email">Email *</label>
+                    <input type="email" id="user-email" class="form-input" placeholder="user@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="user-password">Password *</label>
+                    <div class="password-field">
+                        <input type="password" id="user-password" class="form-input" placeholder="Minimum 12 characters" required minlength="12">
+                        <button type="button" class="password-toggle" onclick="toggleUserPassword('user-password')" aria-label="Toggle password visibility">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                    <p class="form-hint">The new user will sign in with this password. They should change it after first login.</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="user-role">Role</label>
+                    <select id="user-role" class="form-select" style="width: 200px;">
+                        <option value="user">User — can view dashboards and manage their own API keys</option>
+                        <option value="admin">Admin — full access to all settings and data</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="add-modal-cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="add-btn">Create User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Role Modal -->
+<div id="role-modal" class="modal">
+    <div class="modal-backdrop" id="role-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header">Change Role</div>
+        <form id="roleForm">
+            <div class="modal-body">
+                <p style="margin-bottom: 1rem;">Changing role for: <strong id="role-user-email"></strong></p>
+                <div class="form-group">
+                    <label class="form-label" for="new-role">New Role</label>
+                    <select id="new-role" class="form-select" style="width: 200px;">
+                        <option value="user">User — can view dashboards and manage their own API keys</option>
+                        <option value="admin">Admin — full access to all settings and data</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="role-modal-cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="role-btn">Update Role</button>
+            </div>
+            <input type="hidden" id="role-user-id">
+        </form>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="delete-modal" class="modal">
+    <div class="modal-backdrop" id="delete-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header" style="color: var(--rose);">Delete User</div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete <strong id="delete-user-email"></strong>? This will revoke their access immediately. Any API keys they created will also be deleted.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="delete-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-danger" id="delete-btn">Delete</button>
+        </div>
+        <input type="hidden" id="delete-user-id">
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+function toggleUserPassword(inputId) {
+    var input = document.getElementById(inputId);
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+var users = [];
+var currentUserId = null;
+
+async function loadUsers() {
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/users', {
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error('Failed to load users');
+        }
+
+        var data = await response.json();
+        users = data.users || [];
+        renderUsers();
+    } catch (err) {
+        console.error('Failed to load users:', err);
+        document.getElementById('users-table').innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--rose); padding: 2rem;">Failed to load users</td></tr>';
+    }
+}
+
+function renderUsers() {
+    var tbody = document.getElementById('users-table');
+
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div><div class="empty-state-title">No users yet</div><div class="empty-state-text">Add team members who need access to the Kroxy admin panel.</div><div class="empty-state-action"><button type="button" class="btn btn-primary" onclick="openModal(\'add-modal\')">Add User</button></div></div></td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = users.map(function(user) {
+        var roleBadge = user.role === 'admin'
+            ? '<span class="badge badge-info">Admin</span>'
+            : '<span class="badge badge-neutral">User</span>';
+
+        var displayName = user.name && user.name !== user.email ? user.name : user.email;
+        var avatarInitial = displayName.charAt(0).toUpperCase();
+
+        return '<tr>' +
+            '<td>' +
+                '<div style="display: flex; align-items: center; gap: 0.75rem;">' +
+                    '<div style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 600; font-size: 0.875rem;">' + avatarInitial + '</div>' +
+                    '<div>' +
+                        '<div style="font-weight: 500;">' + displayName + '</div>' +
+                        (user.name && user.name !== user.email ? '<div style="color: var(--text-muted); font-size: 0.8125rem;">' + user.email + '</div>' : '') +
+                    '</div>' +
+                '</div>' +
+            '</td>' +
+            '<td>' + roleBadge + '</td>' +
+            '<td style="color: var(--text-muted);">' + formatDateTime(user.created_at) + '</td>' +
+            '<td style="color: var(--text-muted);">' + (user.last_login ? formatDateTime(user.last_login) : 'Never') + '</td>' +
+            '<td>' +
+                '<div style="display: flex; gap: 0.5rem;">' +
+                    '<button type="button" class="btn btn-secondary btn-sm role-btn" data-id="' + user.id + '" data-email="' + user.email + '" data-role="' + user.role + '" title="Change role">Change Role</button>' +
+                    '<button type="button" class="btn btn-danger btn-sm delete-btn" data-id="' + user.id + '" data-email="' + user.email + '" title="Delete user">Delete</button>' +
+                '</div>' +
+            '</td>' +
+        '</tr>';
+    }).join('');
+
+    document.querySelectorAll('.role-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            openRoleModal(parseInt(btn.dataset.id), btn.dataset.email, btn.dataset.role);
+        });
+    });
+    document.querySelectorAll('.delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            openDeleteModal(parseInt(btn.dataset.id), btn.dataset.email);
+        });
+    });
+}
+
+function openRoleModal(id, email, currentRole) {
+    document.getElementById('role-user-id').value = id;
+    document.getElementById('role-user-email').textContent = email;
+    document.getElementById('new-role').value = currentRole;
+    openModal('role-modal');
+}
+
+async function updateRole(e) {
+    e.preventDefault();
+
+    var btn = document.getElementById('role-btn');
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    var userId = document.getElementById('role-user-id').value;
+    var newRole = document.getElementById('new-role').value;
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/users/' + userId + '/role', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({ role: newRole })
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to update role');
+        }
+
+        closeModal('role-modal');
+        showToast('Role updated', 'success');
+        loadUsers();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Update Role';
+    }
+
+    return false;
+}
+
+function openDeleteModal(id, email) {
+    document.getElementById('delete-user-id').value = id;
+    document.getElementById('delete-user-email').textContent = email;
+    openModal('delete-modal');
+}
+
+async function confirmDelete() {
+    var btn = document.getElementById('delete-btn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    var userId = document.getElementById('delete-user-id').value;
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/users/' + userId, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            var result = await response.json();
+            throw new Error(result.error || 'Failed to delete user');
+        }
+
+        closeModal('delete-modal');
+        showToast('User deleted', 'success');
+        loadUsers();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+    }
+}
+
+async function addUser(e) {
+    e.preventDefault();
+
+    var btn = document.getElementById('add-btn');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    var data = {
+        email: document.getElementById('user-email').value.trim(),
+        password: document.getElementById('user-password').value,
+        role: document.getElementById('user-role').value,
+        name: document.getElementById('user-name').value.trim()
+    };
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to create user');
+        }
+
+        closeModal('add-modal');
+        showToast('User created', 'success');
+        loadUsers();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create User';
+    }
+
+    return false;
+}
+
+// Event listeners
+document.getElementById('add-user-btn').addEventListener('click', function() { openModal('add-modal'); });
+document.getElementById('add-modal-backdrop').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('add-modal-cancel').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('addForm').addEventListener('submit', addUser);
+
+document.getElementById('role-modal-backdrop').addEventListener('click', function() { closeModal('role-modal'); });
+document.getElementById('role-modal-cancel').addEventListener('click', function() { closeModal('role-modal'); });
+document.getElementById('roleForm').addEventListener('submit', updateRole);
+
+document.getElementById('delete-modal-backdrop').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-modal-cancel').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-btn').addEventListener('click', confirmDelete);
+
+// Load users on page load
+loadUsers();
+</script>
+{{ end }}

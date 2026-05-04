@@ -1,0 +1,244 @@
+{{ define "dashboard" }}
+<div class="page-header-row">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">See how your websites are performing at a glance</p>
+    </div>
+</div>
+
+<!-- Hero Metrics -->
+<div class="grid grid-3" style="margin-bottom: 1.5rem;">
+    <div class="card">
+        <div class="card-body">
+            <div class="metric-header">
+                <span class="metric-label">Live Traffic</span>
+                <span id="req-status" class="badge badge-success">Live</span>
+            </div>
+            <div id="req-value" class="metric-value">--</div>
+            <div id="req-trend" class="metric-hint">Requests per second</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <div class="metric-header">
+                <span class="metric-label">Attacks Blocked</span>
+                <span class="metric-hint">Last 24 hours</span>
+            </div>
+            <div id="waf-value" class="metric-value">--</div>
+            <div id="waf-trend" class="metric-hint">In the last 24 hours</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <div class="metric-header">
+                <span class="metric-label">Route Health</span>
+                <a href="/routes?health=unhealthy" id="health-link" class="text-sm" style="display: none;">View issues</a>
+                <span id="health-badge" class="badge badge-neutral">--</span>
+            </div>
+            <div id="health-value" class="metric-value">--</div>
+            <div class="metric-hint">Healthy routes</div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="grid grid-2">
+    <!-- Recent Security Events -->
+    <div class="card">
+        <div class="card-header">
+            <div class="flex flex-between">
+                <span>Recent Security Events</span>
+                <a href="/security/events" class="text-sm">View all</a>
+            </div>
+        </div>
+        <div class="card-body-flush">
+            <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Details</th>
+                        <th>IP</th>
+                    </tr>
+                </thead>
+                <tbody id="security-events">
+                    <tr>
+                        <td colspan="4" style="text-align: center;">
+                            <div class="skeleton skeleton-line" style="width: 100%;"></div>
+                            <div class="skeleton skeleton-line w-3/4" style="width: 75%; margin-top: 8px;"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Routes by Traffic -->
+    <div class="card">
+        <div class="card-header">
+            <div class="flex flex-between">
+                <span>Top Routes by Traffic</span>
+                <a href="/routes" class="text-sm">View all</a>
+            </div>
+        </div>
+        <div class="card-body-flush">
+            <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Route</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="top-routes">
+                    <tr>
+                        <td colspan="2" style="text-align: center;">
+                            <div class="skeleton skeleton-line" style="width: 100%;"></div>
+                            <div class="skeleton skeleton-line w-3/4" style="width: 75%; margin-top: 8px;"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Certificate Status (conditional) -->
+<div id="cert-warning" class="card" style="display: none; margin-top: 1.5rem; border-color: rgba(245,158,11,0.2);">
+    <div class="card-body" style="background: rgba(245,158,11,0.04);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <div>
+                <div style="font-weight: 600; color: var(--amber);">Certificate Expiring Soon</div>
+                <div id="cert-message" style="font-size: 0.875rem; color: var(--amber);"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+// Fetch dashboard metrics
+async function loadMetrics() {
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const response = await fetch('/api/dashboard/stats', {
+            headers: {
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error('Failed to load metrics');
+        }
+
+        const data = await response.json();
+
+        // Update live traffic
+        document.getElementById('req-value').textContent = formatNumber(data.requests_total || 0);
+        document.getElementById('req-trend').textContent = 'Total requests processed';
+
+        // Update WAF blocks
+        document.getElementById('waf-value').textContent = formatNumber(data.waf_blocks || 0);
+        document.getElementById('waf-trend').textContent = 'Attacks blocked';
+
+        // Update route health
+        var healthy = data.enabled_routes || 0;
+        var total = data.total_routes || 0;
+        document.getElementById('health-value').textContent = healthy + ' / ' + total;
+        const healthBadge = document.getElementById('health-badge');
+        const healthLink = document.getElementById('health-link');
+        if (healthy === total && total > 0) {
+            healthBadge.className = 'badge badge-success';
+            healthBadge.textContent = 'Healthy';
+            healthLink.style.display = 'none';
+        } else if (healthy > 0) {
+            healthBadge.className = 'badge badge-warning';
+            healthBadge.textContent = 'Issues';
+            healthLink.style.display = '';
+        } else if (total > 0) {
+            healthBadge.className = 'badge badge-error';
+            healthBadge.textContent = 'Down';
+            healthLink.style.display = '';
+        } else {
+            healthBadge.className = 'badge badge-neutral';
+            healthBadge.textContent = '--';
+            healthLink.style.display = 'none';
+        }
+
+        // Update security events
+        const eventsBody = document.getElementById('security-events');
+        var events = data.recent_events || [];
+        if (events.length > 0) {
+            eventsBody.innerHTML = events.map(function(event) {
+                return '<tr>' +
+                    '<td>' + escapeHtml(event.time) + '</td>' +
+                    '<td><span class="badge badge-' + getEventBadgeClass(event.type) + '">' + escapeHtml(event.type) + '</span></td>' +
+                    '<td>' + escapeHtml(event.details || '-') + '</td>' +
+                    '<td>' + escapeHtml(event.ip || '-') + '</td>' +
+                '</tr>';
+            }).join('');
+        } else {
+            eventsBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No recent events</td></tr>';
+        }
+
+        // Update top routes
+        const routesBody = document.getElementById('top-routes');
+        var routes = data.topRoutes || [];
+        if (routes.length > 0) {
+            routesBody.innerHTML = routes.map(function(route) {
+                var statusBadge = route.status === 'healthy'
+                    ? '<span class="badge badge-success">&#10003;</span>'
+                    : '<span class="badge badge-warning">&#9888;</span>';
+                return '<tr>' +
+                    '<td>' + escapeHtml(route.domain) + '</td>' +
+                    '<td>' + statusBadge + '</td>' +
+                '</tr>';
+            }).join('');
+        } else {
+            routesBody.innerHTML = '<tr><td colspan="2"><div class="empty-state"><div class="empty-state-icon"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg></div><div class="empty-state-title">No routes yet</div><div class="empty-state-text">Routes tell Kroxy where to send web traffic for your websites. Create your first route to get started.</div><div class="empty-state-action"><a href="/routes/new" class="btn btn-primary">Add Your First Route</a></div></div></td></tr>';
+        }
+
+        // Show certificate warning if needed
+        if (data.expiringCerts && data.expiringCerts.length > 0) {
+            document.getElementById('cert-warning').style.display = 'block';
+            document.getElementById('cert-message').innerHTML = data.expiringCerts.map(function(cert) {
+                return '<a href="/settings/ssl" style="color: var(--amber); text-decoration: underline;">' + cert.domain + '</a> expires in ' + cert.daysLeft + ' days';
+            }).join(', ');
+        } else {
+            document.getElementById('cert-warning').style.display = 'none';
+        }
+    } catch (err) {
+        console.error('Failed to load metrics:', err);
+        document.getElementById('security-events').innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">Unable to load events</td></tr>';
+        document.getElementById('top-routes').innerHTML = '<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 2rem;">Unable to load routes</td></tr>';
+    }
+}
+
+function getEventBadgeClass(type) {
+    switch (type.toLowerCase()) {
+        case 'waf block':
+        case 'rate limit':
+        case 'blocked':
+            return 'error';
+        case 'login':
+            return 'success';
+        default:
+            return 'info';
+    }
+}
+
+// Load metrics on page load
+loadMetrics();
+
+// Refresh every 30 seconds
+setInterval(loadMetrics, 30000);
+</script>
+{{ end }}

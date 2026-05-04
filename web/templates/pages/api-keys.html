@@ -1,0 +1,330 @@
+{{ define "api-keys" }}
+<div class="page-header-row">
+    <div>
+        <h1 class="page-title">API Keys</h1>
+        <p class="page-subtitle">API keys let other programs connect to Kroxy automatically</p>
+    </div>
+    <button type="button" class="btn btn-primary" id="generate-key-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Generate Key
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding: 0;">
+        <div class="table-scroll">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Key</th>
+                    <th>Expires</th>
+                    <th>Created</th>
+                    <th>Last Used</th>
+                    <th class="col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="keys-table">
+                <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="delete-modal" class="modal">
+    <div class="modal-backdrop" id="delete-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header" style="color: var(--rose);">Delete API Key</div>
+        <div class="modal-body">
+            <p>Are you sure? Any systems using this key will lose access immediately.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="delete-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-danger" id="delete-confirm-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Modal -->
+<div id="add-modal" class="modal">
+    <div class="modal-backdrop" id="add-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header">Generate API Key</div>
+        <form id="add-key-form">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="key-name">Key Name *</label>
+                    <input type="text" id="key-name" class="form-input" placeholder="e.g., CI/CD Pipeline" required>
+                    <p class="form-hint">A friendly name to identify this key</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Validity Period</label>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-secondary btn-sm expiry-btn" data-hours="">Never</button>
+                        <button type="button" class="btn btn-secondary btn-sm expiry-btn" data-hours="24">24 Hours</button>
+                        <button type="button" class="btn btn-secondary btn-sm expiry-btn" data-hours="168">1 Week</button>
+                        <button type="button" class="btn btn-secondary btn-sm expiry-btn" data-hours="720">1 Month</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="custom-expiry-btn">Custom</button>
+                    </div>
+                    <div id="custom-expiry-group" style="display: none; margin-top: 0.5rem;">
+                        <input type="datetime-local" id="key-expires-at" class="form-input">
+                    </div>
+                    <p class="form-hint">Choose how long this key remains valid. Expired keys stay visible but stop working.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="add-modal-cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="generate-btn">Generate</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Key Display Modal -->
+<div id="key-modal" class="modal">
+    <div class="modal-backdrop" id="key-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 32rem;">
+        <div class="modal-header">API Key Generated</div>
+        <div class="modal-body">
+            <p style="margin-bottom: 1rem;">Your new API key has been generated. Copy it now - it won't be shown again.</p>
+            <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 0.5rem; font-family: 'JetBrains Mono', monospace; word-break: break-all; border: 1px solid var(--border-default); color: var(--text-primary);" id="key-display"></div>
+            <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 0.5rem;" id="copy-key-btn">Copy to Clipboard</button>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" id="key-modal-done">Done</button>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+var keys = [];
+var currentKey = '';
+var selectedExpiry = '';
+
+async function loadKeys() {
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/user/api-keys', {
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error('Failed to load API keys');
+        }
+
+        var data = await response.json();
+        keys = Array.isArray(data) ? data : (data.keys || []);
+        renderKeys();
+    } catch (err) {
+        console.error('Failed to load keys:', err);
+        document.getElementById('keys-table').innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--rose); padding: 2rem;">Failed to load API keys</td></tr>';
+    }
+}
+
+function renderKeys() {
+    var tbody = document.getElementById('keys-table');
+
+    if (keys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg></div><div class="empty-state-title">No API keys yet</div><div class="empty-state-text">API keys allow automated tools like CI/CD pipelines to manage Kroxy without signing in through the web browser.</div><div class="empty-state-action"><button type="button" class="btn btn-primary" onclick="openModal(\'add-modal\')">Generate Your First Key</button></div></div></td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = keys.map(function(key) {
+        var rowStyle = key.is_expired ? 'background: var(--rose-dim);' : '';
+        var expiresHtml = '<span style="color: var(--text-muted);">Never</span>';
+        if (key.expires_at) {
+            if (key.is_expired) {
+                expiresHtml = '<span class="badge badge-error" style="margin-right: 0.5rem;">Expired</span><span style="color: var(--rose); font-size: 0.8125rem;">' + formatDateTime(key.expires_at) + '</span>';
+            } else {
+                expiresHtml = '<span style="color: var(--text-muted);">' + formatDateTime(key.expires_at) + '</span>';
+            }
+        }
+
+        var keyPrefix = key.key_id ? key.key_id.substring(0, 12) + '...' : '...';
+
+        return '<tr style="' + rowStyle + '">' +
+            '<td style="font-weight: 500;">' + key.name + '</td>' +
+            '<td style="font-family: \'JetBrains Mono\', monospace;">' + keyPrefix + '</td>' +
+            '<td>' + expiresHtml + '</td>' +
+            '<td style="color: var(--text-muted);">' + formatDateTime(key.created_at) + '</td>' +
+            '<td style="color: var(--text-muted);">' + (key.last_used ? formatDateTime(key.last_used) : 'Never') + '</td>' +
+            '<td>' +
+                '<button type="button" class="btn btn-danger btn-sm delete-key-btn" data-id="' + key.id + '">Delete</button>' +
+            '</td>' +
+        '</tr>';
+    }).join('');
+
+    document.querySelectorAll('.delete-key-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { deleteKey(parseInt(btn.dataset.id)); });
+    });
+}
+
+// Expiry button handling
+document.querySelectorAll('.expiry-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.expiry-btn').forEach(function(b) { b.classList.remove('active'); b.style.background = ''; b.style.borderColor = ''; });
+        btn.classList.add('active');
+        btn.style.background = 'var(--accent-dim)';
+        btn.style.borderColor = 'var(--accent)';
+        btn.style.color = 'var(--accent)';
+        selectedExpiry = btn.dataset.hours;
+        document.getElementById('custom-expiry-group').style.display = 'none';
+    });
+});
+
+// Set "Never" as default active
+(function() {
+    var neverBtn = document.querySelector('.expiry-btn[data-hours=""]');
+    if (neverBtn) {
+        neverBtn.classList.add('active');
+        neverBtn.style.background = 'var(--accent-dim)';
+        neverBtn.style.borderColor = 'var(--accent)';
+        neverBtn.style.color = 'var(--accent)';
+    }
+})();
+
+document.getElementById('custom-expiry-btn').addEventListener('click', function() {
+    document.querySelectorAll('.expiry-btn').forEach(function(b) { b.classList.remove('active'); b.style.background = ''; b.style.borderColor = ''; b.style.color = ''; });
+    selectedExpiry = 'custom';
+    document.getElementById('custom-expiry-group').style.display = 'block';
+    document.getElementById('key-expires-at').focus();
+});
+
+async function generateKey(e) {
+    e.preventDefault();
+
+    var btn = document.getElementById('generate-btn');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+
+    try {
+        var body = { name: document.getElementById('key-name').value.trim() };
+
+        if (selectedExpiry === 'custom') {
+            var customDate = document.getElementById('key-expires-at').value;
+            if (customDate) {
+                body.expires_at = new Date(customDate).toISOString();
+            }
+        } else if (selectedExpiry && selectedExpiry !== '') {
+            body.duration = selectedExpiry + 'h';
+        }
+
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/auth/api-key', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify(body)
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to generate key');
+        }
+
+        currentKey = result.key_id + ':' + result.key_secret;
+        document.getElementById('key-display').textContent = currentKey;
+
+        closeModal('add-modal');
+        openModal('key-modal');
+        loadKeys();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generate';
+    }
+
+    return false;
+}
+
+var deleteKeyId = null;
+
+async function deleteKey(id) {
+    deleteKeyId = id;
+    openModal('delete-modal');
+}
+
+async function confirmDeleteKey() {
+    if (!deleteKeyId) return;
+    var btn = document.getElementById('delete-confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/user/api-keys/' + deleteKeyId, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to delete key');
+        }
+
+        closeModal('delete-modal');
+        showToast('API key deleted', 'success');
+        loadKeys();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+    }
+}
+
+function copyKey() {
+    navigator.clipboard.writeText(currentKey).then(function() {
+        var copyBtn = document.getElementById('copy-key-btn');
+        copyBtn.textContent = 'Copied!';
+        setTimeout(function() { copyBtn.textContent = 'Copy to Clipboard'; }, 2000);
+    });
+}
+
+// Reset add modal when opened
+var origOpenModal = openModal;
+openModal = function(id) {
+    if (id === 'add-modal') {
+        document.getElementById('key-name').value = '';
+        document.getElementById('key-expires-at').value = '';
+        document.getElementById('custom-expiry-group').style.display = 'none';
+        selectedExpiry = '';
+        document.querySelectorAll('.expiry-btn').forEach(function(b) { b.classList.remove('active'); b.style.background = ''; b.style.borderColor = ''; b.style.color = ''; });
+        var neverBtn = document.querySelector('.expiry-btn[data-hours=""]');
+        if (neverBtn) { neverBtn.classList.add('active'); neverBtn.style.background = 'var(--accent-dim)'; neverBtn.style.borderColor = 'var(--accent)'; neverBtn.style.color = 'var(--accent)'; }
+        selectedExpiry = '';
+    }
+    origOpenModal(id);
+};
+
+// Event listeners
+document.getElementById('generate-key-btn').addEventListener('click', function() { openModal('add-modal'); });
+document.getElementById('add-modal-backdrop').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('add-modal-cancel').addEventListener('click', function() { closeModal('add-modal'); });
+document.getElementById('add-key-form').addEventListener('submit', generateKey);
+
+document.getElementById('key-modal-backdrop').addEventListener('click', function() { closeModal('key-modal'); });
+document.getElementById('copy-key-btn').addEventListener('click', copyKey);
+document.getElementById('key-modal-done').addEventListener('click', function() { closeModal('key-modal'); });
+
+document.getElementById('delete-modal-backdrop').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-modal-cancel').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-confirm-btn').addEventListener('click', confirmDeleteKey);
+
+loadKeys();
+</script>
+{{ end }}

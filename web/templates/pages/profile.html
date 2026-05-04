@@ -1,0 +1,198 @@
+{{ define "profile" }}
+<div class="constrained">
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">Profile</div>
+        <div class="card-body">
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="width: 64px; height: 64px; border-radius: 50%; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 1.5rem; font-weight: 700;">
+                    {{ if .User }}{{ .User.Email | printf "%.1s" | upper }}{{ end }}
+                </div>
+                <div>
+                    <div style="font-size: 1.125rem; font-weight: 600;">{{ if .User }}{{ .User.Email }}{{ end }}</div>
+                    <div style="color: var(--text-muted);">{{ if .User }}{{ if eq .User.Role "admin" }}Administrator{{ else }}User{{ end }}{{ end }}</div>
+                </div>
+            </div>
+
+            <form id="profileForm">
+                <div class="form-group">
+                    <label class="form-label" for="email">Email</label>
+                    <input type="email" id="email" class="form-input" value="{{ if .User }}{{ .User.Email }}{{ end }}" disabled>
+                    <p class="form-hint">Email cannot be changed</p>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Password -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">Change Password</div>
+        <div class="card-body">
+            <form id="passwordForm">
+                <div class="form-group">
+                    <label class="form-label" for="current-password">Current Password</label>
+                    <div class="password-field">
+                        <input type="password" id="current-password" class="form-input" required>
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('current-password', this)" aria-label="Toggle password visibility">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="new-password">New Password</label>
+                    <div class="password-field">
+                        <input type="password" id="new-password" class="form-input" required minlength="12">
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('new-password', this)" aria-label="Toggle password visibility">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                    <p class="form-hint">At least 12 characters</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="confirm-password">Confirm New Password</label>
+                    <div class="password-field">
+                        <input type="password" id="confirm-password" class="form-input" required>
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('confirm-password', this)" aria-label="Toggle password visibility">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary" id="password-btn">Change Password</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="card card-danger">
+        <div class="card-header">Danger Zone</div>
+        <div class="card-body">
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">Once you delete your account, there is no going back. Please be certain.</p>
+            <button type="button" class="btn btn-danger" id="delete-account-btn">Delete Account</button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Account Modal -->
+<div id="delete-modal" class="modal">
+    <div class="modal-backdrop" id="delete-modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 28rem;">
+        <div class="modal-header" style="color: var(--rose);">Delete Account</div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete your account? This action cannot be undone.</p>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label class="form-label" for="delete-password">Enter your password to confirm</label>
+                <input type="password" id="delete-password" class="form-input">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="delete-modal-cancel">Cancel</button>
+            <button type="button" class="btn btn-danger" id="delete-btn">Delete Account</button>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ nonce }}">
+function togglePasswordVisibility(inputId, btn) {
+    var input = document.getElementById(inputId);
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+    } else {
+        input.type = 'password';
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+    }
+}
+
+async function changePassword(e) {
+    e.preventDefault();
+
+    var btn = document.getElementById('password-btn');
+    var newPassword = document.getElementById('new-password').value;
+    var confirmPassword = document.getElementById('confirm-password').value;
+
+    if (newPassword !== confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return false;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Changing...';
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/user/password', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                current_password: document.getElementById('current-password').value,
+                new_password: newPassword
+            })
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to change password');
+        }
+
+        document.getElementById('passwordForm').reset();
+        showToast('Password changed successfully', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Change Password';
+    }
+
+    return false;
+}
+
+async function deleteAccount() {
+    var password = document.getElementById('delete-password').value;
+    if (!password) {
+        showToast('Please enter your password', 'error');
+        return;
+    }
+
+    var btn = document.getElementById('delete-btn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    try {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var response = await fetch('/api/user', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({ password: password })
+        });
+
+        var result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to delete account');
+        }
+
+        window.location.href = '/login';
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Delete Account';
+    }
+}
+
+// Event listeners
+document.getElementById('passwordForm').addEventListener('submit', changePassword);
+document.getElementById('delete-account-btn').addEventListener('click', function() { openModal('delete-modal'); });
+document.getElementById('delete-modal-backdrop').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-modal-cancel').addEventListener('click', function() { closeModal('delete-modal'); });
+document.getElementById('delete-btn').addEventListener('click', deleteAccount);
+</script>
+{{ end }}

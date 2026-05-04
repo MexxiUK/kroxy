@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kroxy
+  namespace: kroxy
+  labels:
+    app.kubernetes.io/name: kroxy
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+    - name: admin
+      port: 8080
+      targetPort: admin
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: kroxy
+---
+# Headless service for direct pod access (useful for debugging)
+apiVersion: v1
+kind: Service
+metadata:
+  name: kroxy-headless
+  namespace: kroxy
+  labels:
+    app.kubernetes.io/name: kroxy
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: admin
+      port: 8080
+      targetPort: admin
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: kroxy
