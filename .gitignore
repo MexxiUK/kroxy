@@ -127,3 +127,4 @@ DEPLOYMENT.md
 
 # Claude Code artifacts
 .superpowers/
+.kroxy-encryption-key

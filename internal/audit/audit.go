@@ -121,7 +121,7 @@ func Init(logPath string) error {
 
 		instance.alertHandler = NewAlertHandler()
 		if logPath != "" {
-			instance.logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0640)
+			instance.logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 			if err == nil {
 				// Get current file size for rotation tracking
 				if info, statErr := instance.logFile.Stat(); statErr == nil {
@@ -380,7 +380,7 @@ func (l *Logger) rotate() {
 
 	// Open new log file
 	var err error
-	l.logFile, err = os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0640)
+	l.logFile, err = os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		log.Printf("audit: failed to open new log file after rotation: %v", err)
 		l.logFile = nil

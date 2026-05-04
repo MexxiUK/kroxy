@@ -48,7 +48,8 @@ type API struct {
 	wafReloadFunc   func() error // Callback to reload WAF when rules change
 	proxyReloadFunc func() error // Callback to reload proxy config when routes change
 	templates       *TemplateHandler
-	productionMode  bool // Controls security settings like Secure cookie flag
+	productionMode  bool       // Controls security settings like Secure cookie flag
+	setupMu         sync.Mutex // Prevents race condition in initial setup (CRIT-005)
 }
 
 // RateLimiter implements a sliding window rate limiter to prevent burst attacks
@@ -606,6 +607,11 @@ func generateCSRFToken() string {
 
 // setup handles initial admin account creation (only when no users exist)
 func (a *API) setup(w http.ResponseWriter, r *http.Request) {
+	// Prevent race condition where two concurrent requests both see zero users
+	// and create multiple admin accounts (CRIT-005)
+	a.setupMu.Lock()
+	defer a.setupMu.Unlock()
+
 	// Check if setup is allowed (no users exist)
 	users, err := a.store.GetUsers()
 	if err != nil {
@@ -2303,6 +2309,12 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Validate WAF exclusions (comma-separated numeric rule IDs only)
+	if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
+		log.Printf("WAF exclusions validation failed for %q: %v", rule.Name, err)
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Validate route_id if specified
 	if rule.RouteID != nil {
@@ -2416,6 +2428,12 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 	}
 	if rule.Rule != "" {
 		if err := validation.ValidateWAFRule(rule.Rule); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	if rule.Exclusions != "" {
+		if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}

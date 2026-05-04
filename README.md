@@ -100,7 +100,7 @@ When you first access `http://localhost:8080`, you'll be guided through a setup 
 |----------|---------|-------------|
 | `KROXY_PROXY` | `:80` | HTTP listen address |
 | `KROXY_HTTPS_ADDR` | `:443` | HTTPS listen address (when TLS enabled) |
-| `KROXY_ADMIN` | `:8081` | Admin API listen address |
+| `KROXY_ADMIN` | `127.0.0.1:8081` | Admin API listen address (localhost by default for security) |
 | `KROXY_DB` | `./kroxy.db` | SQLite database path |
 | `KROXY_PRODUCTION` | `false` | Production mode (stricter defaults) |
 | `KROXY_MAX_REQUEST_SIZE` | `10MB` | Max request body size |
