@@ -155,8 +155,8 @@ function renderProviders() {
 
     tbody.innerHTML = providers.map(function(provider) {
         return '<tr>' +
-            '<td style="font-weight: 500;">' + provider.name + '</td>' +
-            '<td style="color: var(--text-muted); font-family: \'JetBrains Mono\', monospace; font-size: 0.875rem;">' + provider.issuer + '</td>' +
+            '<td style="font-weight: 500;">' + escapeHtml(provider.name) + '</td>' +
+            '<td style="color: var(--text-muted); font-family: \'JetBrains Mono\', monospace; font-size: 0.875rem;">' + escapeHtml(provider.issuer) + '</td>' +
             '<td>' + (provider.enabled ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-neutral">Disabled</span>') + '</td>' +
             '<td>' +
                 '<div style="display: flex; gap: 0.5rem;">' +
