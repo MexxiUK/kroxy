@@ -15,7 +15,7 @@ RestartSec=5
 LimitNOFILE=8192
 
 # Environment
-Environment=KROXY_LISTEN=:443
+Environment=KROXY_PROXY=:443
 Environment=KROXY_ADMIN=127.0.0.1:8080
 Environment=KROXY_DB=/var/lib/kroxy/kroxy.db
 

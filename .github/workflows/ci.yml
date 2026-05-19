@@ -78,13 +78,13 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
       - name: Run govulncheck
-        run: govulncheck ./... || true
+        run: govulncheck ./...
 
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
 
       - name: Run gosec
-        run: gosec ./... || true
+        run: gosec ./...
 
       - name: Run Semgrep
         uses: returntocorp/semgrep-action@v1
