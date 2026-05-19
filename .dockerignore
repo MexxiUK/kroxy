@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+kroxy
+kroxy-fixed
+*.db
+*.log
+
+# Security: encryption keys must never be in images
+*.key
+*.pem
+.kroxy-encryption-key
+
+# Data directories
+data/
+bin/
+dist/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (optional, reduces image size)
+*.md
+LICENSE
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
