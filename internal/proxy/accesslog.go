@@ -44,7 +44,7 @@ func NewLogStore(logPath string) (*LogStore, error) {
 		return nil, fmt.Errorf("failed to create log dir: %w", err)
 	}
 
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0640)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600) // #nosec G304 — logPath is from server-side configuration
 	if err != nil {
 		return nil, fmt.Errorf("failed to open access log: %w", err)
 	}

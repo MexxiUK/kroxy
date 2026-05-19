@@ -194,7 +194,7 @@ func (a *API) renderTemplate(w http.ResponseWriter, r *http.Request, name string
 	tmpl := a.templates.templates.Funcs(template.FuncMap{
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
-		"nonce": func() template.HTMLAttr { return template.HTMLAttr(nonce) },
+		"nonce": func() template.HTMLAttr { return template.HTMLAttr(nonce) }, // #nosec G203 — nonce is a cryptographically random string generated server-side
 	})
 
 	// Set defaults
@@ -220,7 +220,7 @@ func (a *API) renderTemplate(w http.ResponseWriter, r *http.Request, name string
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
-		data.Content = template.HTML(contentBuf.String())
+		data.Content = template.HTML(contentBuf.String()) // #nosec G203 — content is server-rendered template output, not user-controlled
 		templateName = "root"
 	}
 
@@ -231,7 +231,7 @@ func (a *API) renderTemplate(w http.ResponseWriter, r *http.Request, name string
 			Value:    data.CSRFToken,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   os.Getenv("KROXY_PRODUCTION") == "true",
+			Secure:   os.Getenv("KROXY_INSECURE_COOKIES") != "true",
 			SameSite: http.SameSiteStrictMode,
 			MaxAge:   3600,
 		})
@@ -487,7 +487,7 @@ func (a *API) serveWAF(w http.ResponseWriter, r *http.Request) {
 	}
 	presetsJSON, err := json.Marshal(presets)
 	if err == nil {
-		data.WAFPresetJS = template.JS(presetsJSON)
+		data.WAFPresetJS = template.JS(presetsJSON) // #nosec G203 — presets are hardcoded server-side rules serialized to JSON
 	}
 
 	a.renderTemplate(w, r, "waf", data)
