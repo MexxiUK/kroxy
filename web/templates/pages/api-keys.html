@@ -152,7 +152,7 @@ function renderKeys() {
         var keyPrefix = key.key_id ? key.key_id.substring(0, 12) + '...' : '...';
 
         return '<tr style="' + rowStyle + '">' +
-            '<td style="font-weight: 500;">' + key.name + '</td>' +
+            '<td style="font-weight: 500;">' + escapeHtml(key.name) + '</td>' +
             '<td style="font-family: \'JetBrains Mono\', monospace;">' + keyPrefix + '</td>' +
             '<td>' + expiresHtml + '</td>' +
             '<td style="color: var(--text-muted);">' + formatDateTime(key.created_at) + '</td>' +
