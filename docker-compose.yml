@@ -41,8 +41,6 @@ services:
       - KROXY_ADMIN=:8080
       - KROXY_DB=/data/kroxy.db
       - KROXY_ADMIN_TOKEN_FILE=/data/admin_token
-      - KROXY_PRODUCTION=false
-      - KROXY_ALLOW_PRIVATE_BACKENDS=true
 
     networks:
       default:
@@ -57,7 +55,7 @@ services:
       - "com.kroxy.security=hardened"
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "-s", "http://127.0.0.1:8080/api/status"]
+      test: ["CMD", "curl", "-f", "-s", "http://127.0.0.1:8080/ready"]
       interval: 30s
       timeout: 10s
       retries: 3
