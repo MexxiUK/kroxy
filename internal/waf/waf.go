@@ -734,7 +734,7 @@ func (w *WAF) InspectRequest(rw http.ResponseWriter, r *http.Request) (allowed b
 
 // logDetection logs a WAF detection event in detect mode without blocking the request.
 func (w *WAF) logDetection(clientIP string, r *http.Request, reason string) {
-	log.Printf("WAF detect: %s - %s %s%s (route: %d)", clientIP, r.Method, r.Host, r.URL.RequestURI(), w.routeID)
+	log.Printf("WAF detect: %s - %s %s%s (route: %d)", strings.ReplaceAll(clientIP, "\n", " "), r.Method, strings.ReplaceAll(r.Host, "\n", " "), strings.ReplaceAll(r.URL.RequestURI(), "\n", " "), w.routeID) // #nosec G706 — newlines stripped from all logged request fields
 
 	if w.audit != nil {
 		w.audit.Log(audit.Event{

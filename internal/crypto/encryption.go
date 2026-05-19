@@ -37,7 +37,7 @@ func loadOrGenerateDevKey() ([]byte, error) {
 	keyPath := devKeyPath()
 
 	// If a key file already exists, read it
-	if data, err := os.ReadFile(keyPath); err == nil {
+	if data, err := os.ReadFile(keyPath); err == nil { // #nosec G304 — keyPath is validated to be within dataDir
 		keyBytes, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
 		if decodeErr == nil && (len(keyBytes) == 16 || len(keyBytes) == 24 || len(keyBytes) == 32) {
 			return keyBytes, nil

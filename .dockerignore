@@ -1,0 +1,62 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+kroxy
+kroxy-fixed
+*.db
+*.log
+
+# Security: encryption keys must never be in images
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+*.jks
+*.der
+.kroxy-encryption-key
+
+# Data directories
+data/
+logs/
+secrets/
+tokens/
+bin/
+dist/
+
+# Secrets files
+credentials.yaml
+credentials.json
+.env
+.env.*
+deploy/k8s/secret.yaml
+docker-compose.override.yml
+
+# Go workspace
+vendor/
+go.work
+go.work.sum
+
+# Test and build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+*.test
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (optional, reduces image size)
+*.md
+LICENSE
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md

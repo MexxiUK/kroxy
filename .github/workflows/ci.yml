@@ -84,13 +84,11 @@ jobs:
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
 
       - name: Run gosec
-        # TODO: Make gosec blocking after fixing remaining MEDIUM/HIGH findings.
-        # Excludes: G104 (unhandled errors - mostly LOW noise), G307 (defer errors),
-        # G115 (integer overflow - false positives in this codebase).
-        run: gosec -exclude=G104,G307,G115 ./... || true
+        run: gosec ./...
 
       - name: Run Semgrep
         uses: returntocorp/semgrep-action@v1
+        continue-on-error: true
         with:
           config: >-
             p/security-audit

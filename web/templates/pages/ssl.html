@@ -212,7 +212,7 @@ function renderCerts() {
         }
 
         return '<tr>' +
-            '<td style="font-weight: 500;">' + cert.domain + '</td>' +
+            '<td style="font-weight: 500;">' + escapeHtml(cert.domain) + '</td>' +
             '<td style="color: var(--text-muted);">' + issuer + '</td>' +
             expiresCell +
             '<td>' + statusBadge + '</td>' +

@@ -930,6 +930,13 @@
         finishSetup();
     });
 
+    function escapeHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
     // Finish setup — show summary and go to done step
     function finishSetup() {
         var summaryItems = [];
@@ -944,7 +951,7 @@
 
         var summaryList = document.getElementById('summary-list');
         summaryList.innerHTML = summaryItems.map(function(item) {
-            return '<li><span class="summary-label">' + item.label + '</span><span class="summary-value">' + item.value + '</span></li>';
+            return '<li><span class="summary-label">' + item.label + '</span><span class="summary-value">' + escapeHtml(item.value) + '</span></li>';
         }).join('');
 
         goToStep('done');
