@@ -42,12 +42,12 @@ var (
 
 	// Precompiled WAF disable patterns (avoids recompilation per rule validation)
 	wafDisablePatterns = []*regexp.Regexp{
-		regexp.MustCompile(`(?i)secruleengine\s+off`),
-		regexp.MustCompile(`(?i)secruleengine\s+detectiononly`),
-		regexp.MustCompile(`(?i)secdefaultaction\s+[^"]*pass`),
-		regexp.MustCompile(`(?i)secdefaultaction\s+[^"]*nolog`),
-		regexp.MustCompile(`(?i)secdefaultaction\s+[^"]*noauditlog`),
-		regexp.MustCompile(`(?i)secaction[^"]*(?:pass|nolog|noauditlog)`),
+		regexp.MustCompile(`(?i)secruleengine\s+(?:"[^"]*"|\S*)\s*off\b`),
+		regexp.MustCompile(`(?i)secruleengine\s+(?:"[^"]*"|\S*)\s*detectiononly\b`),
+		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*pass\b`),
+		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*nolog\b`),
+		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*noauditlog\b`),
+		regexp.MustCompile(`(?i)secaction.*(?:pass|nolog|noauditlog)\b`),
 	}
 )
 
@@ -785,6 +785,12 @@ func ValidateWAFRule(rule string) error {
 	if strings.ContainsRune(rule, '\u0000') {
 		return errors.New("rule contains null byte (forbidden character)")
 	}
+	if strings.ContainsRune(rule, '\n') {
+		return errors.New("rule contains newline (forbidden character)")
+	}
+	if strings.ContainsRune(rule, '\r') {
+		return errors.New("rule contains carriage return (forbidden character)")
+	}
 	if strings.ContainsRune(rule, '\u2028') {
 		return errors.New("rule contains Unicode line separator (forbidden character)")
 	}
@@ -880,6 +886,31 @@ func ValidateWAFRule(rule string) error {
 		}
 	}
 
+	return nil
+}
+
+// ValidateWAFExclusions validates a WAF exclusions string
+func ValidateWAFExclusions(exclusions string) error {
+	if exclusions == "" {
+		return nil
+	}
+	for _, r := range exclusions {
+		if r == '\n' || r == '\r' || r == 0x2028 || r == 0x2029 || r == '\x00' {
+			return errors.New("exclusions contains forbidden line separator characters")
+		}
+	}
+	for _, part := range strings.Split(exclusions, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		// Each exclusion must be a purely numeric rule ID
+		for _, c := range part {
+			if c < '0' || c > '9' {
+				return errors.New("exclusions must be comma-separated numeric rule IDs")
+			}
+		}
+	}
 	return nil
 }
 

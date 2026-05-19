@@ -20,6 +20,7 @@ import (
 
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/crypto"
+	"github.com/kroxy/kroxy/internal/security"
 	"github.com/kroxy/kroxy/internal/store"
 	"github.com/kroxy/kroxy/internal/totp"
 	"github.com/kroxy/kroxy/internal/validation"
@@ -50,6 +51,16 @@ const (
 	maxSessionAbsoluteLifetime = 7 * 24 * time.Hour
 )
 
+// dummyPasswordHash is a pre-computed bcrypt hash used for timing-safe
+// comparison when a user does not exist. Running bcrypt.CompareHashAndPassword
+// against this dummy hash ensures the login function takes roughly the same
+// time regardless of whether the email exists, preventing timing-based
+// account enumeration.
+var dummyPasswordHash = func() []byte {
+	h, _ := bcrypt.GenerateFromPassword([]byte("dummy-password-hash-for-timing"), bcryptCost)
+	return h
+}()
+
 // failedAttempt tracks failed login attempts for account lockout
 type failedAttempt struct {
 	mu          sync.Mutex
@@ -66,6 +77,13 @@ type roleCacheEntry struct {
 
 // adminTokenAttempt tracks failed admin token attempts per IP
 type adminTokenAttempt struct {
+	mu        sync.Mutex
+	count     int
+	firstFail time.Time
+}
+
+// apiKeyAttempt tracks API key validation failures per IP to prevent bcrypt DoS (CRIT-004)
+type apiKeyAttempt struct {
 	mu        sync.Mutex
 	count     int
 	firstFail time.Time
@@ -122,6 +140,7 @@ type Auth struct {
 	roleCache          sync.Map                  // userID (int) -> *roleCacheEntry
 	sessionMu          sync.Map                  // userID (int) -> *sync.Mutex (for atomic session operations)
 	adminTokenAttempts sync.Map                  // IP -> *adminTokenAttempt // Track failed admin token attempts
+	apiKeyAttempts     sync.Map                  // IP -> *apiKeyAttempt     // Track failed API key attempts (bcrypt DoS protection)
 	distributedAttack  *distributedAttackTracker // Credential stuffing detection
 	pending2FA         sync.Map                  // pendingID -> *pending2FASession
 	twoFARateLimits    sync.Map                  // userID (int) -> *twoFARateLimit
@@ -632,6 +651,13 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 		return nil, errors.New("unsupported authorization type")
 	}
 
+	// Rate-limit API key validation attempts to prevent bcrypt DoS (CRIT-004)
+	ip := getIPFromRequest(r)
+	if !a.checkAPIKeyRateLimit(ip) {
+		log.Printf("AUDIT: API key validation rate limit exceeded for IP=%s", ip) // #nosec G706 — IP is from server-side request metadata (RemoteAddr/X-Forwarded-For)
+		return nil, errors.New("rate limit exceeded")
+	}
+
 	// Look up API key from memory cache first
 	var apiKey *APIKey
 	if value, ok := a.apiKeys.Load(keyID); ok {
@@ -684,6 +710,7 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 
 	// Verify secret using bcrypt (constant-time comparison)
 	if err := bcrypt.CompareHashAndPassword([]byte(apiKey.KeySecretHash), []byte(keySecret)); err != nil {
+		a.recordAPIKeyFailure(ip)
 		log.Printf("AUDIT: API key authentication failed for key_id=%s", strings.ReplaceAll(keyID, "\n", " "))
 		return nil, errors.New("invalid API key secret")
 	}
@@ -788,6 +815,60 @@ func (a *Auth) recordAdminTokenFailure(ip string) {
 	attempt.count++
 }
 
+// checkAPIKeyRateLimit enforces rate limiting for API key validation attempts (CRIT-004)
+// Returns false if rate limit exceeded, preventing bcrypt DoS.
+func (a *Auth) checkAPIKeyRateLimit(ip string) bool {
+	const maxAttempts = 10
+	const window = time.Minute
+
+	value, ok := a.apiKeyAttempts.Load(ip)
+	if !ok {
+		a.apiKeyAttempts.Store(ip, &apiKeyAttempt{
+			count:     0,
+			firstFail: time.Now(),
+		})
+		return true
+	}
+
+	attempt := value.(*apiKeyAttempt)
+	attempt.mu.Lock()
+	defer attempt.mu.Unlock()
+
+	// Reset if window expired
+	if time.Since(attempt.firstFail) > window {
+		attempt.count = 0
+		attempt.firstFail = time.Now()
+		return true
+	}
+
+	// Check if limit exceeded
+	if attempt.count >= maxAttempts {
+		return false
+	}
+
+	return true
+}
+
+// recordAPIKeyFailure records a failed API key validation attempt for rate limiting
+func (a *Auth) recordAPIKeyFailure(ip string) {
+	value, _ := a.apiKeyAttempts.LoadOrStore(ip, &apiKeyAttempt{
+		count:     0,
+		firstFail: time.Now(),
+	})
+
+	attempt := value.(*apiKeyAttempt)
+	attempt.mu.Lock()
+	defer attempt.mu.Unlock()
+
+	// Reset if window expired
+	if time.Since(attempt.firstFail) > time.Minute {
+		attempt.count = 0
+		attempt.firstFail = time.Now()
+	}
+
+	attempt.count++
+}
+
 // getIPFromRequest extracts IP from request
 func getIPFromRequest(r *http.Request) string {
 	ip := r.RemoteAddr
@@ -816,15 +897,18 @@ func (a *Auth) Login(email, password, ip, userAgent string) (*LoginResponse, err
 	// Look up user (database query is case-insensitive for email)
 	user, err := a.store.GetUserByEmail(email)
 	if err != nil {
-		// Record failed attempt even for non-existent users (prevents enumeration)
+		// Timing-safe: run bcrypt on dummy hash so response time matches a real
+		// user with wrong password, preventing timing-based account enumeration.
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
 		a.recordFailedAttempt(email)
-		// Also record for distributed attack detection
 		a.recordDistributedAttackAttempt(ip, email)
 		return nil, errors.New("invalid credentials")
 	}
 
 	if !user.Enabled {
-		// Return same error as invalid credentials to prevent account enumeration
+		// Timing-safe: run bcrypt on dummy hash so response time matches a real
+		// user with wrong password, preventing timing-based account enumeration.
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
 		a.recordFailedAttempt(email)
 		a.recordDistributedAttackAttempt(ip, email)
 		return nil, errors.New("invalid credentials")
@@ -1268,19 +1352,11 @@ func (a *Auth) RequireStrongAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		// Password-only ("local") - check if client IP is private
-		ip := getIPFromRequest(r)
+		// Password-only ("local") - check if client IP is private.
+		// Use security.GetClientIP to respect trusted proxies and X-Forwarded-For
+		// instead of raw RemoteAddr (HIGH-024).
+		ip := security.GetClientIP(r)
 		parsedIP := net.ParseIP(ip)
-		if parsedIP == nil {
-			// Try to handle host:port format
-			host, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err == nil {
-				parsedIP = net.ParseIP(host)
-			}
-		}
-		if parsedIP == nil {
-			parsedIP = net.ParseIP(r.RemoteAddr)
-		}
 
 		if parsedIP != nil && validation.IsPrivateIP(parsedIP) {
 			// Private IP - allow password-only
