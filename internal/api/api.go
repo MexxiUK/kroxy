@@ -807,6 +807,8 @@ func (a *API) verify2FA(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   os.Getenv("KROXY_INSECURE_COOKIES") != "true",
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
 
@@ -1489,7 +1491,9 @@ func (a *API) oauthCallback(w http.ResponseWriter, r *http.Request) {
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
-			MaxAge:   -1, // Delete cookie
+			Secure:   os.Getenv("KROXY_INSECURE_COOKIES") != "true",
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1, // Delete cookie
 		})
 	}
 
@@ -1561,6 +1565,8 @@ func (a *API) oauthLogout(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
+		Secure:   os.Getenv("KROXY_INSECURE_COOKIES") != "true",
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
 

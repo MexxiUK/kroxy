@@ -751,7 +751,7 @@ func findCaddyCertDir(baseDir, domain string) string {
 }
 
 func parseCertExpiry(certPath string) (time.Time, error) {
-	data, err := os.ReadFile(certPath)
+	data, err := os.ReadFile(certPath) // #nosec G304 — certPath is from server-side TLS configuration
 	if err != nil {
 		return time.Time{}, err
 	}
