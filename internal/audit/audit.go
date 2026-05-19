@@ -23,8 +23,8 @@ const (
 	EventTypeAuthLogin        EventType = "auth.login"
 	EventTypeAuthLogout       EventType = "auth.logout"
 	EventTypeAuthFailure      EventType = "auth.failure"
-	EventTypeAuthAPIKeyCreate EventType = "auth.apikey.create"
-	EventTypeAuthAPIKeyDelete EventType = "auth.apikey.delete"
+	EventTypeAuthAPIKeyCreate EventType = "auth.apikey.create" // #nosec G101 — event type constant, not a credential
+	EventTypeAuthAPIKeyDelete EventType = "auth.apikey.delete" // #nosec G101 — event type constant, not a credential
 
 	EventTypeWAFBlock EventType = "waf.block"
 
@@ -116,12 +116,12 @@ func Init(logPath string) error {
 
 		if webhookURL != "" {
 			instance.webhookClient = &http.Client{Timeout: 5 * time.Second}
-			log.Printf("Audit log forwarding enabled to: %s", webhookURL)
+			log.Printf("Audit log forwarding enabled to: %s", webhookURL) // #nosec G706 — webhookURL is from server-side configuration
 		}
 
 		instance.alertHandler = NewAlertHandler()
 		if logPath != "" {
-			instance.logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+			instance.logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) // #nosec G304 — logPath is from server-side configuration
 			if err == nil {
 				// Get current file size for rotation tracking
 				if info, statErr := instance.logFile.Stat(); statErr == nil {
@@ -380,7 +380,7 @@ func (l *Logger) rotate() {
 
 	// Open new log file
 	var err error
-	l.logFile, err = os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	l.logFile, err = os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) // #nosec G304 — logPath is from server-side configuration
 	if err != nil {
 		log.Printf("audit: failed to open new log file after rotation: %v", err)
 		l.logFile = nil

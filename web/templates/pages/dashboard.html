@@ -210,7 +210,7 @@ async function loadMetrics() {
         if (data.expiringCerts && data.expiringCerts.length > 0) {
             document.getElementById('cert-warning').style.display = 'block';
             document.getElementById('cert-message').innerHTML = data.expiringCerts.map(function(cert) {
-                return '<a href="/settings/ssl" style="color: var(--amber); text-decoration: underline;">' + cert.domain + '</a> expires in ' + cert.daysLeft + ' days';
+                return '<a href="/settings/ssl" style="color: var(--amber); text-decoration: underline;">' + escapeHtml(cert.domain) + '</a> expires in ' + escapeHtml(String(cert.daysLeft)) + ' days';
             }).join(', ');
         } else {
             document.getElementById('cert-warning').style.display = 'none';

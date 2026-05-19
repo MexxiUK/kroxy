@@ -127,4 +127,4 @@ DEPLOYMENT.md
 
 # Claude Code artifacts
 .superpowers/
-.kroxy-encryption-key
+deploy/k8s/secret.yaml

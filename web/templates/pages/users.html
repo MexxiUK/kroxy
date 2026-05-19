@@ -171,10 +171,10 @@ function renderUsers() {
         return '<tr>' +
             '<td>' +
                 '<div style="display: flex; align-items: center; gap: 0.75rem;">' +
-                    '<div style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 600; font-size: 0.875rem;">' + avatarInitial + '</div>' +
+                    '<div style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 600; font-size: 0.875rem;">' + escapeHtml(avatarInitial) + '</div>' +
                     '<div>' +
-                        '<div style="font-weight: 500;">' + displayName + '</div>' +
-                        (user.name && user.name !== user.email ? '<div style="color: var(--text-muted); font-size: 0.8125rem;">' + user.email + '</div>' : '') +
+                        '<div style="font-weight: 500;">' + escapeHtml(displayName) + '</div>' +
+                        (user.name && user.name !== user.email ? '<div style="color: var(--text-muted); font-size: 0.8125rem;">' + escapeHtml(user.email) + '</div>' : '') +
                     '</div>' +
                 '</div>' +
             '</td>' +

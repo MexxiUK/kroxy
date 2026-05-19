@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -142,11 +143,9 @@ func (m *Manager) setCooldown(key string) {
 }
 
 func (m *Manager) sign(payload []byte, secret string) string {
-	// Simple HMAC placeholder
-	importHash := sha256.New()
-	importHash.Write([]byte(secret))
-	importHash.Write(payload)
-	return hex.EncodeToString(importHash.Sum(nil))
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(payload)
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // UpdateWebhooks replaces the webhook list.
