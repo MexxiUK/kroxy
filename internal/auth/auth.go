@@ -231,7 +231,7 @@ func New(s *store.Store) *Auth {
 		if productionMode {
 			log.Fatal("KROXY_JWT_SECRET must be at least 32 characters. Generate a secret with: openssl rand -base64 32")
 		}
-		log.Printf("WARNING: KROXY_JWT_SECRET is only %d characters. Recommended minimum is 32 characters.", len(jwtSecret)) // #nosec G706 — %d prints an integer, not a user-controlled string
+		log.Printf("WARNING: KROXY_JWT_SECRET is only %d characters. Recommended minimum is 32 characters.", len(jwtSecret)) // #nosec G706 — %d prints an integer length, not user input
 	}
 
 	a := &Auth{
@@ -551,7 +551,7 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 	// Check absolute lifetime limit (prevents indefinite session hijacking)
 	if time.Since(dbSession.CreatedAt) > maxSessionAbsoluteLifetime {
 		a.store.DeleteSession(sessionID)
-		log.Printf("AUDIT: session expired (absolute limit) for user_email=%s", strings.ReplaceAll(dbSession.UserEmail, "\n", " "))
+		log.Printf("AUDIT: session expired (absolute limit) for user_email=%s", strings.ReplaceAll(dbSession.UserEmail, "\n", " ")) // #nosec G706 — newlines stripped from logged email
 		return nil, errors.New("session expired (absolute limit)")
 	}
 
@@ -565,7 +565,7 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 	if userID > 0 {
 		if user, err := a.store.GetUserByID(userID); err == nil && !user.Enabled {
 			a.store.DeleteSession(sessionID)
-			log.Printf("AUDIT: session invalidated for disabled user_id=%d email=%s", userID, strings.ReplaceAll(dbSession.UserEmail, "\n", " "))
+			log.Printf("AUDIT: session invalidated for disabled user_id=%d email=%s", userID, strings.ReplaceAll(dbSession.UserEmail, "\n", " ")) // #nosec G706 — newlines stripped from logged email
 			return nil, errors.New("user account is disabled")
 		}
 	}
