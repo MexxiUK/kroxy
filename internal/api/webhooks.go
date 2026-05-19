@@ -9,10 +9,32 @@ import (
 	"github.com/kroxy/kroxy/internal/alerts"
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/auth"
+	"github.com/kroxy/kroxy/internal/api/dto"
 	"github.com/kroxy/kroxy/internal/security"
 	"github.com/kroxy/kroxy/internal/store"
 	"github.com/kroxy/kroxy/internal/validation"
 )
+
+// toWebhookResponse converts a store.Webhook to the API-safe DTO.
+func toWebhookResponse(wh store.Webhook) dto.WebhookResponse {
+	return dto.WebhookResponse{
+		ID:        wh.ID,
+		Name:      wh.Name,
+		URL:       wh.URL,
+		Events:    wh.Events,
+		Enabled:   wh.Enabled,
+		CreatedAt: wh.CreatedAt,
+	}
+}
+
+// toWebhookResponses converts a slice of store.Webhooks to API-safe DTOs.
+func toWebhookResponses(webhooks []store.Webhook) []dto.WebhookResponse {
+	result := make([]dto.WebhookResponse, len(webhooks))
+	for i, wh := range webhooks {
+		result[i] = toWebhookResponse(wh)
+	}
+	return result
+}
 
 func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
 	webhooks, err := a.store.GetWebhooks()
@@ -20,7 +42,7 @@ func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to get webhooks")
 		return
 	}
-	respondJSON(w, http.StatusOK, map[string]interface{}{"webhooks": webhooks})
+	respondJSON(w, http.StatusOK, map[string]interface{}{"webhooks": toWebhookResponses(webhooks)})
 }
 
 func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +82,11 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 		Details:   map[string]interface{}{"name": wh.Name, "url": wh.URL},
 	})
 
-	respondJSON(w, http.StatusCreated, wh)
+	// Return the secret only once during creation, similar to API keys.
+	respondJSON(w, http.StatusCreated, map[string]interface{}{
+		"webhook": toWebhookResponse(wh),
+		"secret":  wh.Secret,
+	})
 }
 
 func (a *API) updateWebhook(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +133,8 @@ func (a *API) updateWebhook(w http.ResponseWriter, r *http.Request) {
 		Details:   map[string]interface{}{"id": id, "name": wh.Name},
 	})
 
-	respondJSON(w, http.StatusOK, wh)
+	// Never return the secret on update.
+	respondJSON(w, http.StatusOK, toWebhookResponse(wh))
 }
 
 func (a *API) deleteWebhook(w http.ResponseWriter, r *http.Request) {
