@@ -226,15 +226,18 @@ func (a *API) renderTemplate(w http.ResponseWriter, r *http.Request, name string
 
 	// Set CSRF cookie so API requests from this page can pass CSRF validation
 	if data.CSRFToken != "" {
-		http.SetCookie(w, &http.Cookie{
+		c := &http.Cookie{
 			Name:     "csrf_token",
 			Value:    data.CSRFToken,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   os.Getenv("KROXY_INSECURE_COOKIES") != "true",
 			SameSite: http.SameSiteStrictMode,
 			MaxAge:   3600,
-		})
+		}
+		if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
+			c.Secure = true
+		}
+		http.SetCookie(w, c)
 	}
 
 	// Execute template

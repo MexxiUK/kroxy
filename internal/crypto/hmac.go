@@ -65,7 +65,7 @@ func GetWAFSigningKey() ([]byte, error) {
 				wafKeyLoadErr = fmt.Errorf("KROXY_WAF_SIGNING_KEY must be at least 32 characters, got %d", len(key))
 				return
 			}
-			log.Printf("WARNING: KROXY_WAF_SIGNING_KEY is only %d characters. Recommended minimum is 32 characters.", len(key)) // #nosec G706 — %d prints an integer, not a user-controlled string
+			log.Printf("WARNING: KROXY_WAF_SIGNING_KEY is only %d characters. Recommended minimum is 32 characters.", len(key)) // #nosec G706 — %d prints an integer length, not user input
 		}
 		wafSigningKey = []byte(key)
 	})
