@@ -48,7 +48,8 @@ type API struct {
 	wafReloadFunc   func() error // Callback to reload WAF when rules change
 	proxyReloadFunc func() error // Callback to reload proxy config when routes change
 	templates       *TemplateHandler
-	productionMode  bool // Controls security settings like Secure cookie flag
+	productionMode  bool       // Controls security settings like Secure cookie flag
+	setupMu         sync.Mutex // Prevents race condition in initial setup (CRIT-005)
 }
 
 // RateLimiter implements a sliding window rate limiter to prevent burst attacks
@@ -607,6 +608,18 @@ func generateCSRFToken() string {
 
 // setup handles initial admin account creation (only when no users exist)
 func (a *API) setup(w http.ResponseWriter, r *http.Request) {
+	// Strict rate limiting: setup should only ever be called once per installation.
+	ip := security.GetClientIP(r)
+	if !a.rateLimiter.Allow(ip, 3) {
+		respondError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
+
+	// Prevent race condition where two concurrent requests both see zero users
+	// and create multiple admin accounts (CRIT-005)
+	a.setupMu.Lock()
+	defer a.setupMu.Unlock()
+
 	// Check if setup is allowed (no users exist)
 	users, err := a.store.GetUsers()
 	if err != nil {
@@ -2231,33 +2244,48 @@ func (a *API) provisionCertificate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) certAllowed(w http.ResponseWriter, r *http.Request) {
+	// Rate-limit this public endpoint to prevent domain enumeration (LOW-009).
+	ip := security.GetClientIP(r)
+	if !a.rateLimiter.Allow(ip, 10) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+
 	domain := r.URL.Query().Get("domain")
 	if domain == "" {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+
+	// Timing equalization: always fetch both routes and certs before deciding,
+	// so the response time is similar whether the domain exists or not.
+	found := false
 	routes, err := a.store.GetRoutes()
-	if err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		return
-	}
-	for _, route := range routes {
-		if route.Domain == domain && route.Enabled {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-	}
-	// Also check certificate records — LE certs may exist before a route
-	certs, err := a.store.GetCertificates()
 	if err == nil {
-		for _, cert := range certs {
-			if cert.Domain == domain && cert.Type == "letsencrypt" {
-				w.WriteHeader(http.StatusOK)
-				return
+		for _, route := range routes {
+			if route.Domain == domain && route.Enabled {
+				found = true
+				break
 			}
 		}
 	}
-	w.WriteHeader(http.StatusForbidden)
+	// Also check certificate records — LE certs may exist before a route
+	if !found {
+		certs, err := a.store.GetCertificates()
+		if err == nil {
+			for _, cert := range certs {
+				if cert.Domain == domain && cert.Type == "letsencrypt" {
+					found = true
+					break
+				}
+			}
+		}
+	}
+	if found {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusForbidden)
+	}
 }
 
 func (a *API) listWAFRules(w http.ResponseWriter, r *http.Request) {
@@ -2315,6 +2343,13 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 	// Validate WAF rule syntax
 	if err := validation.ValidateWAFRule(rule.Rule); err != nil {
 		log.Printf("WAF rule validation failed for %q (rule: %.100s): %v", rule.Name, rule.Rule, err)
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Validate WAF exclusions (comma-separated numeric rule IDs only)
+	if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
+		log.Printf("WAF exclusions validation failed for %q: %v", rule.Name, err)
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -2451,6 +2486,12 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 		}
 		if !found {
 			respondError(w, http.StatusBadRequest, "Route not found")
+			return
+		}
+	}
+	if rule.Exclusions != "" {
+		if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
