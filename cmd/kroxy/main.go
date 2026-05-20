@@ -217,7 +217,18 @@ func main() {
 	<-sig
 
 	log.Println("Shutting down...")
-	px.Stop()
+
+	// Stop proxy with a bounded timeout so it can't block shutdown indefinitely.
+	pxStopDone := make(chan struct{})
+	go func() {
+		px.Stop()
+		close(pxStopDone)
+	}()
+	select {
+	case <-pxStopDone:
+	case <-time.After(10 * time.Second):
+		log.Println("WARNING: proxy stop timed out, continuing shutdown")
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
