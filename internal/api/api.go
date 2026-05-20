@@ -142,6 +142,25 @@ func (rl *RateLimiter) Allow(ip string, limit int) bool {
 	return true
 }
 
+// cleanupStaleRateLimits removes rate limit entries with zero counts to prevent
+// memory leaks when many IPs have touched the API.
+func (rl *RateLimiter) cleanupStaleRateLimits() {
+	now := time.Now().UnixNano()
+	rl.requests.Range(func(key, value interface{}) bool {
+		counter := value.(*rateLimitCounter)
+		counter.mu.Lock()
+		elapsed := now - counter.windowStart
+		if elapsed >= 2*rateLimitWindow {
+			// More than 2 windows have passed, both counts are effectively zero
+			counter.mu.Unlock()
+			rl.requests.Delete(key)
+		} else {
+			counter.mu.Unlock()
+		}
+		return true
+	})
+}
+
 func New(s *store.Store) *API {
 	r := chi.NewRouter()
 

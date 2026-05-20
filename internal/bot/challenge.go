@@ -216,8 +216,28 @@ func (cm *ChallengeManager) checkVerifyRateLimit(ip string) bool {
 
 // consumeNonce marks a nonce as consumed and returns true if it was not already used.
 func (cm *ChallengeManager) consumeNonce(nonce string) bool {
+	cm.nonceCleanup.Do(cm.startCleanup)
 	_, loaded := cm.consumedNonces.LoadOrStore(nonce, &consumedNonce{expiresAt: time.Now().Add(5 * time.Minute)})
 	return !loaded
+}
+
+// startCleanup begins a background goroutine that removes expired nonces.
+func (cm *ChallengeManager) startCleanup() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now()
+			cm.consumedNonces.Range(func(key, value interface{}) bool {
+				if cn, ok := value.(*consumedNonce); ok {
+					if now.After(cn.expiresAt) {
+						cm.consumedNonces.Delete(key)
+					}
+				}
+				return true
+			})
+		}
+	}()
 }
 
 func (cm *ChallengeManager) hmac(data string) []byte {
