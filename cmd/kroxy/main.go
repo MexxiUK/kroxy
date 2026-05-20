@@ -218,7 +218,13 @@ func main() {
 
 	log.Println("Shutting down...")
 	px.Stop()
-	server.Shutdown(ctx)
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("ERROR: graceful shutdown failed: %v", err)
+	}
 	if logStore != nil {
 		logStore.Close()
 	}
