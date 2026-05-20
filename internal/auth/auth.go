@@ -327,6 +327,85 @@ func (a *Auth) cleanupExpired() {
 		return true
 	})
 
+	// Cleanup expired API keys
+	a.apiKeys.Range(func(key, value interface{}) bool {
+		if apiKey, ok := value.(*APIKey); ok {
+			if apiKey.ExpiresAt != nil && now.After(*apiKey.ExpiresAt) {
+				a.apiKeys.Delete(key)
+			}
+		}
+		return true
+	})
+
+	// Cleanup old failed login attempts (24h retention)
+	a.failedAttempts.Range(func(key, value interface{}) bool {
+		if attempt, ok := value.(*failedAttempt); ok {
+			if now.Sub(attempt.firstFail) > 24*time.Hour {
+				a.failedAttempts.Delete(key)
+			}
+		}
+		return true
+	})
+
+	// Cleanup expired role cache entries
+	a.roleCache.Range(func(key, value interface{}) bool {
+		if entry, ok := value.(*roleCacheEntry); ok {
+			if now.Sub(entry.cachedAt) > roleCacheTTL {
+				a.roleCache.Delete(key)
+			}
+		}
+		return true
+	})
+
+	// Cleanup session mutexes for users with no active sessions
+	a.sessionMu.Range(func(key, value interface{}) bool {
+		userID := key.(int)
+		hasSession := false
+		a.sessions.Range(func(sKey, sValue interface{}) bool {
+			if session, ok := sValue.(*Session); ok {
+				if session.UserID == userID && now.Before(session.ExpiresAt) {
+					hasSession = true
+					return false // stop iterating
+				}
+			}
+			return true
+		})
+		if !hasSession {
+			a.sessionMu.Delete(userID)
+		}
+		return true
+	})
+
+	// Cleanup old admin token rate limit entries (1h retention)
+	a.adminTokenAttempts.Range(func(key, value interface{}) bool {
+		if attempt, ok := value.(*adminTokenAttempt); ok {
+			if now.Sub(attempt.firstFail) > time.Hour {
+				a.adminTokenAttempts.Delete(key)
+			}
+		}
+		return true
+	})
+
+	// Cleanup old API key rate limit entries (1h retention)
+	a.apiKeyAttempts.Range(func(key, value interface{}) bool {
+		if attempt, ok := value.(*apiKeyAttempt); ok {
+			if now.Sub(attempt.firstFail) > time.Hour {
+				a.apiKeyAttempts.Delete(key)
+			}
+		}
+		return true
+	})
+
+	// Cleanup old 2FA rate limit entries (10m retention)
+	a.twoFARateLimits.Range(func(key, value interface{}) bool {
+		if rl, ok := value.(*twoFARateLimit); ok {
+			if now.Sub(rl.firstFail) > 10*time.Minute {
+				a.twoFARateLimits.Delete(key)
+			}
+		}
+		return true
+	})
+
 	// Cleanup distributed attack tracker
 	a.cleanupDistributedAttackTracker()
 }
