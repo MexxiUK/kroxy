@@ -40,6 +40,20 @@ func New(path string) (*Store, error) {
 	// Warn if encryption is not configured in production mode
 	crypto.RequireEncryptionInProduction()
 
+	// Enable WAL mode for concurrent reads while writing
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		return nil, fmt.Errorf("failed to enable WAL mode: %w", err)
+	}
+	// Set busy timeout to prevent "database is locked" errors
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		return nil, fmt.Errorf("failed to set busy_timeout: %w", err)
+	}
+	// Limit connections: SQLite with WAL supports multiple readers but only one writer.
+	// SetMaxOpenConns(1) serializes all access through one connection, eliminating lock contention.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
+
 	return &Store{db: db, dbPath: path}, nil
 }
 
