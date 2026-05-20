@@ -83,9 +83,6 @@ func (s *Store) GetRoutes() ([]Route, error) {
 
 	var routes []Route
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var r Route
 		if err := rows.Scan(&r.ID, &r.Domain, &r.Backend, &r.Enabled, &r.WAFEnabled, &r.WAFMode, &r.WAFParanoiaLevel, &r.OIDCEnabled, &r.OIDCProviderID,
 			&r.RateLimit, &r.EnableGzip, &r.EnableBrotli, &r.EnableCache, &r.CustomHeaders, &r.BlockCountries, &r.AllowCountries, &r.RequireHTTPS,
@@ -93,6 +90,9 @@ func (s *Store) GetRoutes() ([]Route, error) {
 			return nil, err
 		}
 		routes = append(routes, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return routes, nil
 }
@@ -152,14 +152,14 @@ func (s *Store) GetOIDCProviders() ([]OIDCProvider, error) {
 
 	var providers []OIDCProvider
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var p OIDCProvider
 		if err := rows.Scan(&p.ID, &p.Name, &p.ClientID, &p.ClientSecret, &p.DiscoveryURL, &p.RedirectURL); err != nil {
 			return nil, err
 		}
 		providers = append(providers, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return providers, nil
 }
@@ -256,14 +256,14 @@ func (s *Store) GetBlacklists() ([]Blacklist, error) {
 
 	var list []Blacklist
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var b Blacklist
 		if err := rows.Scan(&b.ID, &b.Type, &b.Value, &b.Enabled, &b.CreatedAt); err != nil {
 			return nil, err
 		}
 		list = append(list, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return list, nil
 }
@@ -297,14 +297,14 @@ func (s *Store) GetWhitelists() ([]Whitelist, error) {
 
 	var list []Whitelist
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var w Whitelist
 		if err := rows.Scan(&w.ID, &w.Type, &w.Value, &w.Enabled, &w.CreatedAt); err != nil {
 			return nil, err
 		}
 		list = append(list, w)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return list, nil
 }
@@ -338,14 +338,14 @@ func (s *Store) GetRateLimits() ([]RateLimit, error) {
 
 	var limits []RateLimit
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var r RateLimit
 		if err := rows.Scan(&r.ID, &r.Domain, &r.RequestsPerMinute, &r.Burst, &r.Enabled); err != nil {
 			return nil, err
 		}
 		limits = append(limits, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return limits, nil
 }
@@ -384,14 +384,14 @@ func (s *Store) GetUsers() ([]User, error) {
 
 	var users []User
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var u User
 		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Enabled, &u.TOTPEnabled); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return users, nil
 }
@@ -463,14 +463,14 @@ func (s *Store) GetCertificates() ([]Certificate, error) {
 
 	var certs []Certificate
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var c Certificate
 		if err := rows.Scan(&c.ID, &c.Domain, &c.Type, &c.Issuer, &c.CertPath, &c.KeyPath, &c.AutoRenew, &c.Status, &c.ExpiresAt); err != nil {
 			return nil, err
 		}
 		certs = append(certs, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return certs, nil
 }
@@ -527,14 +527,14 @@ func (s *Store) GetWAFRules() ([]WAFRule, error) {
 
 	var rules []WAFRule
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var r WAFRule
 		if err := rows.Scan(&r.ID, &r.Name, &r.Rule, &r.Enabled, &r.Mode, &r.Exclusions, &r.RouteID); err != nil {
 			return nil, err
 		}
 		rules = append(rules, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return rules, nil
 }
@@ -549,14 +549,14 @@ func (s *Store) GetGlobalWAFRules() ([]WAFRule, error) {
 
 	var rules []WAFRule
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var r WAFRule
 		if err := rows.Scan(&r.ID, &r.Name, &r.Rule, &r.Enabled, &r.Mode, &r.Exclusions, &r.RouteID); err != nil {
 			return nil, err
 		}
 		rules = append(rules, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return rules, nil
 }
@@ -571,14 +571,14 @@ func (s *Store) GetWAFRulesForRoute(routeID int) ([]WAFRule, error) {
 
 	var rules []WAFRule
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var r WAFRule
 		if err := rows.Scan(&r.ID, &r.Name, &r.Rule, &r.Enabled, &r.Mode, &r.Exclusions, &r.RouteID); err != nil {
 			return nil, err
 		}
 		rules = append(rules, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return rules, nil
 }
@@ -637,9 +637,6 @@ func (s *Store) GetAPIKeysByUser(userID int) ([]APIKey, error) {
 
 	var keys []APIKey
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var key APIKey
 		var expiresAt, lastUsed sql.NullTime
 		if err := rows.Scan(&key.ID, &key.KeyID, &key.KeySecretHash, &key.UserID, &key.Name, &key.CreatedAt, &expiresAt, &lastUsed); err != nil {
@@ -652,6 +649,9 @@ func (s *Store) GetAPIKeysByUser(userID int) ([]APIKey, error) {
 			key.LastUsed = &lastUsed.Time
 		}
 		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return keys, nil
 }
@@ -890,14 +890,14 @@ func (s *Store) GetRedirectDomains() ([]string, error) {
 
 	var domains []string
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var domain string
 		if err := rows.Scan(&domain); err != nil {
 			return nil, err
 		}
 		domains = append(domains, domain)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return domains, nil
 }
@@ -929,14 +929,14 @@ func (s *Store) GetSessionsByUser(userID int) ([]Session, error) {
 
 	var sessions []Session
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var sess Session
 		if err := rows.Scan(&sess.ID, &sess.UserEmail, &sess.UserName, &sess.UserID, &sess.ProviderName, &sess.CreatedAt, &sess.ExpiresAt); err != nil {
 			return nil, err
 		}
 		sessions = append(sessions, sess)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return sessions, nil
 }
@@ -970,14 +970,14 @@ func (s *Store) GetSecurityEvents(limit int, offset int) ([]SecurityEvent, error
 
 	var events []SecurityEvent
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var e SecurityEvent
 		if err := rows.Scan(&e.ID, &e.EventType, &e.ClientIP, &e.Host, &e.URI, &e.Method, &e.UserAgent, &e.RuleName, &e.RuleID, &e.RouteID, &e.Action, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return events, nil
 }
@@ -1003,14 +1003,14 @@ func (s *Store) GetSecurityEventsForRoute(routeID int, limit int, offset int) ([
 
 	var events []SecurityEvent
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var e SecurityEvent
 		if err := rows.Scan(&e.ID, &e.EventType, &e.ClientIP, &e.Host, &e.URI, &e.Method, &e.UserAgent, &e.RuleName, &e.RuleID, &e.RouteID, &e.Action, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return events, nil
 }
@@ -1079,9 +1079,6 @@ func (s *Store) GetWebhooks() ([]Webhook, error) {
 
 	var webhooks []Webhook
 	for rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
 		var w Webhook
 		var enabled int
 		if err := rows.Scan(&w.ID, &w.Name, &w.URL, &w.Events, &w.Secret, &enabled, &w.CreatedAt); err != nil {
@@ -1089,6 +1086,9 @@ func (s *Store) GetWebhooks() ([]Webhook, error) {
 		}
 		w.Enabled = enabled == 1
 		webhooks = append(webhooks, w)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return webhooks, nil
 }
