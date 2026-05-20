@@ -1688,7 +1688,8 @@ func (a *API) createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.oidcManager.AddProvider(r.Context(), *provider); err != nil {
+	// Use background context so client disconnect doesn't leave the cache stale.
+	if err := a.oidcManager.AddProvider(context.Background(), *provider); err != nil {
 		log.Printf("Warning: failed to initialize OIDC provider %s: %v", provider.Name, err)
 	}
 
@@ -1775,10 +1776,11 @@ func (a *API) updateOIDCProvider(w http.ResponseWriter, r *http.Request) {
 	if provider.ClientSecret == "" {
 		existing, err := a.store.GetOIDCProvider(id)
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, "Failed to retrieve existing provider secret")
-			return
+			// If we can't decrypt the existing secret, still allow updating other fields
+			log.Printf("Warning: failed to retrieve existing provider %d for secret preservation: %v", id, err)
+		} else {
+			provider.ClientSecret = existing.ClientSecret
 		}
-		provider.ClientSecret = existing.ClientSecret
 	}
 	// Persist the update
 	if err := a.store.UpdateOIDCProvider(provider); err != nil {
@@ -1786,7 +1788,8 @@ func (a *API) updateOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.oidcManager.UpdateProvider(r.Context(), *provider); err != nil {
+	// Use background context so client disconnect doesn't leave the cache stale.
+	if err := a.oidcManager.UpdateProvider(context.Background(), *provider); err != nil {
 		log.Printf("Warning: failed to update OIDC provider cache for %s: %v", provider.Name, err)
 	}
 
