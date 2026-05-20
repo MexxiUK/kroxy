@@ -1771,6 +1771,15 @@ func (a *API) updateOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		DiscoveryURL: discoveryURL,
 		RedirectURL:  req.RedirectURL,
 	}
+	// Preserve existing secret if not provided in update (prevents secret wipe)
+	if provider.ClientSecret == "" {
+		existing, err := a.store.GetOIDCProvider(id)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to retrieve existing provider secret")
+			return
+		}
+		provider.ClientSecret = existing.ClientSecret
+	}
 	// Persist the update
 	if err := a.store.UpdateOIDCProvider(provider); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update OIDC provider")
