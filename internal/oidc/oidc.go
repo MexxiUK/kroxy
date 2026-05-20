@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/kroxy/kroxy/internal/crypto"
 	"github.com/kroxy/kroxy/internal/store"
 	"golang.org/x/oauth2"
 )
@@ -57,7 +58,10 @@ func NewManager(s *store.Store) *Manager {
 func (m *Manager) InitializeProvider(ctx context.Context, p store.OIDCProvider) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.initializeProviderLocked(ctx, p)
+}
 
+func (m *Manager) initializeProviderLocked(ctx context.Context, p store.OIDCProvider) error {
 	// Discover OIDC configuration
 	discoveryURL := p.DiscoveryURL
 	if discoveryURL == "" {
@@ -99,6 +103,26 @@ func (m *Manager) InitializeProvider(ctx context.Context, p store.OIDCProvider) 
 	return nil
 }
 
+// AddProvider adds a new provider to the in-memory cache
+func (m *Manager) AddProvider(ctx context.Context, p store.OIDCProvider) error {
+	return m.InitializeProvider(ctx, p)
+}
+
+// UpdateProvider updates an existing provider in the cache
+func (m *Manager) UpdateProvider(ctx context.Context, p store.OIDCProvider) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.providers, p.ID)
+	return m.initializeProviderLocked(ctx, p)
+}
+
+// RemoveProvider removes a provider from the cache
+func (m *Manager) RemoveProvider(id int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.providers, id)
+}
+
 // InitializeAllProviders loads all providers from database
 func (m *Manager) InitializeAllProviders(ctx context.Context) error {
 	providers, err := m.store.GetOIDCProviders()
@@ -107,6 +131,12 @@ func (m *Manager) InitializeAllProviders(ctx context.Context) error {
 	}
 
 	for _, p := range providers {
+		decryptedSecret, err := crypto.Decrypt(p.ClientSecret)
+		if err != nil {
+			log.Printf("Warning: failed to decrypt client secret for provider %s: %v", p.Name, err)
+			continue
+		}
+		p.ClientSecret = decryptedSecret
 		if err := m.InitializeProvider(ctx, p); err != nil {
 			log.Printf("Warning: failed to initialize provider %s: %v", p.Name, err)
 			continue
