@@ -1248,8 +1248,7 @@ func (a *Auth) Verify2FA(pendingID, code, ip, userAgent string) (*LoginResponse,
 	// Decrypt TOTP secret
 	secret, err := crypto.Decrypt(user.TOTPSecret)
 	if err != nil {
-		// Try using the secret as-is (backward compatibility with plaintext)
-		secret = user.TOTPSecret
+		return nil, fmt.Errorf("failed to decrypt TOTP secret: %w", err)
 	}
 
 	// Validate TOTP code

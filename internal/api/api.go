@@ -921,7 +921,8 @@ func (a *API) enable2FA(w http.ResponseWriter, r *http.Request) {
 	// Decrypt secret
 	secret, err := crypto.Decrypt(dbUser.TOTPSecret)
 	if err != nil {
-		secret = dbUser.TOTPSecret // fallback to plaintext
+		respondError(w, http.StatusInternalServerError, "Failed to decrypt TOTP secret")
+		return
 	}
 
 	// Verify the code
@@ -986,7 +987,8 @@ func (a *API) disable2FA(w http.ResponseWriter, r *http.Request) {
 	// Decrypt secret and verify code
 	secret, err := crypto.Decrypt(dbUser.TOTPSecret)
 	if err != nil {
-		secret = dbUser.TOTPSecret
+		respondError(w, http.StatusInternalServerError, "Failed to decrypt TOTP secret")
+		return
 	}
 
 	if !totp.ValidateCode(secret, req.Code) {

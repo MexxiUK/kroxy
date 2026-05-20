@@ -172,14 +172,12 @@ func (s *Store) GetOIDCProvider(id int) (*OIDCProvider, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Decrypt client secret (handles plaintext for backward compatibility)
+	// Decrypt client secret
 	decryptedSecret, err := crypto.Decrypt(encryptedSecret)
 	if err != nil {
-		// If decryption fails, try using the value as-is (backward compatibility)
-		p.ClientSecret = encryptedSecret
-	} else {
-		p.ClientSecret = decryptedSecret
+		return nil, fmt.Errorf("failed to decrypt client secret for provider %d: %w", p.ID, err)
 	}
+	p.ClientSecret = decryptedSecret
 	return &p, nil
 }
 
