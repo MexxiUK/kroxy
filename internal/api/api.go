@@ -1688,7 +1688,7 @@ func (a *API) createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.oidcManager.InitializeProvider(r.Context(), *provider); err != nil {
+	if err := a.oidcManager.AddProvider(r.Context(), *provider); err != nil {
 		log.Printf("Warning: failed to initialize OIDC provider %s: %v", provider.Name, err)
 	}
 
@@ -1786,6 +1786,10 @@ func (a *API) updateOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := a.oidcManager.UpdateProvider(r.Context(), *provider); err != nil {
+		log.Printf("Warning: failed to update OIDC provider cache for %s: %v", provider.Name, err)
+	}
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"id":            provider.ID,
 		"name":          provider.Name,
@@ -1808,6 +1812,8 @@ func (a *API) deleteOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to delete provider")
 		return
 	}
+
+	a.oidcManager.RemoveProvider(id)
 
 	a.audit.Log(audit.Event{
 		Type:      "oidc_provider_deleted",
