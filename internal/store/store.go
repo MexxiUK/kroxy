@@ -18,7 +18,9 @@ type Store struct {
 }
 
 func New(path string) (*Store, error) {
-	db, err := sql.Open("sqlite3", path)
+	// Use connection-string pragmas so every connection gets WAL mode and busy_timeout.
+	connStr := fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=5000", path)
+	db, err := sql.Open("sqlite3", connStr)
 	if err != nil {
 		return nil, err
 	}
@@ -36,18 +38,16 @@ func New(path string) (*Store, error) {
 		// This can happen if running as non-root or on certain filesystems
 		log.Printf("Warning: failed to set database file permissions on %s: %v", path, err)
 	}
+	// WAL mode creates sidecar files; restrict their permissions too
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if err := os.Chmod(path+suffix, 0600); err != nil {
+			log.Printf("Warning: failed to set WAL file permissions on %s%s: %v", path, suffix, err)
+		}
+	}
 
 	// Warn if encryption is not configured in production mode
 	crypto.RequireEncryptionInProduction()
 
-	// Enable WAL mode for concurrent reads while writing
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		return nil, fmt.Errorf("failed to enable WAL mode: %w", err)
-	}
-	// Set busy timeout to prevent "database is locked" errors
-	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		return nil, fmt.Errorf("failed to set busy_timeout: %w", err)
-	}
 	// Limit connections: SQLite with WAL supports multiple readers but only one writer.
 	// SetMaxOpenConns(1) serializes all access through one connection, eliminating lock contention.
 	db.SetMaxOpenConns(1)
