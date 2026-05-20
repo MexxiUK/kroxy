@@ -627,8 +627,9 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 		// Extend sliding window expiration on successful validation
 		newExpiry := time.Now().Add(a.sessionExpiry)
 		if newExpiry.After(session.ExpiresAt) {
-			session.ExpiresAt = newExpiry
-			a.sessions.Store(sessionID, session)
+			updated := *session
+			updated.ExpiresAt = newExpiry
+			a.sessions.Store(sessionID, &updated)
 			go a.store.UpdateSessionExpiry(sessionID, newExpiry)
 		}
 		return session, nil
