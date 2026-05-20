@@ -147,6 +147,8 @@ type Auth struct {
 	jwtSecret          []byte
 	sessionExpiry      time.Duration
 	productionMode     bool // When false, cookies don't require HTTPS
+	dbUpdateCh         chan func() // Background worker for async DB writes
+	dbUpdateOnce       sync.Once   // Ensures worker starts once
 }
 
 // twoFARateLimit tracks 2FA verification attempts per user to prevent brute-forcing
@@ -258,6 +260,7 @@ func New(s *store.Store) *Auth {
 		sessionExpiry:  24 * time.Hour,
 		jwtSecret:      []byte(jwtSecret),
 		productionMode: productionMode,
+		dbUpdateCh:     make(chan func(), 100),
 		distributedAttack: &distributedAttackTracker{
 			ipAttempts:  make(map[string]*ipAttackStats),
 			windowStart: time.Now(),
@@ -280,6 +283,24 @@ func (a *Auth) startCleanup() {
 
 	for range ticker.C {
 		a.cleanupExpired()
+	}
+}
+
+// enqueueDBUpdate schedules an async database write. Drops if buffer is full.
+func (a *Auth) enqueueDBUpdate(fn func()) {
+	a.dbUpdateOnce.Do(func() {
+		go a.dbUpdateWorker()
+	})
+	select {
+	case a.dbUpdateCh <- fn:
+	default:
+		log.Println("auth: DB update buffer full, dropping async write")
+	}
+}
+
+func (a *Auth) dbUpdateWorker() {
+	for fn := range a.dbUpdateCh {
+		fn()
 	}
 }
 
@@ -630,7 +651,7 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 			updated := *session
 			updated.ExpiresAt = newExpiry
 			a.sessions.Store(sessionID, &updated)
-			go a.store.UpdateSessionExpiry(sessionID, newExpiry)
+			a.enqueueDBUpdate(func() { a.store.UpdateSessionExpiry(sessionID, newExpiry) })
 		}
 		return session, nil
 	}
@@ -673,7 +694,7 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 	newExpiry := time.Now().Add(a.sessionExpiry)
 	if newExpiry.After(dbSession.ExpiresAt) {
 		dbSession.ExpiresAt = newExpiry
-		go a.store.UpdateSessionExpiry(sessionID, newExpiry)
+		a.enqueueDBUpdate(func() { a.store.UpdateSessionExpiry(sessionID, newExpiry) })
 	}
 
 	// Fetch user's actual role from database (with caching)
@@ -805,7 +826,7 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 	}
 
 	// Update last used timestamp (async)
-	go a.store.UpdateAPIKeyLastUsed(keyID)
+	a.enqueueDBUpdate(func() { a.store.UpdateAPIKeyLastUsed(keyID) })
 
 	log.Printf("AUDIT: API key authenticated: key_id=%s user_id=%d name=%s", strings.ReplaceAll(keyID, "\n", " "), apiKey.UserID, strings.ReplaceAll(apiKey.Name, "\n", " ")) // #nosec G706 — newlines stripped from logged fields
 

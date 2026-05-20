@@ -21,6 +21,7 @@ type Manager struct {
 	cooldowns   map[string]time.Time
 	cooldownDur time.Duration
 	client      *http.Client
+	semaphore   chan struct{} // Limits concurrent webhook sends
 }
 
 // Webhook represents a configured webhook endpoint.
@@ -48,12 +49,15 @@ type Event struct {
 
 const defaultCooldown = 5 * time.Minute
 
+const maxConcurrentWebhookSends = 10
+
 // NewManager creates an alert manager.
 func NewManager() *Manager {
 	return &Manager{
 		cooldowns:   make(map[string]time.Time),
 		cooldownDur: defaultCooldown,
 		client:      &http.Client{Timeout: 10 * time.Second},
+		semaphore:   make(chan struct{}, maxConcurrentWebhookSends),
 	}
 }
 
@@ -78,7 +82,15 @@ func (m *Manager) Send(event Event) {
 			continue
 		}
 
-		go m.sendWebhook(wh, event)
+		select {
+		case m.semaphore <- struct{}{}:
+			go func(wh Webhook, event Event) {
+				defer func() { <- m.semaphore }()
+				m.sendWebhook(wh, event)
+			}(wh, event)
+		default:
+			log.Printf("Alert: dropping webhook to %s, concurrency limit reached", wh.URL)
+		}
 		m.setCooldown(key)
 	}
 }
