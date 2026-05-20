@@ -70,6 +70,8 @@ type Logger struct {
 	webhookURL    string // External webhook URL for log forwarding
 	webhookClient *http.Client
 	alertHandler  *AlertHandler // Real-time alerting
+	webhookCh     chan []byte   // Buffered channel for async webhook forwarding
+	webhookOnce   sync.Once     // Ensures webhook worker starts once
 }
 
 const (
@@ -112,6 +114,7 @@ func Init(logPath string) error {
 			maxSize:    defaultMaxSize,
 			maxBackups: defaultMaxBackups,
 			webhookURL: webhookURL,
+			webhookCh:  make(chan []byte, 100),
 		}
 
 		if webhookURL != "" {
@@ -210,7 +213,7 @@ func (l *Logger) Log(event Event) {
 
 	// Forward to external webhook (async, non-blocking)
 	if l.webhookURL != "" && l.webhookClient != nil {
-		go l.forwardToWebhook(data)
+		l.enqueueWebhook(data)
 	}
 
 	// Check alerting thresholds
@@ -259,6 +262,26 @@ func (l *Logger) LogRateLimitTrigger(ip, domain string, requestsPerMinute int) {
 			"requests_per_min": requestsPerMinute,
 		},
 	})
+}
+
+// enqueueWebhook drops events into a buffered channel; if full, new events are dropped.
+func (l *Logger) enqueueWebhook(data []byte) {
+	l.webhookOnce.Do(l.startWebhookWorker)
+	select {
+	case l.webhookCh <- data:
+	default:
+		log.Println("audit: webhook buffer full, dropping event")
+	}
+}
+
+func (l *Logger) startWebhookWorker() {
+	go l.webhookWorker()
+}
+
+func (l *Logger) webhookWorker() {
+	for data := range l.webhookCh {
+		l.forwardToWebhook(data)
+	}
 }
 
 // forwardToWebhook sends an audit event to the configured webhook URL
