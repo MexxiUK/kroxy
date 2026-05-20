@@ -54,14 +54,9 @@ func NewManager(s *store.Store) *Manager {
 	}
 }
 
-// InitializeProvider sets up an OIDC provider from database configuration
-func (m *Manager) InitializeProvider(ctx context.Context, p store.OIDCProvider) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.initializeProviderLocked(ctx, p)
-}
-
-func (m *Manager) initializeProviderLocked(ctx context.Context, p store.OIDCProvider) error {
+// buildOAuthProvider performs OIDC discovery and constructs the runtime provider
+// WITHOUT holding any locks. Network I/O happens here, so callers must not hold mu.
+func (m *Manager) buildOAuthProvider(ctx context.Context, p store.OIDCProvider) (*oauthProvider, error) {
 	// Discover OIDC configuration
 	discoveryURL := p.DiscoveryURL
 	if discoveryURL == "" {
@@ -71,13 +66,13 @@ func (m *Manager) initializeProviderLocked(ctx context.Context, p store.OIDCProv
 		case "github":
 			discoveryURL = "https://token.actions.githubusercontent.com"
 		default:
-			return fmt.Errorf("discovery URL required for custom provider")
+			return nil, fmt.Errorf("discovery URL required for custom provider")
 		}
 	}
 
 	provider, err := oidc.NewProvider(ctx, discoveryURL)
 	if err != nil {
-		return fmt.Errorf("failed to create OIDC provider: %w", err)
+		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 	}
 
 	// Default scopes
@@ -93,12 +88,23 @@ func (m *Manager) initializeProviderLocked(ctx context.Context, p store.OIDCProv
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: p.ClientID})
 
-	m.providers[p.ID] = &oauthProvider{
+	return &oauthProvider{
 		name:        p.Name,
 		oauthConfig: oauthConfig,
 		verifier:    verifier,
+	}, nil
+}
+
+// InitializeProvider sets up an OIDC provider from database configuration
+func (m *Manager) InitializeProvider(ctx context.Context, p store.OIDCProvider) error {
+	op, err := m.buildOAuthProvider(ctx, p)
+	if err != nil {
+		return err
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.providers[p.ID] = op
 	log.Printf("Initialized OIDC provider: %s", p.Name)
 	return nil
 }
@@ -108,12 +114,19 @@ func (m *Manager) AddProvider(ctx context.Context, p store.OIDCProvider) error {
 	return m.InitializeProvider(ctx, p)
 }
 
-// UpdateProvider updates an existing provider in the cache
+// UpdateProvider updates an existing provider in the cache.
+// It performs discovery BEFORE modifying the cache, so a failure leaves the old entry intact.
 func (m *Manager) UpdateProvider(ctx context.Context, p store.OIDCProvider) error {
+	op, err := m.buildOAuthProvider(ctx, p)
+	if err != nil {
+		return err
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.providers, p.ID)
-	return m.initializeProviderLocked(ctx, p)
+	m.providers[p.ID] = op
+	log.Printf("Updated OIDC provider: %s", p.Name)
+	return nil
 }
 
 // RemoveProvider removes a provider from the cache
