@@ -183,8 +183,8 @@ function renderUsers() {
             '<td style="color: var(--text-muted);">' + (user.last_login ? formatDateTime(user.last_login) : 'Never') + '</td>' +
             '<td>' +
                 '<div style="display: flex; gap: 0.5rem;">' +
-                    '<button type="button" class="btn btn-secondary btn-sm role-btn" data-id="' + user.id + '" data-email="' + escapeHtml(user.email) + '" data-role="' + escapeHtml(user.role) + '" title="Change role">Change Role</button>' +
-                    '<button type="button" class="btn btn-danger btn-sm delete-btn" data-id="' + user.id + '" data-email="' + escapeHtml(user.email) + '" title="Delete user">Delete</button>' +
+                    '<button type="button" class="btn btn-secondary btn-sm role-btn" data-id="' + escapeHtml(user.id) + '" data-email="' + escapeHtml(user.email) + '" data-role="' + escapeHtml(user.role) + '" title="Change role">Change Role</button>' +
+                    '<button type="button" class="btn btn-danger btn-sm delete-btn" data-id="' + escapeHtml(user.id) + '" data-email="' + escapeHtml(user.email) + '" title="Delete user">Delete</button>' +
                 '</div>' +
             '</td>' +
         '</tr>';

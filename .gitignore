@@ -131,3 +131,9 @@ deploy/k8s/secret.yaml
 
 # Encryption keys (dev keys auto-generated; never commit)
 .kroxy-encryption-key
+
+# Security audit reports (contain vulnerability details)
+audits/
+
+# Claude Code local workspace state
+.claude/

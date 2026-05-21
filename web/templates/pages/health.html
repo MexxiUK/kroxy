@@ -83,14 +83,14 @@ async function loadHealth() {
             var statusText = b.healthy ? 'Healthy' : 'Unhealthy';
             var lastCheck = b.last_checked ? new Date(b.last_checked).toLocaleString() : 'Never';
             var responseTime = b.response_time_ms ? b.response_time_ms + 'ms' : '-';
-            return `<tr>
-                <td>${escapeHtml(b.domain)}</td>
-                <td><code>${escapeHtml(b.backend)}</code></td>
-                <td><span class="${statusClass}">${statusText}</span></td>
-                <td>${responseTime}</td>
-                <td>${lastCheck}</td>
-                <td>${b.fail_count || 0}</td>
-            </tr>`;
+            return '<tr>' +
+                '<td>' + escapeHtml(b.domain) + '</td>' +
+                '<td><code>' + escapeHtml(b.backend) + '</code></td>' +
+                '<td><span class="' + statusClass + '">' + statusText + '</span></td>' +
+                '<td>' + responseTime + '</td>' +
+                '<td>' + lastCheck + '</td>' +
+                '<td>' + (b.fail_count || 0) + '</td>' +
+            '</tr>';
         }).join('');
         document.getElementById('health-table').innerHTML = rows;
     } catch (err) {

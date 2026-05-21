@@ -90,15 +90,15 @@ async function loadLogs() {
 
         var rows = logs.map(function(l) {
             var statusClass = l.status_code >= 500 ? 'badge badge-danger' : l.status_code >= 400 ? 'badge badge-warning' : 'badge badge-success';
-            return `<tr>
-                <td>${new Date(l.timestamp).toLocaleString()}</td>
-                <td><code>${escapeHtml(l.method)}</code></td>
-                <td>${escapeHtml(l.host)}</td>
-                <td><code>${escapeHtml(l.uri)}</code></td>
-                <td><span class="${statusClass}">${l.status_code}</span></td>
-                <td>${l.duration_ms}ms</td>
-                <td>${escapeHtml(l.remote_addr)}</td>
-            </tr>`;
+            return '<tr>' +
+                '<td>' + new Date(l.timestamp).toLocaleString() + '</td>' +
+                '<td><code>' + escapeHtml(l.method) + '</code></td>' +
+                '<td>' + escapeHtml(l.host) + '</td>' +
+                '<td><code>' + escapeHtml(l.uri) + '</code></td>' +
+                '<td><span class="' + statusClass + '">' + l.status_code + '</span></td>' +
+                '<td>' + l.duration_ms + 'ms</td>' +
+                '<td>' + escapeHtml(l.remote_addr) + '</td>' +
+            '</tr>';
         }).join('');
         document.getElementById('log-table').innerHTML = rows;
     } catch (err) {

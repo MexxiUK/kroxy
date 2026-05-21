@@ -678,13 +678,13 @@ function renderRules() {
             : '<span class="badge badge-success">Block</span>';
 
         return '<tr style="' + (!rule.enabled ? 'opacity: 0.5;' : '') + '">' +
-            '<td><label class="toggle-switch"><input type="checkbox" role="switch" aria-checked="' + (rule.enabled ? 'true' : 'false') + '" ' + (rule.enabled ? 'checked' : '') + ' data-action="toggle" data-id="' + rule.id + '"><span class="toggle-slider"></span></label></td>' +
-            '<td><span class="rule-name" data-action="view" data-id="' + rule.id + '">' + escapeHtml(rule.name) + '</span></td>' +
+            '<td><label class="toggle-switch"><input type="checkbox" role="switch" aria-checked="' + (rule.enabled ? 'true' : 'false') + '" ' + (rule.enabled ? 'checked' : '') + ' data-action="toggle" data-id="' + escapeHtml(rule.id) + '"><span class="toggle-slider"></span></label></td>' +
+            '<td><span class="rule-name" data-action="view" data-id="' + escapeHtml(rule.id) + '">' + escapeHtml(rule.name) + '</span></td>' +
             '<td>' + scopeHtml + '</td>' +
             '<td>' + modeHtml + '</td>' +
             '<td><div style="display: flex; gap: 0.25rem;">' +
-                '<button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="' + rule.id + '" title="Edit">Edit</button>' +
-                '<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="' + rule.id + '" title="Delete">Del</button>' +
+                '<button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="' + escapeHtml(rule.id) + '" title="Edit">Edit</button>' +
+                '<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="' + escapeHtml(rule.id) + '" title="Delete">Del</button>' +
             '</div></td>' +
         '</tr>';
     }).join('');

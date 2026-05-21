@@ -261,7 +261,7 @@ function renderIPList(tableId, items, type) {
             '<td style="font-family: \'JetBrains Mono\', monospace;">' + escapeHtml(item.value) + '</td>' +
             '<td style="color: var(--text-muted);">' + formatDate(item.created_at) + '</td>' +
             '<td>' +
-                '<button type="button" class="btn btn-danger btn-sm delete-ip-btn" data-type="' + type + '" data-id="' + item.id + '">Delete</button>' +
+                '<button type="button" class="btn btn-danger btn-sm delete-ip-btn" data-type="' + type + '" data-id="' + escapeHtml(item.id) + '">Delete</button>' +
             '</td>' +
         '</tr>';
     }).join('');

@@ -223,7 +223,7 @@ async function loadMetrics() {
 }
 
 function getEventBadgeClass(type) {
-    switch (type.toLowerCase()) {
+    switch ((type || '').toLowerCase()) {
         case 'waf block':
         case 'rate limit':
         case 'blocked':
