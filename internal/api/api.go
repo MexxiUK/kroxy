@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,17 +40,18 @@ import (
 )
 
 type API struct {
-	store           *store.Store
-	router          *chi.Mux
-	oidcManager     *oidc.Manager
-	auth            *auth.Auth
-	audit           *audit.Logger
-	rateLimiter     *RateLimiter
-	wafReloadFunc   func() error // Callback to reload WAF when rules change
-	proxyReloadFunc func() error // Callback to reload proxy config when routes change
-	templates       *TemplateHandler
-	productionMode  bool       // Controls security settings like Secure cookie flag
-	setupMu         sync.Mutex // Prevents race condition in initial setup (CRIT-005)
+	store            *store.Store
+	router           *chi.Mux
+	oidcManager      *oidc.Manager
+	auth             *auth.Auth
+	audit            *audit.Logger
+	rateLimiter      *RateLimiter
+	wafReloadFunc    func() error // Callback to reload WAF when rules change
+	proxyReloadFunc  func() error // Callback to reload proxy config when routes change
+	templates        *TemplateHandler
+	productionMode   bool       // Controls security settings like Secure cookie flag
+	setupMu          sync.Mutex // Prevents race condition in initial setup (CRIT-005)
+	adminAllowedIPs  []*net.IPNet
 }
 
 // RateLimiter implements a sliding window rate limiter to prevent burst attacks
@@ -167,12 +169,13 @@ func New(s *store.Store) *API {
 	productionMode := os.Getenv("KROXY_PRODUCTION") == "true"
 
 	api := &API{
-		store:          s,
-		router:         r,
-		auth:           auth.New(s),
-		audit:          audit.GetLogger(),
-		rateLimiter:    NewRateLimiter(),
-		productionMode: productionMode,
+		store:           s,
+		router:          r,
+		auth:            auth.New(s),
+		audit:           audit.GetLogger(),
+		rateLimiter:     NewRateLimiter(),
+		productionMode:  productionMode,
+		adminAllowedIPs: parseAdminAllowedIPs(),
 	}
 
 	// Initialize templates
@@ -330,6 +333,73 @@ func GetCSPNonce(r *http.Request) string {
 	return ""
 }
 
+// parseAdminAllowedIPs parses KROXY_ADMIN_ALLOWED_IPS into a slice of IP networks.
+// Supports comma-separated CIDRs and plain IPs (treated as /32).
+func parseAdminAllowedIPs() []*net.IPNet {
+	env := os.Getenv("KROXY_ADMIN_ALLOWED_IPS")
+	if env == "" {
+		return nil
+	}
+
+	var networks []*net.IPNet
+	for _, raw := range strings.Split(env, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		// Plain IP: convert to CIDR
+		if !strings.Contains(raw, "/") {
+			ip := net.ParseIP(raw)
+			if ip == nil {
+				log.Printf("WARNING: invalid admin allowed IP %q, skipping", raw)
+				continue
+			}
+			if ip.To4() != nil {
+				raw = raw + "/32"
+			} else {
+				raw = raw + "/128"
+			}
+		}
+		_, network, err := net.ParseCIDR(raw)
+		if err != nil {
+			log.Printf("WARNING: invalid admin allowed CIDR %q, skipping", raw)
+			continue
+		}
+		networks = append(networks, network)
+	}
+	return networks
+}
+
+// adminIPAllowlistMiddleware restricts admin routes to configured source IPs.
+// If no allowlist is configured, all IPs are permitted (backward compatible).
+func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// No allowlist configured = allow all (backward compatible)
+		if len(a.adminAllowedIPs) == 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ip := security.GetClientIP(r)
+		parsedIP := net.ParseIP(ip)
+		if parsedIP == nil {
+			log.Printf("ADMIN: blocked request from unparseable IP %q to %s", ip, r.URL.Path)
+			respondError(w, http.StatusForbidden, "Access denied")
+			return
+		}
+
+		for _, network := range a.adminAllowedIPs {
+			if network.Contains(parsedIP) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		log.Printf("ADMIN: blocked request from IP %s to %s (not in allowlist)", ip, r.URL.Path)
+		respondError(w, http.StatusForbidden, "Access denied")
+	})
+}
+
 // rateLimitMiddleware returns a middleware that uses the shared rate limiter
 func (a *API) rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -439,108 +509,108 @@ func (a *API) registerRoutes() {
 		r.Delete("/api/user/api-keys/{keyId}", a.deleteUserAPIKey)
 
 		// Routes CRUD (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/routes", a.listRoutes)
-		r.With(auth.RequireRole("admin")).Post("/api/routes", a.createRoute)
-		r.With(auth.RequireRole("admin")).Get("/api/routes/{id}", a.getRoute)
-		r.With(auth.RequireRole("admin")).Put("/api/routes/{id}", a.updateRoute)
-		r.With(auth.RequireRole("admin")).Delete("/api/routes/{id}", a.deleteRoute)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/routes", a.listRoutes)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/routes", a.createRoute)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/routes/{id}", a.getRoute)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/routes/{id}", a.updateRoute)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/routes/{id}", a.deleteRoute)
 
 		// OIDC Providers CRUD (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/oidc", a.listOIDCProviders)
-		r.With(auth.RequireRole("admin")).Post("/api/oidc", a.createOIDCProvider)
-		r.With(auth.RequireRole("admin")).Get("/api/oidc/{id}", a.getOIDCProvider)
-		r.With(auth.RequireRole("admin")).Put("/api/oidc/{id}", a.updateOIDCProvider)
-		r.With(auth.RequireRole("admin")).Delete("/api/oidc/{id}", a.deleteOIDCProvider)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/oidc", a.listOIDCProviders)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/oidc", a.createOIDCProvider)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/oidc/{id}", a.getOIDCProvider)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/oidc/{id}", a.updateOIDCProvider)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/oidc/{id}", a.deleteOIDCProvider)
 
 		// Blacklists CRUD (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/blacklists", a.listBlacklists)
-		r.With(auth.RequireRole("admin")).Post("/api/blacklists", a.createBlacklist)
-		r.With(auth.RequireRole("admin")).Delete("/api/blacklists/{id}", a.deleteBlacklist)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/blacklists", a.listBlacklists)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/blacklists", a.createBlacklist)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/blacklists/{id}", a.deleteBlacklist)
 
 		// Whitelists CRUD (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/whitelists", a.listWhitelists)
-		r.With(auth.RequireRole("admin")).Post("/api/whitelists", a.createWhitelist)
-		r.With(auth.RequireRole("admin")).Delete("/api/whitelists/{id}", a.deleteWhitelist)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/whitelists", a.listWhitelists)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/whitelists", a.createWhitelist)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/whitelists/{id}", a.deleteWhitelist)
 
 		// Rate Limits CRUD (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/ratelimits", a.listRateLimits)
-		r.With(auth.RequireRole("admin")).Post("/api/ratelimits", a.createRateLimit)
-		r.With(auth.RequireRole("admin")).Put("/api/ratelimits/{id}", a.updateRateLimit)
-		r.With(auth.RequireRole("admin")).Delete("/api/ratelimits/{id}", a.deleteRateLimit)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/ratelimits", a.listRateLimits)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/ratelimits", a.createRateLimit)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/ratelimits/{id}", a.updateRateLimit)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/ratelimits/{id}", a.deleteRateLimit)
 
 		// Certificates CRUD (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/certificates", a.listCertificates)
-		r.With(auth.RequireRole("admin")).Post("/api/certificates", a.createCertificate)
-		r.With(auth.RequireRole("admin")).Delete("/api/certificates/{id}", a.deleteCertificate)
-		r.With(auth.RequireRole("admin")).Post("/api/certificates/{id}/provision", a.provisionCertificate)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/certificates", a.listCertificates)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/certificates", a.createCertificate)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/certificates/{id}", a.deleteCertificate)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/certificates/{id}/provision", a.provisionCertificate)
 
 		// TLS Settings (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/settings/tls", a.getTLSSettings)
-		r.With(auth.RequireRole("admin")).Put("/api/settings/tls", a.updateTLSSettings)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/settings/tls", a.getTLSSettings)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/settings/tls", a.updateTLSSettings)
 
 		// General Settings (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/settings/general", a.getGeneralSettings)
-		r.With(auth.RequireRole("admin")).Put("/api/settings/general", a.updateGeneralSettings)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/settings/general", a.getGeneralSettings)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/settings/general", a.updateGeneralSettings)
 
 		// Security Settings (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/settings/security", a.getSecuritySettings)
-		r.With(auth.RequireRole("admin")).Put("/api/settings/security", a.updateSecuritySettings)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/settings/security", a.getSecuritySettings)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/settings/security", a.updateSecuritySettings)
 
 		// Network Settings (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/settings/network", a.getNetworkSettings)
-		r.With(auth.RequireRole("admin")).Put("/api/settings/network", a.updateNetworkSettings)
-		r.With(auth.RequireRole("admin")).Post("/api/settings/reset", a.resetSettings)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/settings/network", a.getNetworkSettings)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/settings/network", a.updateNetworkSettings)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/settings/reset", a.resetSettings)
 
 		// WAF Rules CRUD (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/waf/rules", a.listWAFRules)
-		r.With(auth.RequireRole("admin")).Post("/api/waf/rules", a.createWAFRule)
-		r.With(auth.RequireRole("admin")).Put("/api/waf/rules/{id}", a.updateWAFRule)
-		r.With(auth.RequireRole("admin")).Delete("/api/waf/rules/{id}", a.deleteWAFRule)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/waf/rules", a.listWAFRules)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/waf/rules", a.createWAFRule)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/waf/rules/{id}", a.updateWAFRule)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/waf/rules/{id}", a.deleteWAFRule)
 
 		// WAF Test (admin only)
-		r.With(auth.RequireRole("admin")).Post("/api/waf/test", a.testWAF)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/waf/test", a.testWAF)
 
 		// WAF Paranoia Level (admin only)
-		r.With(auth.RequireRole("admin")).Put("/api/waf/paranoia", a.updateWAFParanoia)
-		r.With(auth.RequireRole("admin")).Get("/api/waf/paranoia", a.getWAFParanoia)
-		r.With(auth.RequireRole("admin")).Post("/api/waf/verify-header", a.verifyWAFHeader)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/waf/paranoia", a.updateWAFParanoia)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/waf/paranoia", a.getWAFParanoia)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/waf/verify-header", a.verifyWAFHeader)
 
 		// Security Events (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/security/events", a.listSecurityEvents)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/security/events", a.listSecurityEvents)
 
 		// Metrics (admin only) - exposes sensitive system information
-		r.With(auth.RequireRole("admin")).Get("/api/metrics", a.getMetrics)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/metrics", a.getMetrics)
 
 		// Dashboard stats (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/dashboard/stats", a.getDashboardStats)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/dashboard/stats", a.getDashboardStats)
 
 		// Users CRUD (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/users", a.listUsers)
-		r.With(auth.RequireRole("admin")).Post("/api/users", a.createUser)
-		r.With(auth.RequireRole("admin")).Put("/api/users/{id}/role", a.updateUserRole)
-		r.With(auth.RequireRole("admin")).Delete("/api/users/{id}", a.deleteUser)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/users", a.listUsers)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/users", a.createUser)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/users/{id}/role", a.updateUserRole)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/users/{id}", a.deleteUser)
 
 		// Redirect Domains CRUD (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/redirect-domains", a.listRedirectDomains)
-		r.With(auth.RequireRole("admin")).Post("/api/redirect-domains", a.addRedirectDomain)
-		r.With(auth.RequireRole("admin")).Delete("/api/redirect-domains/{domain}", a.removeRedirectDomain)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/redirect-domains", a.listRedirectDomains)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/redirect-domains", a.addRedirectDomain)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/redirect-domains/{domain}", a.removeRedirectDomain)
 
 		// Health checks (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/health/backends", a.getHealthStatus)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/health/backends", a.getHealthStatus)
 
 		// Access logs (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/logs", a.getAccessLogs)
-		r.With(auth.RequireRole("admin")).Get("/api/logs/stats", a.getLogStats)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/logs", a.getAccessLogs)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/logs/stats", a.getLogStats)
 
 		// Backup/restore (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/backup", a.exportBackup)
-		r.With(auth.RequireRole("admin")).Post("/api/backup", a.importBackup)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/backup", a.exportBackup)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/backup", a.importBackup)
 
 		// Webhooks (admin only)
-		r.With(auth.RequireRole("admin")).Get("/api/webhooks", a.listWebhooks)
-		r.With(auth.RequireRole("admin")).Post("/api/webhooks", a.createWebhook)
-		r.With(auth.RequireRole("admin")).Put("/api/webhooks/{id}", a.updateWebhook)
-		r.With(auth.RequireRole("admin")).Delete("/api/webhooks/{id}", a.deleteWebhook)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/webhooks", a.listWebhooks)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Post("/api/webhooks", a.createWebhook)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Put("/api/webhooks/{id}", a.updateWebhook)
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Delete("/api/webhooks/{id}", a.deleteWebhook)
 	})
 
 }
