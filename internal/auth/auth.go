@@ -645,6 +645,11 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 				return nil, errors.New("user account is disabled")
 			}
 		}
+		// Session binding check (hijacking mitigation)
+		if !a.checkSessionBinding(r, session, sessionID) {
+			return nil, errors.New("session invalid")
+		}
+
 		// Extend sliding window expiration on successful validation
 		newExpiry := time.Now().Add(a.sessionExpiry)
 		if newExpiry.After(session.ExpiresAt) {
@@ -712,6 +717,13 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 		ProviderName: dbSession.ProviderName,
 		CreatedAt:    dbSession.CreatedAt,
 		ExpiresAt:    dbSession.ExpiresAt,
+		IP:           dbSession.ClientIP,
+		UserAgent:    dbSession.UserAgent,
+	}
+
+	// Session binding check (hijacking mitigation)
+	if !a.checkSessionBinding(r, session, sessionID) {
+		return nil, errors.New("session invalid")
 	}
 
 	// Cache in memory
@@ -979,6 +991,45 @@ func getIPFromRequest(r *http.Request) string {
 	return ip
 }
 
+// checkSessionBinding validates that the current request matches the session's
+// stored IP and User-Agent. Returns true if binding check passes or is disabled.
+// When KROXY_STRICT_SESSION_BINDING is true, mismatches invalidate the session.
+func (a *Auth) checkSessionBinding(r *http.Request, session *Session, sessionID string) bool {
+	if os.Getenv("KROXY_STRICT_SESSION_BINDING") != "true" {
+		return true
+	}
+
+	currentIP := security.GetClientIP(r)
+	currentUA := r.UserAgent()
+
+	ipMatch := session.IP == currentIP || sameIPv4Subnet24(session.IP, currentIP)
+	uaMatch := session.UserAgent == currentUA
+
+	if !ipMatch || !uaMatch {
+		log.Printf("AUDIT: session binding mismatch for user_id=%d session=%s: ip(stored=%s current=%s) ua(stored=%s current=%s)",
+			session.UserID, maskSessionID(sessionID), session.IP, currentIP, session.UserAgent, currentUA)
+		a.sessions.Delete(sessionID)
+		a.store.DeleteSession(sessionID)
+		return false
+	}
+	return true
+}
+
+// sameIPv4Subnet24 returns true if both IPs are valid IPv4 addresses in the same /24 subnet.
+func sameIPv4Subnet24(ipA, ipB string) bool {
+	a := net.ParseIP(ipA)
+	b := net.ParseIP(ipB)
+	if a == nil || b == nil {
+		return false
+	}
+	a = a.To4()
+	b = b.To4()
+	if a == nil || b == nil {
+		return false
+	}
+	return a[0] == b[0] && a[1] == b[1] && a[2] == b[2]
+}
+
 // Login authenticates a user and creates a session
 func (a *Auth) Login(email, password, ip, userAgent string) (*LoginResponse, error) {
 	// Normalize email to lowercase to prevent lockout bypass via case variations
@@ -1083,6 +1134,8 @@ func (a *Auth) Login(email, password, ip, userAgent string) (*LoginResponse, err
 		UserName:     user.Name,
 		UserID:       fmt.Sprintf("%d", user.ID),
 		ProviderName: "local",
+		ClientIP:     ip,
+		UserAgent:    userAgent,
 		CreatedAt:    session.CreatedAt,
 		ExpiresAt:    session.ExpiresAt,
 	}
@@ -1394,6 +1447,8 @@ func (a *Auth) Verify2FA(pendingID, code, ip, userAgent string) (*LoginResponse,
 		UserName:     user.Name,
 		UserID:       fmt.Sprintf("%d", user.ID),
 		ProviderName: "local_totp",
+		ClientIP:     ip,
+		UserAgent:    userAgent,
 		CreatedAt:    session.CreatedAt,
 		ExpiresAt:    session.ExpiresAt,
 	}
