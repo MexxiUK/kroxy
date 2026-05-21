@@ -17,15 +17,27 @@ func newTestStore(t *testing.T) (*store.Store, func()) {
 	}
 	tmp.Close()
 
+	// Use temp data dir to avoid writing encryption keys to working directory
+	dataDir, err := os.MkdirTemp("", "kroxy-test-data-*")
+	if err != nil {
+		os.Remove(tmp.Name())
+		t.Fatal(err)
+	}
+	os.Setenv("KROXY_DATA_DIR", dataDir)
+
 	s, err := store.New(tmp.Name())
 	if err != nil {
 		os.Remove(tmp.Name())
+		os.RemoveAll(dataDir)
+		os.Unsetenv("KROXY_DATA_DIR")
 		t.Fatal(err)
 	}
 
 	cleanup := func() {
 		s.Close()
 		os.Remove(tmp.Name())
+		os.RemoveAll(dataDir)
+		os.Unsetenv("KROXY_DATA_DIR")
 	}
 	return s, cleanup
 }

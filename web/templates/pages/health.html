@@ -57,20 +57,19 @@ async function loadHealth() {
         var healthy = backends.filter(function(b) { return b.healthy; }).length;
         var unhealthy = backends.filter(function(b) { return !b.healthy; }).length;
 
-        document.getElementById('health-summary').innerHTML = `
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--success);">${healthy}</div>
-                <div class="stat-label">Healthy</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" style="color: var(--danger);">${unhealthy}</div>
-                <div class="stat-label">Unhealthy</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${backends.length}</div>
-                <div class="stat-label">Total</div>
-            </div>
-        `;
+        document.getElementById('health-summary').innerHTML =
+            '<div class="stat-card">' +
+                '<div class="stat-value" style="color: var(--success);">' + healthy + '</div>' +
+                '<div class="stat-label">Healthy</div>' +
+            '</div>' +
+            '<div class="stat-card">' +
+                '<div class="stat-value" style="color: var(--danger);">' + unhealthy + '</div>' +
+                '<div class="stat-label">Unhealthy</div>' +
+            '</div>' +
+            '<div class="stat-card">' +
+                '<div class="stat-value">' + backends.length + '</div>' +
+                '<div class="stat-label">Total</div>' +
+            '</div>';
 
         if (backends.length === 0) {
             document.getElementById('health-empty').style.display = 'block';

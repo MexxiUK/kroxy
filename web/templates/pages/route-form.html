@@ -296,7 +296,7 @@ function renderCountryChips() {
     blockChips.innerHTML = blockCountries.map(function(code) {
         return '<span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: rgba(244,63,94,0.15); color: var(--rose); border-radius: 9999px; font-size: 0.8125rem;">' +
             escapeHtml(getCountryName(code)) +
-            '<button type="button" data-remove-country="' + code + '" style="background: none; border: none; cursor: pointer; color: var(--rose); padding: 0; line-height: 1;">&times;</button>' +
+            '<button type="button" data-remove-country="' + escapeHtml(code) + '" style="background: none; border: none; cursor: pointer; color: var(--rose); padding: 0; line-height: 1;">&times;</button>' +
         '</span>';
     }).join('');
 
@@ -304,7 +304,7 @@ function renderCountryChips() {
     allowChips.innerHTML = allowCountries.map(function(code) {
         return '<span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: rgba(16,185,129,0.15); color: var(--emerald); border-radius: 9999px; font-size: 0.8125rem;">' +
             escapeHtml(getCountryName(code)) +
-            '<button type="button" data-remove-country="' + code + '" style="background: none; border: none; cursor: pointer; color: var(--emerald); padding: 0; line-height: 1;">&times;</button>' +
+            '<button type="button" data-remove-country="' + escapeHtml(code) + '" style="background: none; border: none; cursor: pointer; color: var(--emerald); padding: 0; line-height: 1;">&times;</button>' +
         '</span>';
     }).join('');
 }
