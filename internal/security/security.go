@@ -13,8 +13,13 @@ import (
 func GetClientIP(r *http.Request) string {
 	// Get the direct client IP (from connection)
 	remoteIP := r.RemoteAddr
-	if idx := strings.LastIndex(remoteIP, ":"); idx != -1 {
-		remoteIP = remoteIP[:idx]
+	// Use net.SplitHostPort to properly handle IPv6 bracketed addresses (e.g. [::1]:8080)
+	host, _, err := net.SplitHostPort(remoteIP)
+	if err == nil {
+		remoteIP = host
+	} else {
+		// Fallback: strip brackets if present (for IPv6 addresses without port)
+		remoteIP = strings.Trim(remoteIP, "[]")
 	}
 
 	// Only trust proxy headers if the request comes from a trusted proxy

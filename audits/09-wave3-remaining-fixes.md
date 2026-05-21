@@ -19,88 +19,66 @@
    - Alerts: semaphore (max 10 concurrent) for webhook sends.
    - Auth: buffered channel (100) + single worker for async DB updates.
 
-## Remaining
+## Completed (All Fixes)
 
 ### Fix 4: Admin IP Allowlist (Defense in Depth)
-**Goal:** Restrict admin API access by source IP.
+- Added `KROXY_ADMIN_ALLOWED_IPS` env var support (comma-separated CIDRs and plain IPs).
+- Created `adminIPAllowlistMiddleware` in `internal/api/api.go` applied to all admin routes.
+- Parses `security.GetClientIP(r)`, returns 403 for non-allowed IPs.
+- Backward compatible: no allowlist configured = allow all.
 
-- Add `KROXY_ADMIN_ALLOWED_IPS` env var (comma-separated CIDRs, e.g. `192.168.0.0/24,10.0.0.1,127.0.0.1`).
-- Create `adminIPAllowlistMiddleware` in `internal/api/api.go`:
-  - Only applies to routes under `/api/` that require admin role.
-  - Parses `security.GetClientIP(r)`.
-  - Checks against configured allowlist.
-  - If no allowlist configured, allow all (backward compatible).
-  - If IP not in allowlist, return 403.
-- Load the allowlist at startup from env, parse into `[]*net.IPNet`.
-
-**Files:** `internal/api/api.go`, `cmd/kroxy/main.go`
+**Commit:** `16f4a15`
 
 ---
 
 ### Fix 5: Bind Sessions to IP and User-Agent (Session Hijacking Mitigation)
-**Goal:** Prevent stolen session cookies from working across browsers/networks.
+- Added `client_ip` and `user_agent` columns to `sessions` table via migration `012_session_ip_ua.up.sql`.
+- Updated `store.Session` model and all store methods (`CreateSession`, `GetSession`, `GetSessionsByUser`).
+- `auth.Login` and `auth.Verify2FA` now persist IP/UA when creating sessions.
+- Added `KROXY_STRICT_SESSION_BINDING` opt-in check in `validateSession`:
+  - Compares current IP with stored IP (exact match or same /24).
+  - Compares User-Agent (exact match).
+  - On mismatch: invalidates session and returns "session invalid".
 
-1. Add fields to `store.Session` (`internal/store/models.go`):
-   ```go
-   ClientIP  string
-   UserAgent string
-   ```
-   Update `CREATE TABLE sessions` migration if needed (add nullable columns).
-
-2. Store IP/UA on session creation (`internal/auth/auth.go`):
-   - Capture `ip` and `userAgent` when creating sessions.
-   - Persist to database via `CreateSession`.
-
-3. Validate IP/UA on session check (`internal/auth/auth.go:validateSession`):
-   - Compare current request IP with stored IP (exact match or same /24).
-   - Compare current User-Agent with stored UA (exact match — UA can be spoofed but adds friction).
-   - On mismatch: invalidate session, return "session invalid".
-   - Add env var `KROXY_STRICT_SESSION_BINDING=true` to opt-in (default false for backward compatibility).
-
-4. Update store methods to read/write new columns.
-
-**Files:** `internal/store/models.go`, `internal/store/store.go`, `internal/auth/auth.go`
+**Commit:** `5c340b0`
 
 ---
 
 ### Fix 6: API DTOs for Sensitive Models (Information Disclosure)
-**Goal:** Prevent API handlers from returning internal fields (backend URLs, cert paths, PII).
+- Created `internal/api/dto/dto.go` with safe response types:
+  - `RouteResponse` — omits `Backend`, `OIDCProviderID`, `IsAdminRoute`
+  - `CertificateResponse` — omits `CertPath`, `KeyPath`
+  - `WAFRuleResponse`
+  - `SecurityEventResponse` — masks `ClientIP` (last octet hidden), strips `UserAgent`
+  - `UserResponse`, `BlacklistResponse`, `WhitelistResponse`, `RateLimitResponse`
+- Updated all API handlers to return DTOs instead of raw `store.*` structs.
+- Fixed dashboard stats to use masked IPs.
+- All gosec G706 warnings resolved with sanitization.
 
-Create `internal/api/dto/*.go` with response types for:
-- `RouteResponse` — omit `Backend`, `OIDCProviderID`, `IsAdminRoute`
-- `CertificateResponse` — omit `CertPath`, `KeyPath`
-- `WAFRuleResponse`
-- `SecurityEventResponse` — mask `ClientIP`, `UserAgent` (PII)
-- `UserResponse` — already hides `TOTPSecret`, but raw struct is leaky
-
-Update handlers to build and return DTOs instead of raw `store.*` structs.
-
-**Priority order:**
-1. `listRoutes`, `getRoute`, `createRoute`, `updateRoute` (Backend URLs)
-2. `listCertificates`, `createCertificate` (KeyPath)
-3. `listSecurityEvents` (PII)
-4. `listUsers`, `createUser`
-5. Lower priority: `listBlacklists`, `listWhitelists`, `listRateLimits`, `listWAFRules`
-
-**Files:** `internal/api/api.go`, new `internal/api/dto/*.go`
+**Commit:** `bd03bd3`
 
 ---
 
-## Verification Gate (after all fixes)
+## Verification Gate (all passing)
 
 ```bash
 # Build passes
 go build ./...
+# PASS
 
 # Tests pass (unit)
 go test ./...
+# PASS (all packages)
 
 # Race detector clean
 go test -race ./internal/auth/...
+# PASS
 
 # gosec passes
 gosec -exclude=G104,G307,G115 ./...
+# PASS (0 issues)
 
 # No unbounded goroutines remain
 grep -rn "go func()" internal/ | grep -v "_test.go"
+# Only expected background workers (cleanup, dbUpdateWorker, alertManager)
 ```

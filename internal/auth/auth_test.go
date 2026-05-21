@@ -390,3 +390,112 @@ func TestVerify2FA_TooManyAttempts(t *testing.T) {
 		t.Fatal("expected lockout error")
 	}
 }
+
+func TestSameIPv4Subnet24(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        string
+		b        string
+		expected bool
+	}{
+		{"same_subnet", "192.168.1.1", "192.168.1.100", true},
+		{"different_subnet", "192.168.1.1", "192.168.2.1", false},
+		{"same_ip", "10.0.0.1", "10.0.0.1", true},
+		{"different_class_a", "10.0.0.1", "11.0.0.1", false},
+		{"ipv6_not_match", "::1", "::1", false},
+		{"invalid_a", "not-an-ip", "192.168.1.1", false},
+		{"invalid_b", "192.168.1.1", "not-an-ip", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sameIPv4Subnet24(tt.a, tt.b)
+			if got != tt.expected {
+				t.Fatalf("sameIPv4Subnet24(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCheckSessionBinding_Disabled(t *testing.T) {
+	a, _, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	os.Unsetenv("KROXY_STRICT_SESSION_BINDING")
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.1:12345"
+
+	session := &Session{UserID: 1, IP: "10.0.0.1", UserAgent: "old-ua"}
+	if !a.checkSessionBinding(req, session, "sess-id") {
+		t.Fatal("expected binding to pass when disabled")
+	}
+}
+
+func TestCheckSessionBinding_EnabledMatch(t *testing.T) {
+	a, _, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	os.Setenv("KROXY_STRICT_SESSION_BINDING", "true")
+	defer os.Unsetenv("KROXY_STRICT_SESSION_BINDING")
+
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.100:12345"
+	req.Header.Set("User-Agent", "test-ua")
+
+	session := &Session{UserID: 1, IP: "192.168.1.100", UserAgent: "test-ua"}
+	if !a.checkSessionBinding(req, session, "sess-id") {
+		t.Fatal("expected binding to pass when IP and UA match")
+	}
+}
+
+func TestCheckSessionBinding_EnabledMismatch(t *testing.T) {
+	a, _, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	os.Setenv("KROXY_STRICT_SESSION_BINDING", "true")
+	defer os.Unsetenv("KROXY_STRICT_SESSION_BINDING")
+
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.100:12345"
+	req.Header.Set("User-Agent", "attacker-ua")
+
+	session := &Session{UserID: 1, IP: "192.168.1.100", UserAgent: "legit-ua"}
+	if a.checkSessionBinding(req, session, "sess-id") {
+		t.Fatal("expected binding to fail when UA mismatches")
+	}
+}
+
+func TestCheckSessionBinding_SameSubnet24(t *testing.T) {
+	a, _, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	os.Setenv("KROXY_STRICT_SESSION_BINDING", "true")
+	defer os.Unsetenv("KROXY_STRICT_SESSION_BINDING")
+
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.200:12345"
+	req.Header.Set("User-Agent", "test-ua")
+
+	session := &Session{UserID: 1, IP: "192.168.1.100", UserAgent: "test-ua"}
+	if !a.checkSessionBinding(req, session, "sess-id") {
+		t.Fatal("expected binding to pass for same /24 subnet")
+	}
+}
+
+func TestCheckSessionBinding_LegacySession(t *testing.T) {
+	a, _, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	os.Setenv("KROXY_STRICT_SESSION_BINDING", "true")
+	defer os.Unsetenv("KROXY_STRICT_SESSION_BINDING")
+
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.100:12345"
+	req.Header.Set("User-Agent", "attacker-ua")
+
+	// Legacy sessions have empty IP and UA — grandfathered
+	session := &Session{UserID: 1, IP: "", UserAgent: ""}
+	if !a.checkSessionBinding(req, session, "sess-id") {
+		t.Fatal("expected legacy session to pass")
+	}
+}

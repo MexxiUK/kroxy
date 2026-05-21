@@ -985,17 +985,27 @@ func (a *Auth) recordAPIKeyFailure(ip string) {
 // getIPFromRequest extracts IP from request
 func getIPFromRequest(r *http.Request) string {
 	ip := r.RemoteAddr
-	if idx := strings.LastIndex(ip, ":"); idx != -1 {
-		ip = ip[:idx]
+	// Use net.SplitHostPort to properly handle IPv6 bracketed addresses (e.g. [::1]:8080)
+	host, _, err := net.SplitHostPort(ip)
+	if err == nil {
+		return host
 	}
-	return ip
+	// Fallback: strip brackets if present (for IPv6 addresses without port)
+	return strings.Trim(ip, "[]")
 }
 
 // checkSessionBinding validates that the current request matches the session's
 // stored IP and User-Agent. Returns true if binding check passes or is disabled.
-// When KROXY_STRICT_SESSION_BINDING is true, mismatches invalidate the session.
+// When KROXY_STRICT_SESSION_BINDING is true, mismatches reject the request but
+// do NOT delete the session (prevents forced-logout DoS by stolen cookies).
+// Legacy sessions with empty stored IP/UA are grandfathered.
 func (a *Auth) checkSessionBinding(r *http.Request, session *Session, sessionID string) bool {
 	if os.Getenv("KROXY_STRICT_SESSION_BINDING") != "true" {
+		return true
+	}
+
+	// Grandfather legacy sessions created before migration 012
+	if session.IP == "" && session.UserAgent == "" {
 		return true
 	}
 
@@ -1008,8 +1018,8 @@ func (a *Auth) checkSessionBinding(r *http.Request, session *Session, sessionID 
 	if !ipMatch || !uaMatch {
 		log.Printf("AUDIT: session binding mismatch for user_id=%d session=%s: ip(stored=%s current=%s) ua(stored=%s current=%s)", // #nosec G706 — IPs come from security.GetClientIP; UA newlines stripped below
 			session.UserID, maskSessionID(sessionID), session.IP, currentIP, strings.ReplaceAll(session.UserAgent, "\n", " "), strings.ReplaceAll(currentUA, "\n", " "))
-		a.sessions.Delete(sessionID)
-		a.store.DeleteSession(sessionID)
+		// Do NOT delete the session — that would let a stolen-cookie attacker
+		// force the legitimate user to re-authenticate repeatedly.
 		return false
 	}
 	return true

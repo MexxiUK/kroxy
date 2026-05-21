@@ -233,3 +233,33 @@ func RateLimitFromStore(rl store.RateLimit) RateLimitResponse {
 		Enabled:           rl.Enabled,
 	}
 }
+
+// HealthStatusResponse is the safe API representation of a backend health status.
+// Omits Backend (internal URL) to prevent information disclosure.
+type HealthStatusResponse struct {
+	RouteID      int       `json:"route_id"`
+	Domain       string    `json:"domain"`
+	Healthy      bool      `json:"healthy"`
+	LastChecked  time.Time `json:"last_checked"`
+	LastSuccess  time.Time `json:"last_success,omitempty"`
+	FailCount    int       `json:"fail_count"`
+	ResponseTime int64     `json:"response_time_ms"`
+	Error        string    `json:"error,omitempty"`
+}
+
+// AccessLogEntryResponse is the safe API representation of an access log entry.
+// Masks RemoteAddr and strips UserAgent to protect PII.
+type AccessLogEntryResponse struct {
+	Timestamp    time.Time `json:"timestamp"`
+	Method       string    `json:"method"`
+	Host         string    `json:"host"`
+	URI          string    `json:"uri"`
+	RemoteAddr   string    `json:"remote_addr"`
+	UserAgent    string    `json:"user_agent"`
+	StatusCode   int       `json:"status_code"`
+	ResponseSize int64     `json:"response_size"`
+	Duration     int64     `json:"duration_ms"`
+	RouteID      int       `json:"route_id,omitempty"`
+	WAFAction    string    `json:"waf_action,omitempty"`
+	BotScore     float64   `json:"bot_score,omitempty"`
+}

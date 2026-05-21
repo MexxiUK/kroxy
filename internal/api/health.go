@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/kroxy/kroxy/internal/api/dto"
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/proxy"
@@ -23,10 +24,24 @@ func (a *API) getHealthStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statuses := hc.GetAllStatuses()
+	safeStatuses := make([]dto.HealthStatusResponse, len(statuses))
+	for i, s := range statuses {
+		safeStatuses[i] = dto.HealthStatusResponse{
+			RouteID:      s.RouteID,
+			Domain:       s.Domain,
+			Healthy:      s.Healthy,
+			LastChecked:  s.LastChecked,
+			LastSuccess:  s.LastSuccess,
+			FailCount:    s.FailCount,
+			ResponseTime: s.ResponseTime,
+			Error:        s.Error,
+		}
+	}
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "ok",
-		"count":    len(statuses),
-		"backends": statuses,
+		"count":    len(safeStatuses),
+		"backends": safeStatuses,
 	})
 
 	a.audit.Log(audit.Event{
@@ -43,7 +58,7 @@ func (a *API) getAccessLogs(w http.ResponseWriter, r *http.Request) {
 	ls := proxy.GetGlobalLogStore()
 	if ls == nil {
 		respondJSON(w, http.StatusOK, map[string]interface{}{
-			"logs":  []proxy.AccessLogEntry{},
+			"logs":  []dto.AccessLogEntryResponse{},
 			"total": 0,
 		})
 		return
@@ -70,9 +85,28 @@ func (a *API) getAccessLogs(w http.ResponseWriter, r *http.Request) {
 
 	logs := ls.Query(limit, host, method, since)
 
+	// Mask PII before returning to API consumers
+	safeLogs := make([]dto.AccessLogEntryResponse, len(logs))
+	for i, e := range logs {
+		safeLogs[i] = dto.AccessLogEntryResponse{
+			Timestamp:    e.Timestamp,
+			Method:       e.Method,
+			Host:         e.Host,
+			URI:          e.URI,
+			RemoteAddr:   dto.MaskIP(e.RemoteAddr),
+			UserAgent:    "", // User-Agent is PII; never expose
+			StatusCode:   e.StatusCode,
+			ResponseSize: e.ResponseSize,
+			Duration:     e.Duration,
+			RouteID:      e.RouteID,
+			WAFAction:    e.WAFAction,
+			BotScore:     e.BotScore,
+		}
+	}
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"logs":  logs,
-		"total": len(logs),
+		"logs":  safeLogs,
+		"total": len(safeLogs),
 	})
 
 	a.audit.Log(audit.Event{
