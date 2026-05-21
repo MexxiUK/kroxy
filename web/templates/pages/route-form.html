@@ -493,9 +493,9 @@ function renderRouteWafRules() {
     }
     tbody.innerHTML = routeOnly.map(function(rule) {
         return '<tr style="' + (!rule.enabled ? 'opacity: 0.5;' : '') + '">' +
-            '<td><label class="toggle-switch"><input type="checkbox" role="switch" aria-checked="' + (rule.enabled ? 'true' : 'false') + '" ' + (rule.enabled ? 'checked' : '') + ' data-action="toggle" data-id="' + rule.id + '"><span class="toggle-slider"></span></label></td>' +
+            '<td><label class="toggle-switch"><input type="checkbox" role="switch" aria-checked="' + (rule.enabled ? 'true' : 'false') + '" ' + (rule.enabled ? 'checked' : '') + ' data-action="toggle" data-id="' + escapeHtml(rule.id) + '"><span class="toggle-slider"></span></label></td>' +
             '<td>' + escapeHtml(rule.name) + '</td>' +
-            '<td><button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="' + rule.id + '">Del</button></td>' +
+            '<td><button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="' + escapeHtml(rule.id) + '">Del</button></td>' +
         '</tr>';
     }).join('');
 }

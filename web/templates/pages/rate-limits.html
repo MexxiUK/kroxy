@@ -152,8 +152,8 @@ function renderRules() {
             '<td>' + (rule.enabled ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-neutral">Disabled</span>') + '</td>' +
             '<td>' +
                 '<div style="display: flex; gap: 0.5rem;">' +
-                    '<button type="button" class="btn btn-secondary btn-sm edit-rule-btn" data-id="' + rule.id + '">Edit</button>' +
-                    '<button type="button" class="btn btn-danger btn-sm delete-rule-btn" data-id="' + rule.id + '">Delete</button>' +
+                    '<button type="button" class="btn btn-secondary btn-sm edit-rule-btn" data-id="' + escapeHtml(rule.id) + '">Edit</button>' +
+                    '<button type="button" class="btn btn-danger btn-sm delete-rule-btn" data-id="' + escapeHtml(rule.id) + '">Delete</button>' +
                 '</div>' +
             '</td>' +
         '</tr>';

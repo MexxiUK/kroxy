@@ -204,11 +204,11 @@ function renderCerts() {
             expiresCell = '<td style="color: var(--text-muted);">' + formatDate(cert.expires_at) + '</td>';
         }
 
-        actionsHtml += '<button type="button" class="btn btn-danger btn-sm delete-cert-btn" data-id="' + cert.id + '">Delete</button>';
+        actionsHtml += '<button type="button" class="btn btn-danger btn-sm delete-cert-btn" data-id="' + escapeHtml(cert.id) + '">Delete</button>';
         if (isLE && status === 'pending') {
-            actionsHtml += ' <button type="button" class="btn btn-primary btn-sm reprovision-btn" data-id="' + cert.id + '">Provision</button>';
+            actionsHtml += ' <button type="button" class="btn btn-primary btn-sm reprovision-btn" data-id="' + escapeHtml(cert.id) + '">Provision</button>';
         } else if (isLE && status === 'failed') {
-            actionsHtml += ' <button type="button" class="btn btn-secondary btn-sm reprovision-btn" data-id="' + cert.id + '">Retry</button>';
+            actionsHtml += ' <button type="button" class="btn btn-secondary btn-sm reprovision-btn" data-id="' + escapeHtml(cert.id) + '">Retry</button>';
         }
 
         return '<tr>' +

@@ -158,7 +158,7 @@ function renderKeys() {
             '<td style="color: var(--text-muted);">' + formatDateTime(key.created_at) + '</td>' +
             '<td style="color: var(--text-muted);">' + (key.last_used ? formatDateTime(key.last_used) : 'Never') + '</td>' +
             '<td>' +
-                '<button type="button" class="btn btn-danger btn-sm delete-key-btn" data-id="' + key.id + '">Delete</button>' +
+                '<button type="button" class="btn btn-danger btn-sm delete-key-btn" data-id="' + escapeHtml(key.id) + '">Delete</button>' +
             '</td>' +
         '</tr>';
     }).join('');

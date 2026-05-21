@@ -153,7 +153,7 @@ function renderRoutes() {
         if (route.rate_limit) features.push('<span class="badge badge-warning">Rate Limit</span>');
         var featuresHtml = features.length > 0 ? features.join(' ') : '<span style="color: var(--text-faint);">-</span>';
 
-        return '<tr class="route-row" data-id="' + route.id + '" style="cursor: pointer;">' +
+        return '<tr class="route-row" data-id="' + escapeHtml(route.id) + '" style="cursor: pointer;">' +
             '<td><a href="/routes/' + route.id + '" class="route-link">' + escapeHtml(route.domain) + '</a></td>' +
             '<td class="cell-secondary cell-truncated">' + escapeHtml(route.backend) + '</td>' +
             '<td>' + statusBadge + '</td>' +
@@ -165,7 +165,7 @@ function renderRoutes() {
                     '</button>' +
                     '<div id="actions-' + route.id + '" class="dropdown-menu">' +
                         '<a href="/routes/' + route.id + '" class="dropdown-item">Edit</a>' +
-                        '<button type="button" class="dropdown-item delete-route-btn" data-id="' + route.id + '" data-domain="' + escapeHtml(route.domain) + '" style="width: 100%; text-align: left; background: none; border: none; cursor: pointer;">Delete</button>' +
+                        '<button type="button" class="dropdown-item delete-route-btn" data-id="' + escapeHtml(route.id) + '" data-domain="' + escapeHtml(route.domain) + '" style="width: 100%; text-align: left; background: none; border: none; cursor: pointer;">Delete</button>' +
                     '</div>' +
                 '</div>' +
             '</td>' +

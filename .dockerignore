@@ -63,3 +63,7 @@ CONTRIBUTING.md
 
 # Security audit reports (contain vulnerability details — aid adversary reconnaissance)
 audits/
+
+# CI/CD config and local tool artifacts
+.github/
+.claude/
