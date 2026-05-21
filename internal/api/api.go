@@ -164,6 +164,15 @@ func (rl *RateLimiter) cleanupStaleRateLimits() {
 	})
 }
 
+// cleanupLoop runs cleanupStaleRateLimits periodically.
+func (rl *RateLimiter) cleanupLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		rl.cleanupStaleRateLimits()
+	}
+}
+
 func New(s *store.Store) *API {
 	r := chi.NewRouter()
 
@@ -178,6 +187,9 @@ func New(s *store.Store) *API {
 		productionMode:  productionMode,
 		adminAllowedIPs: parseAdminAllowedIPs(),
 	}
+
+	// Start background cleanup for stale rate limit entries
+	go api.rateLimiter.cleanupLoop()
 
 	// Initialize templates
 	tmplHandler, err := NewTemplateHandler()
@@ -385,6 +397,15 @@ func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 		parsedIP := net.ParseIP(ip)
 		if parsedIP == nil {
 			log.Printf("ADMIN: blocked request from unparseable IP %q to %s", ip, r.URL.Path) // #nosec G706 — IP from security.GetClientIP; Path from router
+			a.audit.Log(audit.Event{
+				Type:      audit.EventTypeIPBlocked,
+				IP:        ip,
+				Resource:  r.URL.Path,
+				Action:    "admin_ip_allowlist_block",
+				Details:   map[string]string{"reason": "unparseable_ip"},
+				Success:   false,
+				UserAgent: r.UserAgent(),
+			})
 			respondError(w, http.StatusForbidden, "Access denied")
 			return
 		}
@@ -397,6 +418,15 @@ func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 		}
 
 		log.Printf("ADMIN: blocked request from IP %s to %s (not in allowlist)", ip, r.URL.Path) // #nosec G706 — IP from security.GetClientIP; Path from router
+		a.audit.Log(audit.Event{
+			Type:      audit.EventTypeIPBlocked,
+			IP:        ip,
+			Resource:  r.URL.Path,
+			Action:    "admin_ip_allowlist_block",
+			Details:   map[string]string{"reason": "not_in_allowlist"},
+			Success:   false,
+			UserAgent: r.UserAgent(),
+		})
 		respondError(w, http.StatusForbidden, "Access denied")
 	})
 }
@@ -1633,7 +1663,8 @@ func (a *API) oauthCallback(w http.ResponseWriter, r *http.Request) {
 		providerID = providers[0].ID
 	}
 
-	session, err := a.oidcManager.ExchangeCode(r.Context(), providerID, code)
+	ip := security.GetClientIP(r)
+	session, err := a.oidcManager.ExchangeCode(r.Context(), providerID, code, ip, r.UserAgent())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to exchange code")
 		return

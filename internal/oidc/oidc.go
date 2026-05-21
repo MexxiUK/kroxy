@@ -172,8 +172,9 @@ func (m *Manager) GetAuthURL(providerID int, state string) (string, error) {
 	return p.oauthConfig.AuthCodeURL(state), nil
 }
 
-// ExchangeCode exchanges an authorization code for tokens
-func (m *Manager) ExchangeCode(ctx context.Context, providerID int, code string) (*Session, error) {
+// ExchangeCode exchanges an authorization code for tokens.
+// The ip and userAgent parameters are persisted in the database session for binding validation.
+func (m *Manager) ExchangeCode(ctx context.Context, providerID int, code string, ip string, userAgent string) (*Session, error) {
 	m.mu.RLock()
 	p, ok := m.providers[providerID]
 	m.mu.RUnlock()
@@ -234,6 +235,8 @@ func (m *Manager) ExchangeCode(ctx context.Context, providerID int, code string)
 		UserName:     session.UserName,
 		UserID:       session.UserID,
 		ProviderName: session.ProviderName,
+		ClientIP:     ip,
+		UserAgent:    userAgent,
 		CreatedAt:    session.CreatedAt,
 		ExpiresAt:    session.ExpiresAt,
 	}); err != nil {

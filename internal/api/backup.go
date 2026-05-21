@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kroxy/kroxy/internal/api/dto"
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/security"
@@ -30,6 +31,15 @@ type Backup struct {
 
 const backupVersion = version.Version
 
+// safeOIDCProvider is the redacted form used in backup exports.
+type safeOIDCProvider struct {
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	ClientID     string `json:"client_id"`
+	DiscoveryURL string `json:"discovery_url"`
+	RedirectURL  string `json:"redirect_url"`
+}
+
 func (a *API) exportBackup(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUserFromContext(r.Context())
 
@@ -53,22 +63,77 @@ func (a *API) exportBackup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	backup := Backup{
+	// Build safe DTO slices for export (omit sensitive fields)
+	routeResponses := make([]dto.RouteResponse, len(routes))
+	for i, r := range routes {
+		routeResponses[i] = dto.RouteFromStore(r)
+	}
+
+	safeProviders := make([]safeOIDCProvider, len(providers))
+	for i, p := range providers {
+		safeProviders[i] = safeOIDCProvider{
+			ID:           p.ID,
+			Name:         p.Name,
+			ClientID:     p.ClientID,
+			DiscoveryURL: p.DiscoveryURL,
+			RedirectURL:  p.RedirectURL,
+		}
+	}
+
+	wafResponses := make([]dto.WAFRuleResponse, len(rules))
+	for i, rl := range rules {
+		wafResponses[i] = dto.WAFFromStore(rl)
+	}
+
+	certResponses := make([]dto.CertificateResponse, len(certs))
+	for i, c := range certs {
+		certResponses[i] = dto.CertificateFromStore(c)
+	}
+
+	blResponses := make([]dto.BlacklistResponse, len(blacklists))
+	for i, b := range blacklists {
+		blResponses[i] = dto.BlacklistFromStore(b)
+	}
+
+	wlResponses := make([]dto.WhitelistResponse, len(whitelists))
+	for i, wl := range whitelists {
+		wlResponses[i] = dto.WhitelistFromStore(wl)
+	}
+
+	rlResponses := make([]dto.RateLimitResponse, len(rateLimits))
+	for i, rl := range rateLimits {
+		rlResponses[i] = dto.RateLimitFromStore(rl)
+	}
+
+	// Use an anonymous struct for JSON serialization so the export
+	// format can differ from the import-compatible Backup struct.
+	response := struct {
+		Version       string                   `json:"version"`
+		CreatedAt     time.Time                `json:"created_at"`
+		Routes        []dto.RouteResponse      `json:"routes"`
+		OIDCProviders []safeOIDCProvider       `json:"oidc_providers,omitempty"`
+		WAFRules      []dto.WAFRuleResponse    `json:"waf_rules,omitempty"`
+		Certificates  []dto.CertificateResponse `json:"certificates,omitempty"`
+		Blacklists    []dto.BlacklistResponse  `json:"blacklists,omitempty"`
+		Whitelists    []dto.WhitelistResponse  `json:"whitelists,omitempty"`
+		RateLimits    []dto.RateLimitResponse  `json:"rate_limits,omitempty"`
+		Settings      map[string]string        `json:"settings,omitempty"`
+	}{
 		Version:       backupVersion,
 		CreatedAt:     time.Now(),
-		Routes:        routes,
-		OIDCProviders: providers,
-		WAFRules:      rules,
-		Certificates:  certs,
-		Blacklists:    blacklists,
-		Whitelists:    whitelists,
-		RateLimits:    rateLimits,
+		Routes:        routeResponses,
+		OIDCProviders: safeProviders,
+		WAFRules:      wafResponses,
+		Certificates:  certResponses,
+		Blacklists:    blResponses,
+		Whitelists:    wlResponses,
+		RateLimits:    rlResponses,
 		Settings:      settings,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", "attachment; filename=kroxy-backup-"+time.Now().Format("20060102-150405")+".json")
-	respondJSON(w, http.StatusOK, backup)
+	respondJSON(w, http.StatusOK, response)
 
 	a.audit.Log(audit.Event{
 		Type:      "backup_exported",
