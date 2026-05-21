@@ -36,18 +36,31 @@ spec:
       # Security: Init container to fix permissions
       initContainers:
         - name: fix-permissions
-          image: busybox:latest
+          image: busybox:1.36.1@sha256:9ae97d36d26566ff84e8893c64a6dc4fe8ca6d1144bf5b87d2b6ed6a0beed568
+          imagePullPolicy: Always
           command: ['sh', '-c', 'chmod 750 /data && chown 1000:1000 /data']
           volumeMounts:
             - name: data
               mountPath: /data
           securityContext:
             runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            limits:
+              cpu: 50m
+              memory: 32Mi
+            requests:
+              cpu: 10m
+              memory: 16Mi
 
       containers:
         - name: kroxy
           image: kroxy:latest  # Overridden by kustomization.yaml images transformer
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
 
           ports:
             - name: http

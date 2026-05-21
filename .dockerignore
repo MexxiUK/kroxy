@@ -60,3 +60,6 @@ go.work.sum
 LICENSE
 CODE_OF_CONDUCT.md
 CONTRIBUTING.md
+
+# Security audit reports (contain vulnerability details — aid adversary reconnaissance)
+audits/

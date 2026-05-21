@@ -26,7 +26,6 @@ services:
     privileged: false
     security_opt:
       - no-new-privileges:true
-      - seccomp=unconfined  # Required for SQLite
 
     ports:
       - "80:80"       # HTTP (redirects to HTTPS)
