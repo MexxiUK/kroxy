@@ -24,6 +24,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/kroxy/kroxy/internal/audit"
+	"github.com/kroxy/kroxy/internal/api/dto"
 	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/bot"
 	"github.com/kroxy/kroxy/internal/crypto"
@@ -351,7 +352,7 @@ func parseAdminAllowedIPs() []*net.IPNet {
 		if !strings.Contains(raw, "/") {
 			ip := net.ParseIP(raw)
 			if ip == nil {
-				log.Printf("WARNING: invalid admin allowed IP %q, skipping", raw)
+				log.Printf("WARNING: invalid admin allowed IP %q, skipping", strings.ReplaceAll(raw, "\n", " ")) // #nosec G706 — raw is from env var; newlines stripped
 				continue
 			}
 			if ip.To4() != nil {
@@ -362,7 +363,7 @@ func parseAdminAllowedIPs() []*net.IPNet {
 		}
 		_, network, err := net.ParseCIDR(raw)
 		if err != nil {
-			log.Printf("WARNING: invalid admin allowed CIDR %q, skipping", raw)
+			log.Printf("WARNING: invalid admin allowed CIDR %q, skipping", strings.ReplaceAll(raw, "\n", " ")) // #nosec G706 — raw is from env var; newlines stripped
 			continue
 		}
 		networks = append(networks, network)
@@ -383,7 +384,7 @@ func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 		ip := security.GetClientIP(r)
 		parsedIP := net.ParseIP(ip)
 		if parsedIP == nil {
-			log.Printf("ADMIN: blocked request from unparseable IP %q to %s", ip, r.URL.Path)
+			log.Printf("ADMIN: blocked request from unparseable IP %q to %s", ip, r.URL.Path) // #nosec G706 — IP from security.GetClientIP; Path from router
 			respondError(w, http.StatusForbidden, "Access denied")
 			return
 		}
@@ -395,7 +396,7 @@ func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		log.Printf("ADMIN: blocked request from IP %s to %s (not in allowlist)", ip, r.URL.Path)
+		log.Printf("ADMIN: blocked request from IP %s to %s (not in allowlist)", ip, r.URL.Path) // #nosec G706 — IP from security.GetClientIP; Path from router
 		respondError(w, http.StatusForbidden, "Access denied")
 	})
 }
@@ -1395,7 +1396,7 @@ func (a *API) createRoute(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Warning: failed to reload proxy after route creation: %v", err)
 		}
 	}
-	respondJSON(w, http.StatusCreated, route)
+	respondJSON(w, http.StatusCreated, dto.RouteFromStore(route))
 }
 
 func (a *API) listRoutes(w http.ResponseWriter, r *http.Request) {
@@ -1405,10 +1406,14 @@ func (a *API) listRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return paginated response to match frontend expectations
+	// Return paginated response with DTOs to omit sensitive fields
+	responses := make([]dto.RouteResponse, len(routes))
+	for i, r := range routes {
+		responses[i] = dto.RouteFromStore(r)
+	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"routes":     routes,
-		"total":      len(routes),
+		"routes":     responses,
+		"total":      len(responses),
 		"totalPages": 1,
 		"page":       1,
 	})
@@ -1429,7 +1434,7 @@ func (a *API) getRoute(w http.ResponseWriter, r *http.Request) {
 
 	for _, route := range routes {
 		if route.ID == id {
-			respondJSON(w, http.StatusOK, route)
+			respondJSON(w, http.StatusOK, dto.RouteFromStore(route))
 			return
 		}
 	}
@@ -1494,7 +1499,7 @@ func (a *API) updateRoute(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Warning: failed to reload proxy after route update: %v", err)
 		}
 	}
-	respondJSON(w, http.StatusOK, route)
+	respondJSON(w, http.StatusOK, dto.RouteFromStore(route))
 }
 
 func (a *API) deleteRoute(w http.ResponseWriter, r *http.Request) {
@@ -1926,7 +1931,11 @@ func (a *API) listBlacklists(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to get blacklists")
 		return
 	}
-	respondJSON(w, http.StatusOK, map[string]interface{}{"blacklists": list})
+	responses := make([]dto.BlacklistResponse, len(list))
+	for i, b := range list {
+		responses[i] = dto.BlacklistFromStore(b)
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"blacklists": responses})
 }
 
 func (a *API) createBlacklist(w http.ResponseWriter, r *http.Request) {
@@ -1961,7 +1970,7 @@ func (a *API) createBlacklist(w http.ResponseWriter, r *http.Request) {
 		Details:   map[string]interface{}{"info": b.Type + ": " + b.Value},
 	})
 
-	respondJSON(w, http.StatusCreated, b)
+	respondJSON(w, http.StatusCreated, dto.BlacklistFromStore(b))
 }
 
 func (a *API) deleteBlacklist(w http.ResponseWriter, r *http.Request) {
@@ -1995,7 +2004,11 @@ func (a *API) listWhitelists(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to get whitelists")
 		return
 	}
-	respondJSON(w, http.StatusOK, map[string]interface{}{"whitelists": list})
+	responses := make([]dto.WhitelistResponse, len(list))
+	for i, w := range list {
+		responses[i] = dto.WhitelistFromStore(w)
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"whitelists": responses})
 }
 
 func (a *API) createWhitelist(w http.ResponseWriter, r *http.Request) {
@@ -2026,7 +2039,7 @@ func (a *API) createWhitelist(w http.ResponseWriter, r *http.Request) {
 		Details:   map[string]interface{}{"info": wl.Type + ": " + wl.Value},
 	})
 
-	respondJSON(w, http.StatusCreated, wl)
+	respondJSON(w, http.StatusCreated, dto.WhitelistFromStore(wl))
 }
 
 func (a *API) deleteWhitelist(w http.ResponseWriter, r *http.Request) {
@@ -2060,7 +2073,11 @@ func (a *API) listRateLimits(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to get rate limits")
 		return
 	}
-	respondJSON(w, http.StatusOK, map[string]interface{}{"rules": limits})
+	responses := make([]dto.RateLimitResponse, len(limits))
+	for i, rl := range limits {
+		responses[i] = dto.RateLimitFromStore(rl)
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"rules": responses})
 }
 
 func (a *API) createRateLimit(w http.ResponseWriter, r *http.Request) {
@@ -2091,7 +2108,7 @@ func (a *API) createRateLimit(w http.ResponseWriter, r *http.Request) {
 		Details:   map[string]interface{}{"info": rl.Domain},
 	})
 
-	respondJSON(w, http.StatusCreated, rl)
+	respondJSON(w, http.StatusCreated, dto.RateLimitFromStore(rl))
 }
 
 func (a *API) updateRateLimit(w http.ResponseWriter, r *http.Request) {
@@ -2129,7 +2146,7 @@ func (a *API) updateRateLimit(w http.ResponseWriter, r *http.Request) {
 		Details:   map[string]interface{}{"domain": rl.Domain},
 	})
 
-	respondJSON(w, http.StatusOK, rl)
+	respondJSON(w, http.StatusOK, dto.RateLimitFromStore(rl))
 }
 
 func (a *API) deleteRateLimit(w http.ResponseWriter, r *http.Request) {
@@ -2163,7 +2180,11 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to get certificates")
 		return
 	}
-	respondJSON(w, http.StatusOK, certs)
+	responses := make([]dto.CertificateResponse, len(certs))
+	for i, c := range certs {
+		responses[i] = dto.CertificateFromStore(c)
+	}
+	respondJSON(w, http.StatusOK, responses)
 }
 
 func (a *API) createCertificate(w http.ResponseWriter, r *http.Request) {
@@ -2255,7 +2276,7 @@ func (a *API) createCertificate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	respondJSON(w, http.StatusCreated, cert)
+	respondJSON(w, http.StatusCreated, dto.CertificateFromStore(cert))
 }
 
 func (a *API) deleteCertificate(w http.ResponseWriter, r *http.Request) {
@@ -2412,7 +2433,11 @@ func (a *API) listWAFRules(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusInternalServerError, "Failed to get WAF rules")
 			return
 		}
-		respondJSON(w, http.StatusOK, rules)
+		responses := make([]dto.WAFRuleResponse, len(rules))
+		for i, r := range rules {
+			responses[i] = dto.WAFFromStore(r)
+		}
+		respondJSON(w, http.StatusOK, responses)
 		return
 	}
 
@@ -2422,7 +2447,11 @@ func (a *API) listWAFRules(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusInternalServerError, "Failed to get WAF rules")
 			return
 		}
-		respondJSON(w, http.StatusOK, rules)
+		responses := make([]dto.WAFRuleResponse, len(rules))
+		for i, r := range rules {
+			responses[i] = dto.WAFFromStore(r)
+		}
+		respondJSON(w, http.StatusOK, responses)
 		return
 	}
 
@@ -2431,7 +2460,11 @@ func (a *API) listWAFRules(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to get WAF rules")
 		return
 	}
-	respondJSON(w, http.StatusOK, rules)
+	responses := make([]dto.WAFRuleResponse, len(rules))
+	for i, r := range rules {
+		responses[i] = dto.WAFFromStore(r)
+	}
+	respondJSON(w, http.StatusOK, responses)
 }
 
 func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
@@ -2516,7 +2549,7 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 		Details:   map[string]interface{}{"info": rule.Name},
 	})
 
-	respondJSON(w, http.StatusCreated, rule)
+	respondJSON(w, http.StatusCreated, dto.WAFFromStore(rule))
 }
 
 func (a *API) deleteWAFRule(w http.ResponseWriter, r *http.Request) {
@@ -2642,7 +2675,7 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 		Details:   map[string]interface{}{"info": rule.Name},
 	})
 
-	respondJSON(w, http.StatusOK, rule)
+	respondJSON(w, http.StatusOK, dto.WAFFromStore(rule))
 }
 
 func (a *API) testWAF(w http.ResponseWriter, r *http.Request) {
@@ -2762,9 +2795,14 @@ func (a *API) listSecurityEvents(w http.ResponseWriter, r *http.Request) {
 		events = []store.SecurityEvent{}
 	}
 
+	responses := make([]dto.SecurityEventResponse, len(events))
+	for i, e := range events {
+		responses[i] = dto.SecurityEventFromStore(e)
+	}
+
 	count, _ := a.store.GetSecurityEventCount()
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"events": events,
+		"events": responses,
 		"total":  count,
 	})
 }
@@ -2775,10 +2813,11 @@ func (a *API) listUsers(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Failed to get users")
 		return
 	}
-	for i := range users {
-		users[i].Password = ""
+	responses := make([]dto.UserResponse, len(users))
+	for i, u := range users {
+		responses[i] = dto.UserFromStore(u)
 	}
-	respondJSON(w, http.StatusOK, users)
+	respondJSON(w, http.StatusOK, responses)
 }
 
 func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
@@ -2840,9 +2879,7 @@ func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
 		Details:   map[string]interface{}{"info": u.Email},
 	})
 
-	// Don't return password
-	u.Password = ""
-	respondJSON(w, http.StatusCreated, u)
+	respondJSON(w, http.StatusCreated, dto.UserFromStore(*u))
 }
 
 func (a *API) deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -3442,7 +3479,7 @@ func (a *API) getDashboardStats(w http.ResponseWriter, r *http.Request) {
 			"time":    ev.CreatedAt.Format("2006-01-02 15:04"),
 			"type":    evType,
 			"details": details,
-			"ip":      ev.ClientIP,
+			"ip":      dto.MaskIP(ev.ClientIP),
 		})
 	}
 
