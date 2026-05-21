@@ -211,9 +211,9 @@ func (s *Store) DeleteOIDCProvider(id int) error {
 // Session methods
 
 func (s *Store) GetSession(id string) (*Session, error) {
-	row := s.db.QueryRow("SELECT id, user_email, user_name, user_id, provider_name, created_at, expires_at FROM sessions WHERE id = ?", id)
+	row := s.db.QueryRow("SELECT id, user_email, user_name, user_id, provider_name, client_ip, user_agent, created_at, expires_at FROM sessions WHERE id = ?", id)
 	var sess Session
-	err := row.Scan(&sess.ID, &sess.UserEmail, &sess.UserName, &sess.UserID, &sess.ProviderName, &sess.CreatedAt, &sess.ExpiresAt)
+	err := row.Scan(&sess.ID, &sess.UserEmail, &sess.UserName, &sess.UserID, &sess.ProviderName, &sess.ClientIP, &sess.UserAgent, &sess.CreatedAt, &sess.ExpiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -222,8 +222,8 @@ func (s *Store) GetSession(id string) (*Session, error) {
 
 func (s *Store) CreateSession(sess *Session) error {
 	_, err := s.db.Exec(
-		"INSERT INTO sessions (id, user_email, user_name, user_id, provider_name, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		sess.ID, sess.UserEmail, sess.UserName, sess.UserID, sess.ProviderName, sess.CreatedAt, sess.ExpiresAt,
+		"INSERT INTO sessions (id, user_email, user_name, user_id, provider_name, client_ip, user_agent, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		sess.ID, sess.UserEmail, sess.UserName, sess.UserID, sess.ProviderName, sess.ClientIP, sess.UserAgent, sess.CreatedAt, sess.ExpiresAt,
 	)
 	return err
 }
@@ -917,7 +917,7 @@ func (s *Store) RemoveRedirectDomain(domain string) error {
 // GetSessionsByUser returns all sessions for a specific user
 func (s *Store) GetSessionsByUser(userID int) ([]Session, error) {
 	rows, err := s.db.Query(`
-		SELECT id, user_email, user_name, user_id, provider_name, created_at, expires_at
+		SELECT id, user_email, user_name, user_id, provider_name, client_ip, user_agent, created_at, expires_at
 		FROM sessions WHERE user_id = ?
 	`, userID)
 	if err != nil {
@@ -928,7 +928,7 @@ func (s *Store) GetSessionsByUser(userID int) ([]Session, error) {
 	var sessions []Session
 	for rows.Next() {
 		var sess Session
-		if err := rows.Scan(&sess.ID, &sess.UserEmail, &sess.UserName, &sess.UserID, &sess.ProviderName, &sess.CreatedAt, &sess.ExpiresAt); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.UserEmail, &sess.UserName, &sess.UserID, &sess.ProviderName, &sess.ClientIP, &sess.UserAgent, &sess.CreatedAt, &sess.ExpiresAt); err != nil {
 			return nil, err
 		}
 		sessions = append(sessions, sess)

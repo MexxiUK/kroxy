@@ -78,6 +78,8 @@ type Session struct {
 	UserName     string    `json:"user_name"`
 	UserID       string    `json:"user_id"`
 	ProviderName string    `json:"provider_name"`
+	ClientIP     string    `json:"client_ip"`
+	UserAgent    string    `json:"user_agent"`
 	CreatedAt    time.Time `json:"created_at"`
 	ExpiresAt    time.Time `json:"expires_at"`
 }
