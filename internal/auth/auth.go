@@ -1006,8 +1006,8 @@ func (a *Auth) checkSessionBinding(r *http.Request, session *Session, sessionID 
 	uaMatch := session.UserAgent == currentUA
 
 	if !ipMatch || !uaMatch {
-		log.Printf("AUDIT: session binding mismatch for user_id=%d session=%s: ip(stored=%s current=%s) ua(stored=%s current=%s)",
-			session.UserID, maskSessionID(sessionID), session.IP, currentIP, session.UserAgent, currentUA)
+		log.Printf("AUDIT: session binding mismatch for user_id=%d session=%s: ip(stored=%s current=%s) ua(stored=%s current=%s)", // #nosec G706 — IPs come from security.GetClientIP; UA newlines stripped below
+			session.UserID, maskSessionID(sessionID), session.IP, currentIP, strings.ReplaceAll(session.UserAgent, "\n", " "), strings.ReplaceAll(currentUA, "\n", " "))
 		a.sessions.Delete(sessionID)
 		a.store.DeleteSession(sessionID)
 		return false
