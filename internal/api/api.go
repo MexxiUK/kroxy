@@ -525,6 +525,7 @@ func (a *API) registerRoutes() {
 	// Protected routes (auth required)
 	a.router.Group(func(r chi.Router) {
 		r.Use(a.auth.RequireAuth)
+		r.Use(a.auth.RequireTOTP)
 		r.Use(a.auth.RequireStrongAuth)
 		r.Use(csrfMiddleware)
 
@@ -875,7 +876,8 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, a.auth.CreateSessionCookie(loginResp.SessionID))
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"session_id": loginResp.SessionID,
+		"session_id":         loginResp.SessionID,
+		"setup_2fa_required": loginResp.Setup2FARequired,
 		"user": map[string]interface{}{
 			"id":    loginResp.User.ID,
 			"email": loginResp.User.Email,
