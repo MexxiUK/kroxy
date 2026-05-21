@@ -64,6 +64,11 @@
 
             <form id="loginForm" action="/api/auth/login" method="post">
                 <div id="error" class="error" style="display: none;"></div>
+                {{ if not .InsecureCookies }}
+                <div id="insecure-warning" class="error" style="display: none; background: #fffbeb; border-color: #fcd34d; color: #92400e;">
+                    <strong>Connection not secure.</strong> You are accessing Kroxy over HTTP. Login may fail because session cookies require HTTPS. Either access via HTTPS or set <code>KROXY_INSECURE_COOKIES=true</code>.
+                </div>
+                {{ end }}
 
                 <div class="form-group">
                     <label class="form-label" for="email">Email</label>
@@ -153,6 +158,10 @@
                 if (response.ok) {
                     if (data.requires_2fa) {
                         window.location.href = '/2fa';
+                        return;
+                    }
+                    if (data.setup_2fa_required) {
+                        window.location.href = '/2fa/setup';
                         return;
                     }
                     const params = new URLSearchParams(window.location.search);

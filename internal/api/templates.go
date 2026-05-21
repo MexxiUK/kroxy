@@ -17,17 +17,18 @@ import (
 
 // TemplateData holds data passed to templates
 type TemplateData struct {
-	Title         string
-	Page          string
-	Content       template.HTML
-	User          *TemplateUser
-	CSRFToken     string
-	Settings      *AppSettings
-	Route         *RouteInfo
-	OIDCProviders []OIDCProviderInfo
-	Routes        []RouteInfo
-	Users         []UserInfo
-	WAFPresetJS   template.JS
+	Title           string
+	Page            string
+	Content         template.HTML
+	User            *TemplateUser
+	CSRFToken       string
+	Settings        *AppSettings
+	Route           *RouteInfo
+	OIDCProviders   []OIDCProviderInfo
+	Routes          []RouteInfo
+	Users           []UserInfo
+	WAFPresetJS     template.JS
+	InsecureCookies bool
 }
 
 // TemplateUser represents user data for templates
@@ -129,7 +130,7 @@ func NewTemplateHandler() (*TemplateHandler, error) {
 	}
 
 	// Parse all page templates (standalone pages like login, setup)
-	pages := []string{"login", "setup", "2fa"}
+	pages := []string{"login", "setup", "2fa", "2fa-setup"}
 	for _, page := range pages {
 		content, err := web.TemplatesFS.ReadFile("templates/" + page + ".html")
 		if err != nil {
@@ -268,6 +269,7 @@ func (a *API) RegisterPageRoutes() {
 	a.router.Get("/", a.serveIndex)
 	a.router.Get("/login", a.serveLogin)
 	a.router.Get("/2fa", a.serve2FA)
+	a.router.Get("/2fa/setup", a.serve2FASetup)
 	a.router.Get("/setup", a.serveSetup)
 
 	// Protected pages (require authentication)
@@ -344,9 +346,10 @@ func (a *API) serveLogin(w http.ResponseWriter, r *http.Request) {
 
 	csrfToken := generateCSRFToken()
 	data := &TemplateData{
-		Title:         "Login",
-		CSRFToken:     csrfToken,
-		OIDCProviders: a.getOIDCProviders(),
+		Title:           "Login",
+		CSRFToken:       csrfToken,
+		OIDCProviders:   a.getOIDCProviders(),
+		InsecureCookies: os.Getenv("KROXY_INSECURE_COOKIES") == "true",
 	}
 	a.renderTemplate(w, r, "login", data)
 }
@@ -358,6 +361,15 @@ func (a *API) serve2FA(w http.ResponseWriter, r *http.Request) {
 		CSRFToken: csrfToken,
 	}
 	a.renderTemplate(w, r, "2fa", data)
+}
+
+func (a *API) serve2FASetup(w http.ResponseWriter, r *http.Request) {
+	csrfToken := generateCSRFToken()
+	data := &TemplateData{
+		Title:     "Set Up Two-Factor Authentication",
+		CSRFToken: csrfToken,
+	}
+	a.renderTemplate(w, r, "2fa-setup", data)
 }
 
 func (a *API) serveSetup(w http.ResponseWriter, r *http.Request) {

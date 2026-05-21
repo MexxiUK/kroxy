@@ -214,11 +214,12 @@ type LoginRequest struct {
 
 // LoginResponse represents a successful login response
 type LoginResponse struct {
-	SessionID   string `json:"session_id"`
-	ExpiresAt   int64  `json:"expires_at"`
-	User        User   `json:"user,omitempty"`
-	Requires2FA bool   `json:"requires_2fa,omitempty"`
-	PendingID   string `json:"pending_id,omitempty"`
+	SessionID        string `json:"session_id"`
+	ExpiresAt        int64  `json:"expires_at"`
+	User             User   `json:"user,omitempty"`
+	Requires2FA      bool   `json:"requires_2fa,omitempty"`
+	Setup2FARequired bool   `json:"setup_2fa_required,omitempty"`
+	PendingID        string `json:"pending_id,omitempty"`
 }
 
 // User represents a user in API responses (without sensitive data)
@@ -1105,6 +1106,9 @@ func (a *Auth) Login(email, password, ip, userAgent string) (*LoginResponse, err
 		}, nil
 	}
 
+	// TOTP not enabled — flag that setup is required before admin access
+	setup2FARequired := true
+
 	// Clear failed attempts on successful login
 	a.clearFailedAttempts(email)
 
@@ -1155,8 +1159,9 @@ func (a *Auth) Login(email, password, ip, userAgent string) (*LoginResponse, err
 	}
 
 	return &LoginResponse{
-		SessionID: sessionID,
-		ExpiresAt: session.ExpiresAt.Unix(),
+		SessionID:        sessionID,
+		ExpiresAt:        session.ExpiresAt.Unix(),
+		Setup2FARequired: setup2FARequired,
 		User: User{
 			ID:    user.ID,
 			Email: user.Email,
@@ -1492,6 +1497,65 @@ func (a *Auth) Create2FAPendingCookie(pendingID string) *http.Cookie {
 		c.Secure = true
 	}
 	return c
+}
+
+// RequireTOTP middleware redirects password-only sessions to the 2FA setup page
+// if the user has not enabled TOTP. This ensures admin access always requires 2FA.
+func (a *Auth) RequireTOTP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session := getSessionFromContext(r.Context())
+		if session == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Allow access to 2FA setup/verify endpoints and login/logout
+		path := r.URL.Path
+		if path == "/2fa/setup" || path == "/2fa" ||
+			strings.HasPrefix(path, "/api/user/2fa/") ||
+			strings.HasPrefix(path, "/api/auth/2fa/") ||
+			path == "/login" || path == "/api/auth/login" ||
+			path == "/logout" || path == "/api/auth/logout" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// OIDC sessions are considered strong auth
+		if session.ProviderName != "" && session.ProviderName != "local" && session.ProviderName != "local_totp" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// TOTP-verified sessions are allowed
+		if session.ProviderName == "local_totp" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Password-only session — check if user has TOTP enabled
+		if session.ProviderName == "local" {
+			user, err := a.store.GetUserByID(session.UserID)
+			if err == nil && user.TOTPEnabled {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// TOTP not enabled — redirect to setup
+			if strings.Contains(r.Header.Get("Accept"), "text/html") {
+				http.Redirect(w, r, "/2fa/setup", http.StatusFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error":             "2fa_setup_required",
+				"error_description": "Two-factor authentication must be set up before accessing this resource",
+			})
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // RequireStrongAuth middleware ensures that non-local connections use strong auth (OIDC or TOTP).
