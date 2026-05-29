@@ -23,7 +23,7 @@
                 </select>
             </div>
             <div style="display: flex; align-items: flex-end;">
-                <button type="button" class="btn btn-primary" onclick="loadLogs()">Apply</button>
+                <button type="button" class="btn btn-primary" id="apply-logs-btn">Apply</button>
             </div>
         </div>
     </div>
@@ -118,6 +118,7 @@ function escapeHtml(text) {
         .replace(/'/g, '&#x27;');
 }
 
+document.getElementById('apply-logs-btn').addEventListener('click', loadLogs);
 loadLogs();
 </script>
 {{ end }}

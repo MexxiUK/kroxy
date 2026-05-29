@@ -19,7 +19,7 @@
         <div style="margin-bottom: 1rem;">
             <input type="file" id="backup-file" accept=".json" class="form-input" style="max-width: 400px;">
         </div>
-        <button type="button" class="btn btn-primary" id="import-btn" onclick="importBackup()">Import Backup</button>
+        <button type="button" class="btn btn-primary" id="import-btn">Import Backup</button>
         <div id="import-status" style="margin-top: 1rem;"></div>
     </div>
 </div>
@@ -68,5 +68,7 @@ async function importBackup() {
         btn.textContent = 'Import Backup';
     }
 }
+
+document.getElementById('import-btn').addEventListener('click', importBackup);
 </script>
 {{ end }}
