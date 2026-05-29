@@ -315,8 +315,10 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		// XSS protection
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
-		// HSTS (1 year, include subdomains)
-		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		// HSTS: only send when connection is actually HTTPS (or behind a trusted TLS-terminating proxy)
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
 		// Referrer policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		// Content Security Policy with nonce (no unsafe-inline)
