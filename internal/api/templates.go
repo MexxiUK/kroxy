@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"html/template"
 	"log"
@@ -268,44 +267,39 @@ func (a *API) RegisterPageRoutes() {
 	// Public pages
 	a.router.Get("/", a.serveIndex)
 	a.router.Get("/login", a.serveLogin)
-	a.router.Get("/2fa", a.serve2FA)
-	a.router.Get("/2fa/setup", a.serve2FASetup)
 	a.router.Get("/setup", a.serveSetup)
 
-	// Protected pages (require authentication)
-	// For page routes, redirect to login instead of returning JSON 401
-	authPageMiddleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Check session
-			session, err := a.auth.ValidateSession(r)
-			if err == nil && session != nil {
-				ctx := context.WithValue(r.Context(), "user", session)
-				ctx = context.WithValue(ctx, "session", session)
-				next.ServeHTTP(w, r.WithContext(ctx))
-				return
-			}
-			// Not authenticated, redirect to login
-			http.Redirect(w, r, "/login", http.StatusFound)
-		})
-	}
+	// 2FA pages require session auth but not strong auth (user may be setting up 2FA)
+	a.router.With(a.auth.RequireAuth, a.auth.RequireTOTP).Get("/2fa", a.serve2FA)
+	a.router.With(a.auth.RequireAuth, a.auth.RequireTOTP).Get("/2fa/setup", a.serve2FASetup)
 
-	a.router.With(authPageMiddleware).Get("/dashboard", a.serveDashboard)
-	a.router.With(authPageMiddleware).Get("/routes", a.serveRoutes)
-	a.router.With(authPageMiddleware).Get("/routes/new", a.serveRouteForm)
-	a.router.With(authPageMiddleware).Get("/routes/{id}", a.serveRouteForm)
-	a.router.With(authPageMiddleware).Get("/security/waf", a.serveWAF)
-	a.router.With(authPageMiddleware).Get("/security/ip-lists", a.serveIPLists)
-	a.router.With(authPageMiddleware).Get("/security/rate-limits", a.serveRateLimits)
-	a.router.With(authPageMiddleware).Get("/security/events", a.serveSecurityEvents)
-	a.router.With(authPageMiddleware).Get("/users", a.serveUsers)
-	a.router.With(authPageMiddleware).Get("/users/api-keys", a.serveAPIKeys)
-	a.router.With(authPageMiddleware).Get("/users/oidc", a.serveOIDC)
-	a.router.With(authPageMiddleware).Get("/settings", a.serveSettings)
-	a.router.With(authPageMiddleware).Get("/settings/ssl", a.serveSSLSettings)
-	a.router.With(authPageMiddleware).Get("/profile", a.serveProfile)
-	a.router.With(authPageMiddleware).Get("/health", a.serveHealth)
-	a.router.With(authPageMiddleware).Get("/logs", a.serveLogs)
-	a.router.With(authPageMiddleware).Get("/backup", a.serveBackup)
+	// User pages (any authenticated user with strong auth)
+	a.router.With(a.auth.RequireAuth, a.auth.RequireTOTP, a.auth.RequireStrongAuth).Get("/profile", a.serveProfile)
+	a.router.With(a.auth.RequireAuth, a.auth.RequireTOTP, a.auth.RequireStrongAuth).Get("/users/api-keys", a.serveAPIKeys)
+
+	// Admin pages (require admin role + IP allowlist)
+	adminMW := []func(http.Handler) http.Handler{
+		a.auth.RequireAuth,
+		a.auth.RequireTOTP,
+		a.auth.RequireStrongAuth,
+		auth.RequireRole("admin"),
+		a.adminIPAllowlistMiddleware,
+	}
+	a.router.With(adminMW...).Get("/dashboard", a.serveDashboard)
+	a.router.With(adminMW...).Get("/routes", a.serveRoutes)
+	a.router.With(adminMW...).Get("/routes/new", a.serveRouteForm)
+	a.router.With(adminMW...).Get("/routes/{id}", a.serveRouteForm)
+	a.router.With(adminMW...).Get("/security/waf", a.serveWAF)
+	a.router.With(adminMW...).Get("/security/ip-lists", a.serveIPLists)
+	a.router.With(adminMW...).Get("/security/rate-limits", a.serveRateLimits)
+	a.router.With(adminMW...).Get("/security/events", a.serveSecurityEvents)
+	a.router.With(adminMW...).Get("/users", a.serveUsers)
+	a.router.With(adminMW...).Get("/users/oidc", a.serveOIDC)
+	a.router.With(adminMW...).Get("/settings", a.serveSettings)
+	a.router.With(adminMW...).Get("/settings/ssl", a.serveSSLSettings)
+	a.router.With(adminMW...).Get("/health", a.serveHealth)
+	a.router.With(adminMW...).Get("/logs", a.serveLogs)
+	a.router.With(adminMW...).Get("/backup", a.serveBackup)
 }
 
 // Page handlers

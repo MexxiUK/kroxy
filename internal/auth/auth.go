@@ -547,6 +547,10 @@ func (a *Auth) RequireAuth(next http.Handler) http.Handler {
 		}
 
 		// Authentication failed
+		if strings.Contains(r.Header.Get("Accept"), "text/html") {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
 		a.respondUnauthorized(w, r)
 	})
 }
@@ -1594,6 +1598,10 @@ func (a *Auth) RequireStrongAuth(next http.Handler) http.Handler {
 		}
 
 		// Public IP with password-only auth - reject
+		if strings.Contains(r.Header.Get("Accept"), "text/html") {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]string{
@@ -1894,6 +1902,10 @@ func RequireRole(role string) func(http.Handler) http.Handler {
 					next.ServeHTTP(w, r)
 					return
 				}
+				if strings.Contains(r.Header.Get("Accept"), "text/html") {
+					http.Redirect(w, r, "/login", http.StatusFound)
+					return
+				}
 				http.Error(w, "Forbidden - Insufficient privileges", http.StatusForbidden)
 				return
 			}
@@ -1906,10 +1918,18 @@ func RequireRole(role string) func(http.Handler) http.Handler {
 					next.ServeHTTP(w, r)
 					return
 				}
+				if strings.Contains(r.Header.Get("Accept"), "text/html") {
+					http.Redirect(w, r, "/login", http.StatusFound)
+					return
+				}
 				http.Error(w, "Forbidden - Insufficient privileges", http.StatusForbidden)
 				return
 			}
 
+			if strings.Contains(r.Header.Get("Accept"), "text/html") {
+				http.Redirect(w, r, "/login", http.StatusFound)
+				return
+			}
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		})
 	}

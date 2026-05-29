@@ -408,6 +408,12 @@ func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 				Success:   false,
 				UserAgent: r.UserAgent(),
 			})
+			if strings.Contains(r.Header.Get("Accept"), "text/html") {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusForbidden)
+				w.Write([]byte("<!DOCTYPE html><html><head><title>Access Denied</title></head><body><h1>Access Denied</h1><p>Your IP address is not authorized to access the admin panel.</p><a href='/login'>Back to login</a></body></html>"))
+				return
+			}
 			respondError(w, http.StatusForbidden, "Access denied")
 			return
 		}
@@ -429,6 +435,12 @@ func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 			Success:   false,
 			UserAgent: r.UserAgent(),
 		})
+		if strings.Contains(r.Header.Get("Accept"), "text/html") {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte("<!DOCTYPE html><html><head><title>Access Denied</title></head><body><h1>Access Denied</h1><p>Your IP address is not authorized to access the admin panel.</p><a href='/login'>Back to login</a></body></html>"))
+			return
+		}
 		respondError(w, http.StatusForbidden, "Access denied")
 	})
 }
