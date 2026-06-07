@@ -103,6 +103,13 @@ func GetEncryptionKey() ([]byte, error) {
 	return encryptionKey, err
 }
 
+// ResetEncryptionKeyForTest resets the encryption key state for testing.
+// This is not thread-safe and should only be called in test code.
+func ResetEncryptionKeyForTest() {
+	encryptionKey = nil
+	encryptionKeyOnce = sync.Once{}
+}
+
 // IsEncryptionAvailable returns true if encryption key is configured
 func IsEncryptionAvailable() bool {
 	_, err := GetEncryptionKey()

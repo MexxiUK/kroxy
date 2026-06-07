@@ -4,12 +4,14 @@ VERSION := 0.2.0
 BINARY := kroxy
 
 # Minimum coverage thresholds per package (update as coverage improves)
-COVERAGE_OVERALL := 19.0
+COVERAGE_OVERALL := 20.0
 COVERAGE_AUTH := 39.0
 COVERAGE_STORE := 35.0
 COVERAGE_WAF := 27.0
 COVERAGE_SECURITY := 77.0
 COVERAGE_VALIDATION := 36.0
+COVERAGE_CRYPTO := 79.0
+COVERAGE_TOTP := 88.0
 
 build:
 	go build -o bin/$(BINARY) ./cmd/$(BINARY)
