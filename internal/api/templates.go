@@ -331,6 +331,11 @@ func (a *API) serveIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) serveLogin(w http.ResponseWriter, r *http.Request) {
+	// Prevent caching of auth pages (back-button resurrection, shared computer leaks)
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, private")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
 	// Check if setup is needed
 	users, err := a.store.GetUsers()
 	if err == nil && len(users) == 0 {
@@ -349,6 +354,9 @@ func (a *API) serveLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) serve2FA(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, private")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	csrfToken := generateCSRFToken()
 	data := &TemplateData{
 		Title:     "Two-Factor Authentication",
@@ -358,6 +366,9 @@ func (a *API) serve2FA(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) serve2FASetup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, private")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	csrfToken := generateCSRFToken()
 	data := &TemplateData{
 		Title:     "Set Up Two-Factor Authentication",
@@ -367,6 +378,10 @@ func (a *API) serve2FASetup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) serveSetup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, private")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
 	// Check if setup already complete
 	users, err := a.store.GetUsers()
 	if err == nil && len(users) > 0 {

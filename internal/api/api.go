@@ -1735,6 +1735,9 @@ func (a *API) oauthLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, c)
 
+	// Clear browser data to prevent back-button access to authenticated pages
+	w.Header().Set("Clear-Site-Data", "\"cache\", \"cookies\", \"storage\", \"executionContexts\"")
+
 	if acceptsHTML(r) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	} else {
