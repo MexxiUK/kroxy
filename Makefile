@@ -1,6 +1,6 @@
 .PHONY: build run clean test test-race test-integration test-coverage test-validate lint security test-all pre-push docker docker-run docker-stop install release dev
 
-VERSION := 0.2.0
+VERSION := 1.0.0
 BINARY := kroxy
 
 # Minimum coverage thresholds per package (update as coverage improves)
@@ -83,23 +83,26 @@ docker:
 	docker tag $(BINARY):latest $(BINARY):$(VERSION)
 
 docker-run:
-	docker-compose up -d
+	docker compose up -d
 
 docker-stop:
 	docker-compose down
 
 release: clean
 	mkdir -p dist
-	# Linux AMD64
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$(VERSION)" -o dist/$(BINARY)-linux-amd64 ./cmd/$(BINARY)
-	# Linux ARM64
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$(VERSION)" -o dist/$(BINARY)-linux-arm64 ./cmd/$(BINARY)
-	# macOS AMD64
-	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$(VERSION)" -o dist/$(BINARY)-darwin-amd64 ./cmd/$(BINARY)
-	# macOS ARM64
-	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$(VERSION)" -o dist/$(BINARY)-darwin-arm64 ./cmd/$(BINARY)
-	# Windows
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$(VERSION)" -o dist/$(BINARY)-windows-amd64.exe ./cmd/$(BINARY)
+	# Native binary (CGO required for SQLite)
+	go build -ldflags="-s -w -X main.Version=$(VERSION)" -o dist/$(BINARY) ./cmd/$(BINARY)
+	@echo "Binary built: dist/$(BINARY)"
+	@echo "For cross-platform releases, use 'make release-docker'"
+
+release-docker:
+	docker buildx build \
+		--platform linux/amd64,linux/arm64 \
+		--build-arg VERSION=$(VERSION) \
+		-t $(BINARY):$(VERSION) \
+		-t $(BINARY):latest \
+		--push \
+		.
 
 dev:
 	KROXY_PROXY=:9080 KROXY_ADMIN=:9081 go run ./cmd/$(BINARY)

@@ -8,6 +8,8 @@ One binary. One container. Zero infrastructure complexity.
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat)](LICENSE)
 [![Security](https://img.shields.io/badge/Security-Hardened-green?style=flat)](SECURITY.md)
 
+**📖 [Getting Started Guide](docs/GETTING_STARTED.md)** — Deploy in under 5 minutes.
+
 ---
 
 ## Why Kroxy?
@@ -90,7 +92,7 @@ See `docs/examples/` for ready-to-use compose files:
 
 ### First-Time Setup
 
-When you first access `http://localhost:8080`, you'll be guided through a setup wizard to create your admin account and configure your first route.
+When you first access `http://localhost:8080`, you'll be guided through a setup wizard to create your admin account and configure your first route. See the [Getting Started Guide](docs/GETTING_STARTED.md) for a complete walkthrough.
 
 ---
 
@@ -230,11 +232,11 @@ cd kroxy
 # Build
 go build -o kroxy ./cmd/kroxy
 
-# Test
-go test ./...
+# Run all checks (tests, race detector, lint, security scan, coverage)
+make test-all
 
 # Run
-./kroxy
+go run ./cmd/kroxy
 ```
 
 ---
