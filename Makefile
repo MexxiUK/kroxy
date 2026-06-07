@@ -12,6 +12,7 @@ COVERAGE_SECURITY := 77.0
 COVERAGE_VALIDATION := 36.0
 COVERAGE_CRYPTO := 79.0
 COVERAGE_TOTP := 88.0
+COVERAGE_PROXY := 60.0
 
 build:
 	go build -o bin/$(BINARY) ./cmd/$(BINARY)
@@ -47,7 +48,12 @@ test-validate: coverage.out
 	if [ $$(echo "$$overall < $(COVERAGE_OVERALL)" | bc -l) -eq 1 ]; then \
 		echo "❌ Overall coverage $$overall% < $(COVERAGE_OVERALL)%"; exit 1; \
 	fi; \
-	echo "✅ Overall coverage: $$overall% (threshold: $(COVERAGE_OVERALL)%)"
+	echo "✅ Overall coverage: $$overall% (threshold: $(COVERAGE_OVERALL)%)"; \
+	proxy=$$(go test -cover ./internal/proxy 2>&1 | grep -o 'coverage: [0-9.]*%' | sed 's/coverage: //;s/%//'); \
+	if [ -n "$$proxy" ] && [ $$(echo "$$proxy < $(COVERAGE_PROXY)" | bc -l) -eq 1 ]; then \
+		echo "❌ Proxy coverage $$proxy% < $(COVERAGE_PROXY)%"; exit 1; \
+	fi; \
+	if [ -n "$$proxy" ]; then echo "✅ Proxy coverage: $$proxy% (threshold: $(COVERAGE_PROXY)%)"; fi
 
 coverage.out:
 	go test -coverprofile=coverage.out ./...
