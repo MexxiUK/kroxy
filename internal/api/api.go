@@ -23,8 +23,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/api/dto"
+	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/bot"
 	"github.com/kroxy/kroxy/internal/crypto"
@@ -41,18 +41,18 @@ import (
 )
 
 type API struct {
-	store            *store.Store
-	router           *chi.Mux
-	oidcManager      *oidc.Manager
-	auth             *auth.Auth
-	audit            *audit.Logger
-	rateLimiter      *RateLimiter
-	wafReloadFunc    func() error // Callback to reload WAF when rules change
-	proxyReloadFunc  func() error // Callback to reload proxy config when routes change
-	templates        *TemplateHandler
-	productionMode   bool       // Controls security settings like Secure cookie flag
-	setupMu          sync.Mutex // Prevents race condition in initial setup (CRIT-005)
-	adminAllowedIPs  []*net.IPNet
+	store           *store.Store
+	router          *chi.Mux
+	oidcManager     *oidc.Manager
+	auth            *auth.Auth
+	audit           *audit.Logger
+	rateLimiter     *RateLimiter
+	wafReloadFunc   func() error // Callback to reload WAF when rules change
+	proxyReloadFunc func() error // Callback to reload proxy config when routes change
+	templates       *TemplateHandler
+	productionMode  bool       // Controls security settings like Secure cookie flag
+	setupMu         sync.Mutex // Prevents race condition in initial setup (CRIT-005)
+	adminAllowedIPs []*net.IPNet
 }
 
 // RateLimiter implements a sliding window rate limiter to prevent burst attacks

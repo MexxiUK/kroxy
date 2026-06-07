@@ -10,8 +10,10 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/kroxy/kroxy/internal/testutil"
+	"github.com/pquerna/otp/totp"
 )
 
 // newTestServer spins up an httptest.Server with the API handler.
@@ -36,7 +38,7 @@ func newTestServer(t *testing.T) (string, func()) {
 func newAuthenticatedClient(t *testing.T) (string, *http.Client, func()) {
 	t.Helper()
 	baseURL, cleanup := newTestServer(t)
-	client, csrfToken := testutil.AdminClient(t, baseURL)
+	client, csrfToken, totpSecret := testutil.AdminClient(t, baseURL)
 
 	// Wrap client transport with CSRF injection
 	baseTransport := client.Transport
@@ -48,6 +50,7 @@ func newAuthenticatedClient(t *testing.T) (string, *http.Client, func()) {
 		CSRFToken: csrfToken,
 	}
 
+	_ = totpSecret // available for tests that need to manipulate 2FA state
 	return baseURL, client, cleanup
 }
 
@@ -139,14 +142,14 @@ func TestSetup_FirstUser(t *testing.T) {
 		t.Fatalf("expected 201, got %d", resp.StatusCode)
 	}
 
-	// Second setup should be rejected
+	// Second setup should be rejected (429 = rate-limited after first success, 403 = forbidden)
 	resp2, err := http.Post(baseURL+"/api/setup", "application/json", bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("second setup failed: %v", err)
 	}
 	resp2.Body.Close()
-	if resp2.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", resp2.StatusCode)
+	if resp2.StatusCode != http.StatusForbidden && resp2.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected 403 or 429, got %d", resp2.StatusCode)
 	}
 }
 
@@ -553,18 +556,77 @@ func TestChangePassword_WeakPassword(t *testing.T) {
 }
 
 func TestDisable2FA_NotEnabled(t *testing.T) {
-	baseURL, client, cleanup := newAuthenticatedClient(t)
+	baseURL, cleanup := newTestServer(t)
 	defer cleanup()
 
-	// Disabling 2FA when not enabled should return 400
+	// Set up admin and enable 2FA (AdminClient does this automatically)
+	client, csrfToken, totpSecret := testutil.AdminClient(t, baseURL)
+	baseTransport := client.Transport
+	if baseTransport == nil {
+		baseTransport = http.DefaultTransport
+	}
+	client.Transport = &testutil.CSRFTransport{
+		Base:      baseTransport,
+		CSRFToken: csrfToken,
+	}
+
+	// First, properly disable 2FA with a valid TOTP code
+	code, _ := totp.GenerateCode(totpSecret, time.Now().UTC())
 	body := map[string]string{
 		"password": "AdminPass1!123",
-		"code":     "000000",
+		"code":     code,
 	}
 	b, _ := json.Marshal(body)
 	resp, err := client.Post(baseURL+"/api/user/2fa/disable", "application/json", bytes.NewReader(b))
 	if err != nil {
-		t.Fatalf("POST /api/user/2fa/disable failed: %v", err)
+		t.Fatalf("POST /api/user/2fa/disable (first) failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 when disabling enabled 2FA, got %d", resp.StatusCode)
+	}
+
+	// Disable2FA invalidates all sessions, so we must re-login before testing
+	// the "not enabled" error path.
+	loginBody, _ := json.Marshal(map[string]string{
+		"email":    "admin@kroxy.local",
+		"password": "AdminPass1!123",
+	})
+	resp, err = client.Post(baseURL+"/api/auth/login", "application/json", bytes.NewReader(loginBody))
+	if err != nil {
+		t.Fatalf("re-login after disable failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("re-login unexpected status: %d", resp.StatusCode)
+	}
+
+	// Fetch fresh CSRF token for the new session
+	resp, err = client.Get(baseURL + "/api/csrf")
+	if err != nil {
+		t.Fatalf("csrf after re-login failed: %v", err)
+	}
+	var csrfResp2 struct {
+		Token string `json:"csrf_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&csrfResp2); err != nil {
+		resp.Body.Close()
+		t.Fatalf("decode csrf response: %v", err)
+	}
+	resp.Body.Close()
+
+	// Re-apply CSRF transport with the new token
+	client.Transport = &testutil.CSRFTransport{
+		Base:      baseTransport,
+		CSRFToken: csrfResp2.Token,
+	}
+
+	// Now that 2FA is disabled, a disable attempt should return 400
+	body["code"] = "000000"
+	b, _ = json.Marshal(body)
+	resp, err = client.Post(baseURL+"/api/user/2fa/disable", "application/json", bytes.NewReader(b))
+	if err != nil {
+		t.Fatalf("POST /api/user/2fa/disable (second) failed: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {

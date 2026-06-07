@@ -58,7 +58,7 @@ func MustLogin(t *testing.T, a *auth.Auth, email, password string) *auth.LoginRe
 
 // SessionCookie builds an HTTP request carrying the given session cookie.
 func SessionCookie(r *http.Request, sessionID string) *http.Request {
-	r.AddCookie(&http.Cookie{	// #nosec G124 — test helper cookie, not used in production
+	r.AddCookie(&http.Cookie{ // #nosec G124 — test helper cookie, not used in production
 		Name:  "kroxy_session",
 		Value: sessionID,
 	})

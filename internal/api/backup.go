@@ -108,16 +108,16 @@ func (a *API) exportBackup(w http.ResponseWriter, r *http.Request) {
 	// Use an anonymous struct for JSON serialization so the export
 	// format can differ from the import-compatible Backup struct.
 	response := struct {
-		Version       string                   `json:"version"`
-		CreatedAt     time.Time                `json:"created_at"`
-		Routes        []dto.RouteResponse      `json:"routes"`
-		OIDCProviders []safeOIDCProvider       `json:"oidc_providers,omitempty"`
-		WAFRules      []dto.WAFRuleResponse    `json:"waf_rules,omitempty"`
+		Version       string                    `json:"version"`
+		CreatedAt     time.Time                 `json:"created_at"`
+		Routes        []dto.RouteResponse       `json:"routes"`
+		OIDCProviders []safeOIDCProvider        `json:"oidc_providers,omitempty"`
+		WAFRules      []dto.WAFRuleResponse     `json:"waf_rules,omitempty"`
 		Certificates  []dto.CertificateResponse `json:"certificates,omitempty"`
-		Blacklists    []dto.BlacklistResponse  `json:"blacklists,omitempty"`
-		Whitelists    []dto.WhitelistResponse  `json:"whitelists,omitempty"`
-		RateLimits    []dto.RateLimitResponse  `json:"rate_limits,omitempty"`
-		Settings      map[string]string        `json:"settings,omitempty"`
+		Blacklists    []dto.BlacklistResponse   `json:"blacklists,omitempty"`
+		Whitelists    []dto.WhitelistResponse   `json:"whitelists,omitempty"`
+		RateLimits    []dto.RateLimitResponse   `json:"rate_limits,omitempty"`
+		Settings      map[string]string         `json:"settings,omitempty"`
 	}{
 		Version:       backupVersion,
 		CreatedAt:     time.Now(),

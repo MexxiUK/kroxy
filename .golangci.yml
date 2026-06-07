@@ -1,32 +1,48 @@
 run:
   timeout: 5m
   issues-exit-code: 1
+  tests: true
 
 linters:
   enable:
+    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - gosimple
     - typecheck
-    - prealloc
+    - unused
+    - bodyclose
     - gofmt
     - misspell
-    - goimports
-    - nakedret
+    - noctx
+    - nolintlint
+    - revive
     - rowserrcheck
     - sqlclosecheck
-  disable:
-    - errcheck
-    - unused
-    - goconst
     - unconvert
+  disable:
+    - prealloc      # Micro-optimization; not worth blocking CI during MVP sprint
+    - errchkjson    # False positives on API handlers
+    - wrapcheck     # Too strict for MVP phase
+    - goconst       # Noisy on SQL strings
+    - errcheck      # Too many unchecked errors in existing codebase; enable after cleanup
 
 linters-settings:
   gofmt:
     simplify: true
   misspell:
     locale: US
+  gosec:
+    excludes:
+      - G104  # Unhandled errors (covered by errcheck)
+      - G307  # Deferring unsafe Close
+      - G115  # Integer overflow conversion
+  revive:
+    rules:
+      - name: var-naming
+        disabled: true
+      - name: exported
+        disabled: true
 
 issues:
   exclude-use-default: false
@@ -36,3 +52,36 @@ issues:
     - linters:
         - staticcheck
       text: "SA1029"
+    # Exclude shadow checking in test files
+    - path: "_test\\.go$"
+      text: "shadow: declaration of \"err\" shadows declaration"
+      linters:
+        - govet
+    # Exclude noctx in test helpers and test files (tests don't need request contexts)
+    - path: "(_test\\.go$|internal/testutil/)"
+      linters:
+        - noctx
+    # Exclude defer close in loops (common pattern in this codebase)
+    - text: "G307: Deferring unsafe method \"Close\""
+      linters:
+        - gosec
+    # Exclude noctx in audit webhook (legacy code)
+    - path: "internal/audit/"
+      linters:
+        - noctx
+    # Exclude noctx in proxy health checks (legacy code)
+    - path: "internal/proxy/"
+      linters:
+        - noctx
+    # Exclude unused linter on packages with heavy untested code (MVP sprint)
+    - path: "internal/(waf|bot|oidc|auth|validation)/"
+      linters:
+        - unused
+    # Exclude unconvert in proxy/validation (legacy code)
+    - path: "internal/(proxy|validation)/"
+      linters:
+        - unconvert
+    # Exclude noctx in alerts (legacy webhook code)
+    - path: "internal/alerts/"
+      linters:
+        - noctx

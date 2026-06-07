@@ -85,7 +85,7 @@ func (m *Manager) Send(event Event) {
 		select {
 		case m.semaphore <- struct{}{}:
 			go func(wh Webhook, event Event) {
-				defer func() { <- m.semaphore }()
+				defer func() { <-m.semaphore }()
 				m.sendWebhook(wh, event)
 			}(wh, event)
 		default:

@@ -146,7 +146,7 @@ type Auth struct {
 	twoFARateLimits    sync.Map                  // userID (int) -> *twoFARateLimit
 	jwtSecret          []byte
 	sessionExpiry      time.Duration
-	productionMode     bool // When false, cookies don't require HTTPS
+	productionMode     bool        // When false, cookies don't require HTTPS
 	dbUpdateCh         chan func() // Background worker for async DB writes
 	dbUpdateOnce       sync.Once   // Ensures worker starts once
 }

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Kroxy pre-push hook — fast validation gate before pushing to remote.
+# Install with: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo "🔍 Running pre-push validation..."
+
+# 1. Build check (fastest — catches compile errors)
+echo "➡️  Checking build..."
+if ! go build ./... 2>&1; then
+    echo -e "${RED}❌ Build failed${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Build OK${NC}"
+
+# 2. Unit tests (fast — ~5-10s)
+echo "➡️  Running unit tests..."
+if ! go test -count=1 ./... 2>&1; then
+    echo -e "${RED}❌ Unit tests failed${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Unit tests passed${NC}"
+
+# 3. Race detector (slower — ~20-30s, but critical)
+echo "➡️  Running race detector..."
+if ! go test -race -count=1 ./... 2>&1; then
+    echo -e "${RED}❌ Race detector found issues${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Race detector clean${NC}"
+
+# 4. Integration tests (~8s)
+echo "➡️  Running integration tests..."
+if ! go test -count=1 -tags=integration ./internal/api/... 2>&1; then
+    echo -e "${RED}❌ Integration tests failed${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Integration tests passed${NC}"
+
+# 5. Security scan (gosec)
+echo "➡️  Running security scan (gosec)..."
+if command -v gosec >/dev/null 2>&1; then
+    if ! gosec -exclude=G104,G307,G115 ./... 2>&1; then
+        echo -e "${RED}❌ Security scan found issues${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Security scan passed${NC}"
+else
+    echo -e "${YELLOW}⚠️  gosec not installed, skipping security scan${NC}"
+    echo "   Install: go install github.com/securego/gosec/v2/cmd/gosec@latest"
+fi
+
+# 6. go vet
+echo "➡️  Running go vet..."
+if ! go vet ./... 2>&1; then
+    echo -e "${RED}❌ go vet found issues${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ go vet clean${NC}"
+
+echo ""
+echo -e "${GREEN}🚀 All pre-push checks passed — pushing...${NC}"
+exit 0
