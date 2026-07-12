@@ -692,28 +692,43 @@ func (w *WAF) InspectRequest(rw http.ResponseWriter, r *http.Request) (allowed b
 		}
 	}
 
-	// Read and process request body with size limit to prevent memory exhaustion.
-	// Inspect body for any method that carries one — including OPTIONS.
+	// Read and process request body with a streaming size limit. Body is fed to
+	// Coraza in fixed-size chunks and hashed incrementally so that a 10MB body
+	// never needs to be fully buffered in Kroxy's heap at once.
 	bodyHash := sha256EmptyBodyHash
+	var bodyReader io.Reader
 	if r.Body != nil && r.ContentLength != 0 {
 		limitedBody := http.MaxBytesReader(rw, r.Body, MaxRequestBodySize)
-		body, err := io.ReadAll(limitedBody)
-		if err != nil {
-			if err.Error() == "http: request body too large" {
-				w.storeSecurityEvent(clientIP, r, "blocked")
-				return false, "Request body too large (max 10MB)"
+		hasher := sha256.New()
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := limitedBody.Read(buf)
+			if n > 0 {
+				hasher.Write(buf[:n])
+				if _, _, werr := tx.WriteRequestBody(buf[:n]); werr != nil {
+					log.Printf("WAF: Error writing request body: %v", werr)
+				}
 			}
-			log.Printf("WAF: Error reading request body: %v", err)
-			r.Body = io.NopCloser(strings.NewReader(""))
-			return false, "Error reading request body"
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				if err.Error() == "http: request body too large" {
+					w.storeSecurityEvent(clientIP, r, "blocked")
+					return false, "Request body too large (max 10MB)"
+				}
+				log.Printf("WAF: Error reading request body: %v", err)
+				r.Body = io.NopCloser(strings.NewReader(""))
+				return false, "Error reading request body"
+			}
 		}
-		if _, _, err := tx.WriteRequestBody(body); err != nil {
-			log.Printf("WAF: Error writing request body: %v", err)
+		bodyHash = hex.EncodeToString(hasher.Sum(nil))
+		var rberr error
+		bodyReader, rberr = tx.RequestBodyReader()
+		if rberr != nil {
+			log.Printf("WAF: Error getting request body reader: %v", rberr)
+			bodyReader = strings.NewReader("")
 		}
-		r.Body = io.NopCloser(strings.NewReader(string(body)))
-		h := sha256.New()
-		h.Write(body)
-		bodyHash = hex.EncodeToString(h.Sum(nil))
 	}
 
 	if intervention, _ := tx.ProcessRequestBody(); intervention != nil {
@@ -724,6 +739,10 @@ func (w *WAF) InspectRequest(rw http.ResponseWriter, r *http.Request) (allowed b
 			w.storeSecurityEvent(clientIP, r, "blocked")
 			return false, "Request body blocked"
 		}
+	}
+
+	if bodyReader != nil {
+		r.Body = io.NopCloser(bodyReader)
 	}
 
 	// Add WAF verification header for requests that passed inspection

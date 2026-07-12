@@ -1,6 +1,10 @@
 package waf
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	corazacrs "github.com/corazawaf/coraza-coreruleset/v4"
@@ -344,5 +348,30 @@ func TestWAF_ParanoiaLevel3(t *testing.T) {
 	res := wafInstance.TestPayload("GET", "/test?q=| id", "", nil)
 	if !res.Blocked {
 		t.Error("Expected pipe injection to be blocked at PL3")
+	}
+}
+
+func TestInspectRequest_BodyStreamed(t *testing.T) {
+	wafInstance, err := New(nil, Config{Enabled: true, Mode: "detect"}, nil, nil, "detect")
+	if err != nil {
+		t.Fatalf("failed to create WAF: %v", err)
+	}
+
+	payload := "benign request body"
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	allowed, reason := wafInstance.InspectRequest(rec, req)
+	if !allowed {
+		t.Fatalf("expected request to pass inspection, got blocked: %s", reason)
+	}
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		t.Fatalf("failed to read body after inspection: %v", err)
+	}
+	if string(body) != payload {
+		t.Fatalf("expected body %q after inspection, got %q", payload, string(body))
 	}
 }
