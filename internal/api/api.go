@@ -1514,34 +1514,35 @@ func (a *API) healthz(w http.ResponseWriter, r *http.Request) {
 func (a *API) createRoute(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUserFromContext(r.Context())
 
-	var route store.Route
-	if err := json.NewDecoder(r.Body).Decode(&route); err != nil {
+	var req dto.RouteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	// Validate backend URL (SSRF prevention)
-	if err := validation.ValidateBackendURL(route.Backend); err != nil {
+	if err := validation.ValidateBackendURL(req.Backend); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid backend URL: "+err.Error())
 		return
 	}
 
 	// Prevent proxy loops (backend pointing to admin API)
-	if err := validation.ValidateNoSelfReference(route.Backend, route.IsAdminRoute); err != nil {
+	if err := validation.ValidateNoSelfReference(req.Backend, false); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid backend URL: "+err.Error())
 		return
 	}
 
 	// Validate domain
-	if route.Domain == "" {
+	if req.Domain == "" {
 		respondError(w, http.StatusBadRequest, "Domain is required")
 		return
 	}
-	if err := validation.ValidateDomain(route.Domain); err != nil {
+	if err := validation.ValidateDomain(req.Domain); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid domain: "+err.Error())
 		return
 	}
 
+	route := req.ToStore()
 	if err := a.store.CreateRoute(&route); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create route")
 		return
@@ -1615,36 +1616,43 @@ func (a *API) updateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var route store.Route
-	if err := json.NewDecoder(r.Body).Decode(&route); err != nil {
+	// Check if this is an admin self-route (cannot be modified)
+	adminRoute, _ := a.store.GetAdminRoute()
+	if adminRoute != nil && adminRoute.ID == id {
+		respondError(w, http.StatusForbidden, "Cannot modify admin self-route")
+		return
+	}
+
+	var req dto.RouteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	route.ID = id
-
 	// Validate domain
-	if route.Domain == "" {
+	if req.Domain == "" {
 		respondError(w, http.StatusBadRequest, "Domain is required")
 		return
 	}
-	if err := validation.ValidateDomain(route.Domain); err != nil {
+	if err := validation.ValidateDomain(req.Domain); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid domain: "+err.Error())
 		return
 	}
 
 	// Validate backend URL (SSRF prevention)
-	if err := validation.ValidateBackendURL(route.Backend); err != nil {
+	if err := validation.ValidateBackendURL(req.Backend); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid backend URL: "+err.Error())
 		return
 	}
 
 	// Prevent proxy loops (backend pointing to admin API)
-	if err := validation.ValidateNoSelfReference(route.Backend, route.IsAdminRoute); err != nil {
+	if err := validation.ValidateNoSelfReference(req.Backend, false); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid backend URL: "+err.Error())
 		return
 	}
 
+	route := req.ToStore()
+	route.ID = id
 	if err := a.store.UpdateRoute(&route); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update route")
 		return
@@ -1838,6 +1846,7 @@ func (a *API) oauthLogout(w http.ResponseWriter, r *http.Request) {
 			Success:   true,
 		})
 		a.oidcManager.Logout(cookie.Value)
+		a.auth.Logout(cookie.Value)
 	}
 
 	c := &http.Cookie{

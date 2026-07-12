@@ -1,12 +1,7 @@
 package audit
 
 import (
-	"crypto/hmac"
-	cryptoRand "crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -54,7 +49,6 @@ type Event struct {
 	Error      string      `json:"error,omitempty"`
 	RequestID  string      `json:"request_id,omitempty"`
 	SessionID  string      `json:"session_id,omitempty"`
-	Signature  string      `json:"signature,omitempty"` // HMAC signature for tamper detection
 }
 
 // Logger handles audit logging with rotation and external forwarding
@@ -66,7 +60,6 @@ type Logger struct {
 	maxBackups    int   // Max number of rotated files to keep
 	currentSize   int64 // Current file size
 	enabled       bool
-	signingKey    []byte // HMAC signing key for log integrity
 	webhookURL    string // External webhook URL for log forwarding
 	webhookClient *http.Client
 	alertHandler  *AlertHandler // Real-time alerting
@@ -88,28 +81,10 @@ var (
 func Init(logPath string) error {
 	var err error
 	once.Do(func() {
-		// Get signing key from environment or generate one
-		signingKey := os.Getenv("KROXY_AUDIT_SIGNING_KEY")
-		if signingKey == "" {
-			// In production mode, require a signing key for log verification
-			if os.Getenv("KROXY_PRODUCTION") == "true" {
-				err = errors.New("KROXY_AUDIT_SIGNING_KEY must be set in production mode for log verification")
-				return
-			}
-			// Generate a secure random key for this session (dev mode only)
-			keyBytes := make([]byte, 32)
-			if _, randErr := cryptoRand.Read(keyBytes); randErr != nil {
-				log.Fatalf("audit: failed to generate signing key: %v", randErr)
-			}
-			signingKey = base64.StdEncoding.EncodeToString(keyBytes)
-			log.Println("WARNING: Using random audit signing key (not persistent across restarts)")
-		}
-
 		webhookURL := os.Getenv("KROXY_AUDIT_WEBHOOK_URL")
 
 		instance = &Logger{
 			enabled:    true,
-			signingKey: []byte(signingKey),
 			logPath:    logPath,
 			maxSize:    defaultMaxSize,
 			maxBackups: defaultMaxBackups,
@@ -144,14 +119,37 @@ func GetLogger() *Logger {
 	return instance
 }
 
-// signEvent generates an HMAC signature for the event
-func (l *Logger) signEvent(data []byte) string {
-	if len(l.signingKey) == 0 {
-		return ""
+// sensitiveFieldNames contains substrings that indicate a field should be redacted
+// from stdout logging to avoid leaking credentials into container logs.
+var sensitiveFieldNames = []string{"password", "secret", "token", "key", "seed", "credential", "cookie"}
+
+// redactDetails returns a copy of the event with known sensitive fields in Details masked.
+func redactDetails(event Event) Event {
+	if event.Details == nil {
+		return event
 	}
-	mac := hmac.New(sha256.New, l.signingKey)
-	mac.Write(data)
-	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	details, ok := event.Details.(map[string]interface{})
+	if !ok {
+		return event
+	}
+	redacted := make(map[string]interface{}, len(details))
+	for k, v := range details {
+		lower := strings.ToLower(k)
+		mask := false
+		for _, s := range sensitiveFieldNames {
+			if strings.Contains(lower, s) {
+				mask = true
+				break
+			}
+		}
+		if mask {
+			redacted[k] = "[REDACTED]"
+		} else {
+			redacted[k] = v
+		}
+	}
+	event.Details = redacted
+	return event
 }
 
 // Log writes an audit event
@@ -168,23 +166,10 @@ func (l *Logger) Log(event Event) {
 		event.Timestamp = time.Now().UTC()
 	}
 
-	// Convert to JSON
+	// Full event written to the append-only log file and forwarded to webhooks
 	data, err := json.Marshal(event)
 	if err != nil {
 		log.Printf("audit: failed to marshal event: %v", err)
-		return
-	}
-
-	// Sign the event for integrity
-	signature := l.signEvent(data)
-
-	// Add signature to the event
-	event.Signature = signature
-
-	// Re-marshal with signature
-	data, err = json.Marshal(event)
-	if err != nil {
-		log.Printf("audit: failed to marshal signed event: %v", err)
 		return
 	}
 
@@ -206,9 +191,17 @@ func (l *Logger) Log(event Event) {
 		}
 	}
 
+	// Redact sensitive fields before emitting to stdout (container logs)
+	safeEvent := redactDetails(event)
+	safeData, err := json.Marshal(safeEvent)
+	if err != nil {
+		log.Printf("audit: failed to marshal safe event: %v", err)
+		return
+	}
+
 	// Sanitize log output to prevent log injection
 	// Remove newlines, control characters, and Unicode line separators that could corrupt logs
-	sanitizedData := strings.ReplaceAll(string(data), "\n", "\\n")
+	sanitizedData := strings.ReplaceAll(string(safeData), "\n", "\\n")
 	sanitizedData = strings.ReplaceAll(sanitizedData, "\r", "\\r")
 	sanitizedData = strings.ReplaceAll(sanitizedData, "\t", "\\t")
 	sanitizedData = strings.ReplaceAll(sanitizedData, "\u2028", "\\u2028") // Unicode Line Separator

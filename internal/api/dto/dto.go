@@ -8,6 +8,51 @@ import (
 	"github.com/kroxy/kroxy/internal/store"
 )
 
+// RouteRequest is the API input for creating or updating a route.
+// It excludes internal fields (ID, IsAdminRoute, OIDCProviderID, CreatedAt, UpdatedAt)
+// so callers cannot mass-assign flags that bypass security controls.
+type RouteRequest struct {
+	Domain           string `json:"domain"`
+	Backend          string `json:"backend"`
+	Enabled          bool   `json:"enabled"`
+	WAFEnabled       bool   `json:"waf_enabled"`
+	WAFMode          string `json:"waf_mode"`
+	WAFParanoiaLevel int    `json:"waf_paranoia_level"`
+	OIDCEnabled      bool   `json:"oidc_enabled"`
+	RateLimit        int    `json:"rate_limit"`
+	EnableGzip       bool   `json:"enable_gzip"`
+	EnableBrotli     bool   `json:"enable_brotli"`
+	EnableCache      bool   `json:"enable_cache"`
+	CustomHeaders    string `json:"custom_headers"`
+	BlockCountries   string `json:"block_countries"`
+	AllowCountries   string `json:"allow_countries"`
+	RequireHTTPS     bool   `json:"require_https"`
+	BotProtection    string `json:"bot_protection"`
+}
+
+// ToStore maps a RouteRequest to a store.Route with IsAdminRoute forced false.
+func (req RouteRequest) ToStore() store.Route {
+	return store.Route{
+		Domain:           req.Domain,
+		Backend:          req.Backend,
+		Enabled:          req.Enabled,
+		WAFEnabled:       req.WAFEnabled,
+		WAFMode:          req.WAFMode,
+		WAFParanoiaLevel: req.WAFParanoiaLevel,
+		OIDCEnabled:      req.OIDCEnabled,
+		RateLimit:        req.RateLimit,
+		EnableGzip:       req.EnableGzip,
+		EnableBrotli:     req.EnableBrotli,
+		EnableCache:      req.EnableCache,
+		CustomHeaders:    req.CustomHeaders,
+		BlockCountries:   req.BlockCountries,
+		AllowCountries:   req.AllowCountries,
+		RequireHTTPS:     req.RequireHTTPS,
+		BotProtection:    req.BotProtection,
+		IsAdminRoute:     false,
+	}
+}
+
 // RouteResponse is the safe API representation of a route.
 // Omits Backend (internal URL), OIDCProviderID, and IsAdminRoute.
 type RouteResponse struct {
