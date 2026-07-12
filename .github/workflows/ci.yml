@@ -196,6 +196,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
+          exit-code: 1
 
   release:
     name: Release
