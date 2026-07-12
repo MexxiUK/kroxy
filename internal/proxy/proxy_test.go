@@ -113,6 +113,29 @@ func TestProxy_New(t *testing.T) {
 	}
 }
 
+func TestProxy_New_WAFInitFails(t *testing.T) {
+	s, cleanup := testutil.NewTestStore(t)
+	defer cleanup()
+
+	// Seed an invalid global WAF rule so that global WAF engine creation fails.
+	// Proxy.New must fail closed and return an error rather than starting
+	// without WAF protection.
+	badRule := &store.WAFRule{
+		Name:    "invalid-syntax",
+		Rule:    "SecRule ARGS", // missing operator and action
+		Enabled: true,
+		Mode:    "block",
+	}
+	if err := s.CreateWAFRule(badRule); err != nil {
+		t.Fatalf("create WAF rule: %v", err)
+	}
+
+	_, err := New(s, &config.Config{ProxyAddr: ":8080"})
+	if err == nil {
+		t.Fatal("expected error when global WAF initialization fails")
+	}
+}
+
 func TestProxy_Stop(t *testing.T) {
 	s, cleanup := testutil.NewTestStore(t)
 	defer cleanup()
