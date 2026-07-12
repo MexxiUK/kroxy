@@ -2786,23 +2786,18 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 	}
 	rule.ID = id
 
-	if rule.Name != "" {
-		if err := validation.ValidateWAFRuleName(rule.Name); err != nil {
-			respondError(w, http.StatusBadRequest, err.Error())
-			return
-		}
+	// Require and validate name/rule on update, just like on creation.
+	if err := validation.ValidateWAFRuleName(rule.Name); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	if rule.Rule != "" {
-		if err := validation.ValidateWAFRule(rule.Rule); err != nil {
-			respondError(w, http.StatusBadRequest, err.Error())
-			return
-		}
+	if err := validation.ValidateWAFRule(rule.Rule); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	if rule.Exclusions != "" {
-		if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
-			respondError(w, http.StatusBadRequest, err.Error())
-			return
-		}
+	if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	if rule.RouteID != nil {
@@ -2820,12 +2815,6 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 		}
 		if !found {
 			respondError(w, http.StatusBadRequest, "Route not found")
-			return
-		}
-	}
-	if rule.Exclusions != "" {
-		if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
-			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
