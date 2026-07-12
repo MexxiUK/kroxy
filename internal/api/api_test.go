@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/kroxy/kroxy/internal/store"
@@ -99,6 +100,131 @@ func TestCsrfCookie_NonProductionHonoursInsecureOverride(t *testing.T) {
 	}
 	if cookies[0].Secure {
 		t.Errorf("non-production mode must allow KROXY_INSECURE_COOKIES to clear Secure")
+	}
+}
+
+func findCookie(t *testing.T, cookies []*http.Cookie, name string) *http.Cookie {
+	t.Helper()
+	for _, c := range cookies {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("expected cookie %q", name)
+	return nil
+}
+
+func TestRenderTemplateCsrfCookie_ProductionIgnoresInsecureOverride(t *testing.T) {
+	a, cleanup := newTestAPIWithEnv(t, true, true)
+	defer cleanup()
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/login", nil)
+	a.renderTemplate(w, r, "login", &TemplateData{CSRFToken: "test-token"})
+	c := findCookie(t, w.Result().Cookies(), "csrf_token")
+	if !c.Secure {
+		t.Errorf("production mode must set Secure on rendered CSRF cookie even when KROXY_INSECURE_COOKIES=true")
+	}
+}
+
+func TestRenderTemplateCsrfCookie_NonProductionHonoursInsecureOverride(t *testing.T) {
+	a, cleanup := newTestAPIWithEnv(t, false, true)
+	defer cleanup()
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/login", nil)
+	a.renderTemplate(w, r, "login", &TemplateData{CSRFToken: "test-token"})
+	c := findCookie(t, w.Result().Cookies(), "csrf_token")
+	if c.Secure {
+		t.Errorf("non-production mode must allow KROXY_INSECURE_COOKIES to clear Secure on rendered CSRF cookie")
+	}
+}
+
+func TestLogoutCookie_ProductionIgnoresInsecureOverride(t *testing.T) {
+	a, cleanup := newTestAPIWithEnv(t, true, true)
+	defer cleanup()
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	a.oauthLogout(w, r)
+	c := findCookie(t, w.Result().Cookies(), "kroxy_session")
+	if c.MaxAge != -1 {
+		t.Errorf("logout cookie must be a deletion cookie")
+	}
+	if !c.Secure {
+		t.Errorf("production mode must set Secure on logout deletion cookie even when KROXY_INSECURE_COOKIES=true")
+	}
+}
+
+func TestLogoutCookie_NonProductionHonoursInsecureOverride(t *testing.T) {
+	a, cleanup := newTestAPIWithEnv(t, false, true)
+	defer cleanup()
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	a.oauthLogout(w, r)
+	c := findCookie(t, w.Result().Cookies(), "kroxy_session")
+	if c.Secure {
+		t.Errorf("non-production mode must allow KROXY_INSECURE_COOKIES to clear Secure on logout deletion cookie")
+	}
+}
+
+func TestLoginPage_ProductionInsecureCookiesFlagIgnoresOverride(t *testing.T) {
+	s, cleanupStore := newTestStore(t)
+	defer cleanupStore()
+	// #nosec G104 — test environment setup.
+	os.Setenv("KROXY_JWT_SECRET", "test-secret-test-secret-test-secret-test")
+	// #nosec G104 — test environment setup.
+	os.Setenv("KROXY_PRODUCTION", "true")
+	// #nosec G104 — test environment setup.
+	os.Setenv("KROXY_INSECURE_COOKIES", "true")
+	defer func() {
+		os.Unsetenv("KROXY_JWT_SECRET")
+		os.Unsetenv("KROXY_PRODUCTION")
+		os.Unsetenv("KROXY_INSECURE_COOKIES")
+	}()
+
+	a := New(s, 0)
+	if err := s.CreateUser(&store.User{Email: "admin@example.com", Name: "Admin", Role: "admin", Password: "x", Enabled: true}); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/login", nil)
+	a.serveLogin(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	// The warning is shown when cookies are secure. In production the override is
+	// ignored, so the flag is false and the warning must be present.
+	if !strings.Contains(w.Body.String(), "Connection not secure.") {
+		t.Errorf("production mode must treat cookies as secure even when KROXY_INSECURE_COOKIES=true")
+	}
+}
+
+func TestLoginPage_NonProductionHonoursInsecureCookiesOverride(t *testing.T) {
+	s, cleanupStore := newTestStore(t)
+	defer cleanupStore()
+	// #nosec G104 — test environment setup.
+	os.Setenv("KROXY_JWT_SECRET", "test-secret-test-secret-test-secret-test")
+	// #nosec G104 — test environment setup.
+	os.Setenv("KROXY_INSECURE_COOKIES", "true")
+	defer func() {
+		os.Unsetenv("KROXY_JWT_SECRET")
+		os.Unsetenv("KROXY_INSECURE_COOKIES")
+	}()
+
+	a := New(s, 0)
+	if err := s.CreateUser(&store.User{Email: "admin@example.com", Name: "Admin", Role: "admin", Password: "x", Enabled: true}); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/login", nil)
+	a.serveLogin(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	// With the override active in non-production mode, cookies are insecure and
+	// the warning must be suppressed.
+	if strings.Contains(w.Body.String(), "Connection not secure.") {
+		t.Errorf("non-production mode must honor KROXY_INSECURE_COOKIES and suppress the warning")
 	}
 }
 
