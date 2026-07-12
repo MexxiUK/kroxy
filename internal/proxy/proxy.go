@@ -225,6 +225,12 @@ func (p *Proxy) buildConfig() ([]byte, error) {
 			continue
 		}
 
+		// Admin/self-routes are internal and should never be exposed on the
+		// public proxy listener.
+		if route.IsAdminRoute {
+			continue
+		}
+
 		// Runtime re-validation: a route that passed validation when it was
 		// created may have become unsafe due to DNS changes, admin edits, or
 		// stale data. Skip any route whose backend fails SSRF/self-reference

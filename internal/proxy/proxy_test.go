@@ -870,10 +870,15 @@ func TestProxy_buildConfig_SkipInvalidBackend_PrivateIP(t *testing.T) {
 }
 
 func TestProxy_buildConfig_SkipInvalidBackend_SelfReference(t *testing.T) {
-	// Register the proxy listener port so that a backend pointing at it is
-	// recognized as a proxy loop. Duplicates are harmless if this test runs
-	// multiple times.
+	// Save and restore self-reference address state so this test does not
+	// pollute the global registry for later tests.
+	previous := validation.SelfReferenceAddrs()
+	validation.ResetSelfReferenceAddrs()
 	validation.SetProxyAddrs(":8080")
+	t.Cleanup(func() {
+		validation.ResetSelfReferenceAddrs()
+		validation.SetProxyAddrs(previous...)
+	})
 
 	s, cleanup := testutil.NewTestStore(t)
 	defer cleanup()
