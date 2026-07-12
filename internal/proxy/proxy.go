@@ -225,6 +225,19 @@ func (p *Proxy) buildConfig() ([]byte, error) {
 			continue
 		}
 
+		// Runtime re-validation: a route that passed validation when it was
+		// created may have become unsafe due to DNS changes, admin edits, or
+		// stale data. Skip any route whose backend fails SSRF/self-reference
+		// or private-IP checks so it never becomes an upstream.
+		if err := validation.ValidateBackendURL(route.Backend); err != nil {
+			log.Printf("Warning: skipping route %s (id=%d): backend %q failed SSRF validation: %v", route.Domain, route.ID, route.Backend, err)
+			continue
+		}
+		if err := validation.ValidateNoSelfReference(route.Backend, false); err != nil {
+			log.Printf("Warning: skipping route %s (id=%d): backend %q creates proxy loop: %v", route.Domain, route.ID, route.Backend, err)
+			continue
+		}
+
 		var handlers []map[string]interface{}
 
 		// Strip internal X-Kroxy-* headers from incoming client requests before
