@@ -2,7 +2,13 @@ package validation
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
+	"crypto/subtle"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -1125,6 +1131,134 @@ func ValidateRequestTimeout(value string) error {
 		return fmt.Errorf("invalid request_timeout %q: must be between %s and %s", value, minRequestTimeout, maxRequestTimeout)
 	}
 	return nil
+}
+
+// ValidateCertificatePEM parses a PEM-encoded X.509 certificate and returns an
+// error if it is malformed, empty, or contains no valid certificate block.
+func ValidateCertificatePEM(certPEM string) (*x509.Certificate, error) {
+	if certPEM == "" {
+		return nil, errors.New("certificate PEM is required")
+	}
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return nil, errors.New("certificate does not contain a valid PEM block")
+	}
+	if block.Type != "CERTIFICATE" {
+		return nil, fmt.Errorf("certificate PEM has unexpected block type %q", block.Type)
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+	}
+	return cert, nil
+}
+
+// parsePrivateKeyPEM parses a PEM-encoded private key (PKCS#1, PKCS#8, or EC)
+// and returns the parsed key or an error.
+func parsePrivateKeyPEM(keyPEM string) (interface{}, error) {
+	if keyPEM == "" {
+		return nil, errors.New("private key PEM is required")
+	}
+	block, _ := pem.Decode([]byte(keyPEM))
+	if block == nil {
+		return nil, errors.New("private key does not contain a valid PEM block")
+	}
+	switch block.Type {
+	case "RSA PRIVATE KEY":
+		key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse RSA private key: %w", err)
+		}
+		return key, nil
+	case "PRIVATE KEY":
+		key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse PKCS#8 private key: %w", err)
+		}
+		return key, nil
+	case "EC PRIVATE KEY":
+		key, err := x509.ParseECPrivateKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse EC private key: %w", err)
+		}
+		return key, nil
+	default:
+		return nil, fmt.Errorf("private key PEM has unexpected block type %q", block.Type)
+	}
+}
+
+// ValidatePrivateKeyPEM parses a PEM-encoded private key (PKCS#1, PKCS#8, or EC)
+// and returns an error if it is malformed or empty.
+func ValidatePrivateKeyPEM(keyPEM string) error {
+	_, err := parsePrivateKeyPEM(keyPEM)
+	return err
+}
+
+// ValidateCertificateKeyPair validates that a certificate and private key form a
+// usable pair by checking that the public key in the certificate matches the
+// private key. It also rejects expired certificates.
+func ValidateCertificateKeyPair(certPEM, keyPEM string) error {
+	cert, err := ValidateCertificatePEM(certPEM)
+	if err != nil {
+		return err
+	}
+	priv, err := parsePrivateKeyPEM(keyPEM)
+	if err != nil {
+		return err
+	}
+	if time.Now().After(cert.NotAfter) {
+		return fmt.Errorf("certificate expired on %s", cert.NotAfter.Format(time.RFC3339))
+	}
+	if !publicKeysEqual(cert.PublicKey, priv) {
+		return errors.New("certificate public key does not match private key")
+	}
+	return nil
+}
+
+// publicKeysEqual reports whether the public key embedded in a certificate
+// matches the public key derived from a private key.
+func publicKeysEqual(certPub, privKey interface{}) bool {
+	switch pub := certPub.(type) {
+	case *rsa.PublicKey:
+		key, ok := privKey.(*rsa.PrivateKey)
+		return ok && pub.N.Cmp(key.N) == 0 && pub.E == key.E
+	case *ecdsa.PublicKey:
+		key, ok := privKey.(*ecdsa.PrivateKey)
+		return ok && pub.Curve == key.Curve && pub.X.Cmp(key.X) == 0 && pub.Y.Cmp(key.Y) == 0
+	case ed25519.PublicKey:
+		key, ok := privKey.(ed25519.PrivateKey)
+		if !ok {
+			return false
+		}
+		derived := key.Public().(ed25519.PublicKey)
+		return subtle.ConstantTimeCompare(pub, derived) == 1
+	default:
+		return false
+	}
+}
+
+// SanitizeCertificateFileName returns a safe base name for a certificate/key file
+// derived from a domain. It removes path separators and traversal sequences,
+// then restricts the result to alphanumeric characters, dashes, dots, and
+// underscores to avoid filesystem surprises.
+func SanitizeCertificateFileName(domain string) string {
+	if domain == "" {
+		return "_"
+	}
+	// Collapse Windows/Unix separators and traversal patterns.
+	safe := strings.ReplaceAll(domain, "\\", "_")
+	safe = strings.ReplaceAll(safe, "/", "_")
+	for strings.Contains(safe, "..") {
+		safe = strings.ReplaceAll(safe, "..", "_")
+	}
+	// Restrict to safe characters and collapse repeated separators.
+	safe = regexp.MustCompile(`[^a-zA-Z0-9._-]+`).ReplaceAllString(safe, "_")
+	safe = regexp.MustCompile(`_+`).ReplaceAllString(safe, "_")
+	safe = strings.Trim(safe, "_.-")
+	if safe == "" {
+		return "_"
+	}
+	return safe
 }
 
 // ValidateWhitelist validates a whitelist entry

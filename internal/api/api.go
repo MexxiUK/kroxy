@@ -2539,6 +2539,26 @@ func (a *API) createCertificate(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "Certificate and private key PEM content are required for custom certificates")
 			return
 		}
+
+		// Validate PEM content and key pair compatibility before touching disk.
+		parsedCert, err := validation.ValidateCertificatePEM(req.Certificate)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "Invalid certificate: "+err.Error())
+			return
+		}
+		if err := validation.ValidatePrivateKeyPEM(req.PrivateKey); err != nil {
+			respondError(w, http.StatusBadRequest, "Invalid private key: "+err.Error())
+			return
+		}
+		if time.Now().After(parsedCert.NotAfter) {
+			respondError(w, http.StatusBadRequest, fmt.Sprintf("Certificate expired on %s", parsedCert.NotAfter.Format(time.RFC3339)))
+			return
+		}
+		if err := validation.ValidateCertificateKeyPair(req.Certificate, req.PrivateKey); err != nil {
+			respondError(w, http.StatusBadRequest, "Certificate and private key are not a valid pair: "+err.Error())
+			return
+		}
+
 		// Derive data directory from database path
 		dataDir := filepath.Dir(a.store.DatabasePath())
 		certsDir := filepath.Join(dataDir, "certs")
@@ -2547,8 +2567,7 @@ func (a *API) createCertificate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		safeName := strings.ReplaceAll(req.Domain, "/", "_")
-		safeName = strings.ReplaceAll(safeName, "..", "_")
+		safeName := validation.SanitizeCertificateFileName(req.Domain)
 		certPath := filepath.Join(certsDir, safeName+".crt")
 		keyPath := filepath.Join(certsDir, safeName+".key")
 
@@ -2566,6 +2585,7 @@ func (a *API) createCertificate(w http.ResponseWriter, r *http.Request) {
 		cert.CertPath = certPath
 		cert.KeyPath = keyPath
 		cert.Issuer = "Custom"
+		cert.ExpiresAt = parsedCert.NotAfter
 	} else {
 		cert.Issuer = "Let's Encrypt"
 	}
