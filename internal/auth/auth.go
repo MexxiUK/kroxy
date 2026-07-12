@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -172,6 +173,7 @@ type APIKey struct {
 	ID            int
 	KeyID         string
 	KeySecretHash string // bcrypt hashed secret
+	KeySecretHMAC string // fast HMAC pre-check before bcrypt
 	UserID        int
 	Role          string // User's role at time of key creation
 	Name          string
@@ -753,6 +755,7 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 		apiKey = &APIKey{
 			KeyID:         dbKey.KeyID,
 			KeySecretHash: dbKey.KeySecretHash,
+			KeySecretHMAC: dbKey.KeySecretHMAC,
 			UserID:        dbKey.UserID,
 			Role:          userRole,
 			Name:          dbKey.Name,
@@ -767,6 +770,16 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 	// Check expiration
 	if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
 		return nil, errors.New("API key expired")
+	}
+
+	// Fast HMAC pre-check before bcrypt to mitigate DoS from random secrets (CRIT-004).
+	// Legacy keys with no stored HMAC fall through to bcrypt verification.
+	if apiKey.KeySecretHMAC != "" {
+		if !hmac.Equal([]byte(apiKeyHMAC(keySecret)), []byte(apiKey.KeySecretHMAC)) {
+			a.recordAPIKeyFailure(ip)
+			log.Printf("AUDIT: API key authentication failed for key_id=%s", strings.ReplaceAll(keyID, "\n", " "))
+			return nil, errors.New("invalid API key secret")
+		}
 	}
 
 	// Verify secret using bcrypt (constant-time comparison)
@@ -1455,10 +1468,15 @@ func (a *Auth) GenerateAPIKey(userID int, name string, expiresAt *time.Time) (ke
 		return "", "", fmt.Errorf("failed to hash secret: %w", err)
 	}
 
+	// Fast HMAC pre-check to mitigate bcrypt DoS on random secrets (CRIT-004).
+	// In the rare case no encryption key is available, the bcrypt rate limit remains the defense.
+	secretHMAC := apiKeyHMAC(keySecret)
+
 	// Create API key record
 	apiKey := &store.APIKey{
 		KeyID:         keyID,
 		KeySecretHash: string(hashedSecret),
+		KeySecretHMAC: secretHMAC,
 		UserID:        userID,
 		Name:          name,
 		CreatedAt:     time.Now(),
@@ -1474,6 +1492,7 @@ func (a *Auth) GenerateAPIKey(userID int, name string, expiresAt *time.Time) (ke
 	cachedKey := &APIKey{
 		KeyID:         keyID,
 		KeySecretHash: string(hashedSecret),
+		KeySecretHMAC: secretHMAC,
 		UserID:        userID,
 		Name:          name,
 		CreatedAt:     time.Now(),
@@ -1488,6 +1507,20 @@ func (a *Auth) GenerateAPIKey(userID int, name string, expiresAt *time.Time) (ke
 func sha256Sum(input string) string {
 	hash := sha256.Sum256([]byte(input))
 	return base64.URLEncoding.EncodeToString(hash[:])
+}
+
+// apiKeyHMAC returns a server-side HMAC of an API key secret.
+// It uses the configured encryption key so that guessing random secrets requires
+// both the key ID and a valid HMAC, avoiding bcrypt work for invalid secrets.
+// Returns an empty string when no encryption key is available (legacy/dev fallback).
+func apiKeyHMAC(secret string) string {
+	key, err := crypto.GetEncryptionKey()
+	if err != nil {
+		return ""
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(secret))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
 // GenerateState creates a cryptographically secure state parameter

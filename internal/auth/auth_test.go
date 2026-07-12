@@ -281,6 +281,10 @@ func TestGenerateAPIKey(t *testing.T) {
 	if err := bcrypt.CompareHashAndPassword([]byte(dbKeys[0].KeySecretHash), []byte(keySecret)); err != nil {
 		t.Fatal("expected bcrypt hash to match secret")
 	}
+	// Verify HMAC pre-check value is populated
+	if dbKeys[0].KeySecretHMAC == "" {
+		t.Fatal("expected HMAC pre-check value to be stored")
+	}
 }
 
 func TestChangePassword(t *testing.T) {

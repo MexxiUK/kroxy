@@ -386,23 +386,4 @@ func TestStore_TokenValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected second validation to fail")
 	}
-
-	// Admin token
-	adminTokenHash := "admin-token-hash"
-	adminExpires := time.Now().Add(1 * time.Hour)
-	if err := s.CreateAdminToken(adminTokenHash, 0, adminExpires); err != nil {
-		t.Fatalf("CreateAdminToken failed: %v", err)
-	}
-	adminUID, err := s.ValidateAdminToken(adminTokenHash)
-	if err != nil {
-		t.Fatalf("ValidateAdminToken failed: %v", err)
-	}
-	if adminUID != 0 {
-		t.Fatalf("expected admin UID 0, got %d", adminUID)
-	}
-	// Re-validation should fail (token consumed)
-	_, err = s.ValidateAdminToken(adminTokenHash)
-	if err == nil {
-		t.Fatal("expected second admin validation to fail")
-	}
 }

@@ -618,10 +618,10 @@ func (s *Store) UpdateWAFRule(r *WAFRule) error {
 // APIKey methods
 
 func (s *Store) GetAPIKey(keyID string) (*APIKey, error) {
-	row := s.db.QueryRow("SELECT id, key_id, key_secret_hash, user_id, name, created_at, expires_at, last_used FROM api_keys WHERE key_id = ?", keyID)
+	row := s.db.QueryRow("SELECT id, key_id, key_secret_hash, key_secret_hmac, user_id, name, created_at, expires_at, last_used FROM api_keys WHERE key_id = ?", keyID)
 	var key APIKey
 	var expiresAt, lastUsed sql.NullTime
-	err := row.Scan(&key.ID, &key.KeyID, &key.KeySecretHash, &key.UserID, &key.Name, &key.CreatedAt, &expiresAt, &lastUsed)
+	err := row.Scan(&key.ID, &key.KeyID, &key.KeySecretHash, &key.KeySecretHMAC, &key.UserID, &key.Name, &key.CreatedAt, &expiresAt, &lastUsed)
 	if err != nil {
 		return nil, err
 	}
@@ -635,7 +635,7 @@ func (s *Store) GetAPIKey(keyID string) (*APIKey, error) {
 }
 
 func (s *Store) GetAPIKeysByUser(userID int) ([]APIKey, error) {
-	rows, err := s.db.Query("SELECT id, key_id, key_secret_hash, user_id, name, created_at, expires_at, last_used FROM api_keys WHERE user_id = ?", userID)
+	rows, err := s.db.Query("SELECT id, key_id, key_secret_hash, key_secret_hmac, user_id, name, created_at, expires_at, last_used FROM api_keys WHERE user_id = ?", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -645,7 +645,7 @@ func (s *Store) GetAPIKeysByUser(userID int) ([]APIKey, error) {
 	for rows.Next() {
 		var key APIKey
 		var expiresAt, lastUsed sql.NullTime
-		if err := rows.Scan(&key.ID, &key.KeyID, &key.KeySecretHash, &key.UserID, &key.Name, &key.CreatedAt, &expiresAt, &lastUsed); err != nil {
+		if err := rows.Scan(&key.ID, &key.KeyID, &key.KeySecretHash, &key.KeySecretHMAC, &key.UserID, &key.Name, &key.CreatedAt, &expiresAt, &lastUsed); err != nil {
 			return nil, err
 		}
 		if expiresAt.Valid {
@@ -664,8 +664,8 @@ func (s *Store) GetAPIKeysByUser(userID int) ([]APIKey, error) {
 
 func (s *Store) CreateAPIKey(key *APIKey) error {
 	result, err := s.db.Exec(
-		"INSERT INTO api_keys (key_id, key_secret_hash, user_id, name, expires_at) VALUES (?, ?, ?, ?, ?)",
-		key.KeyID, key.KeySecretHash, key.UserID, key.Name, key.ExpiresAt,
+		"INSERT INTO api_keys (key_id, key_secret_hash, key_secret_hmac, user_id, name, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+		key.KeyID, key.KeySecretHash, key.KeySecretHMAC, key.UserID, key.Name, key.ExpiresAt,
 	)
 	if err != nil {
 		return err
@@ -756,32 +756,6 @@ func (s *Store) ValidatePasswordResetToken(tokenHash string) (int, error) {
 		return 0, err
 	}
 	return userID, nil
-}
-
-// CreateAdminToken stores an admin token in the database
-func (s *Store) CreateAdminToken(tokenHash string, createdBy int, expiresAt time.Time) error {
-	_, err := s.db.Exec(
-		"INSERT INTO admin_tokens (token_hash, created_by, expires_at) VALUES (?, ?, ?)",
-		tokenHash, createdBy, expiresAt,
-	)
-	return err
-}
-
-// ValidateAdminToken validates an admin token and marks it as used
-// Uses atomic UPDATE ... RETURNING to prevent race condition where same token could be used twice.
-func (s *Store) ValidateAdminToken(tokenHash string) (int, error) {
-	var createdBy int
-	err := s.db.QueryRow(
-		"UPDATE admin_tokens SET used = 1 WHERE token_hash = ? AND datetime(expires_at) > datetime('now') AND used = 0 RETURNING created_by",
-		tokenHash,
-	).Scan(&createdBy)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return 0, sql.ErrNoRows
-		}
-		return 0, err
-	}
-	return createdBy, nil
 }
 
 // FailedAttempt represents a record of failed login attempts

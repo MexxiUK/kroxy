@@ -124,6 +124,7 @@ type APIKey struct {
 	ID            int        `json:"id"`
 	KeyID         string     `json:"key_id"`
 	KeySecretHash string     `json:"-"` // Never expose in API
+	KeySecretHMAC string     `json:"-"` // Fast pre-check before bcrypt (never expose)
 	UserID        int        `json:"user_id"`
 	Name          string     `json:"name"`
 	CreatedAt     time.Time  `json:"created_at"`
