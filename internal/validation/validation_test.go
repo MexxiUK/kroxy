@@ -1,7 +1,14 @@
 package validation
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -418,6 +425,159 @@ func TestValidateRequestTimeout(t *testing.T) {
 			}
 			if !tt.wantErr && err != nil {
 				t.Errorf("ValidateRequestTimeout(%q) unexpected error: %v", tt.value, err)
+			}
+		})
+	}
+}
+
+func generateTestCertificatePEM(t *testing.T, domain string, notAfter time.Time, priv *rsa.PrivateKey) (certPEM, keyPEM string) {
+	t.Helper()
+	if priv == nil {
+		var err error
+		priv, err = rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: domain},
+		DNSNames:     []string{domain},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     notAfter,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var certBuf, keyBuf strings.Builder
+	if err := pem.Encode(&certBuf, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+		t.Fatal(err)
+	}
+	keyBytes, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pem.Encode(&keyBuf, &pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes}); err != nil {
+		t.Fatal(err)
+	}
+	return certBuf.String(), keyBuf.String()
+}
+
+func TestValidateCertificatePEM(t *testing.T) {
+	validCert, _ := generateTestCertificatePEM(t, "example.com", time.Now().Add(24*time.Hour), nil)
+
+	tests := []struct {
+		name    string
+		certPEM string
+		wantErr bool
+	}{
+		{"valid", validCert, false},
+		{"empty", "", true},
+		{"not PEM", "not-pem", true},
+		{"wrong block type", "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ValidateCertificatePEM(tt.certPEM)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateCertificatePEM(%q) expected error, got nil", tt.certPEM)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateCertificatePEM(%q) unexpected error: %v", tt.certPEM, err)
+			}
+		})
+	}
+}
+
+func TestValidatePrivateKeyPEM(t *testing.T) {
+	_, validKey := generateTestCertificatePEM(t, "example.com", time.Now().Add(24*time.Hour), nil)
+
+	tests := []struct {
+		name    string
+		keyPEM  string
+		wantErr bool
+	}{
+		{"valid PKCS#8", validKey, false},
+		{"empty", "", true},
+		{"not PEM", "not-pem", true},
+		{"wrong block type", "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePrivateKeyPEM(tt.keyPEM)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidatePrivateKeyPEM(%q) expected error, got nil", tt.keyPEM)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidatePrivateKeyPEM(%q) unexpected error: %v", tt.keyPEM, err)
+			}
+		})
+	}
+}
+
+func TestValidateCertificateKeyPair(t *testing.T) {
+	validCert, validKey := generateTestCertificatePEM(t, "example.com", time.Now().Add(24*time.Hour), nil)
+
+	mismatchedPriv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mismatchedCert, mismatchedKey := generateTestCertificatePEM(t, "other.example.com", time.Now().Add(24*time.Hour), mismatchedPriv)
+
+	expiredCert, expiredKey := generateTestCertificatePEM(t, "expired.example.com", time.Now().Add(-time.Hour), nil)
+
+	tests := []struct {
+		name    string
+		certPEM string
+		keyPEM  string
+		wantErr bool
+	}{
+		{"valid", validCert, validKey, false},
+		{"mismatched cert and key", mismatchedCert, validKey, true},
+		{"valid cert with unrelated key", validCert, mismatchedKey, true},
+		{"expired", expiredCert, expiredKey, true},
+		{"invalid cert PEM", "not-pem", validKey, true},
+		{"invalid key PEM", validCert, "not-pem", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCertificateKeyPair(tt.certPEM, tt.keyPEM)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateCertificateKeyPair(%q, %q) expected error, got nil", tt.certPEM, tt.keyPEM)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateCertificateKeyPair(%q, %q) unexpected error: %v", tt.certPEM, tt.keyPEM, err)
+			}
+		})
+	}
+}
+
+func TestSanitizeCertificateFileName(t *testing.T) {
+	tests := []struct {
+		domain string
+		want   string
+	}{
+		{"example.com", "example.com"},
+		{"sub.example.com", "sub.example.com"},
+		{"../etc/passwd", "etc_passwd"},
+		{"a\\b/c", "a_b_c"},
+		{"foo..bar", "foo_bar"},
+		{"", "_"},
+		{"___foo.bar___", "foo.bar"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.domain, func(t *testing.T) {
+			got := SanitizeCertificateFileName(tt.domain)
+			if got != tt.want {
+				t.Errorf("SanitizeCertificateFileName(%q) = %q, want %q", tt.domain, got, tt.want)
 			}
 		})
 	}

@@ -3,13 +3,21 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kroxy/kroxy/internal/auth"
@@ -899,5 +907,210 @@ func TestUpdateNetworkSettings_ValidValues(t *testing.T) {
 	}
 	if got := s.GetSettingDefault("request_timeout", ""); got != "45s" {
 		t.Fatalf("expected request_timeout 45s, got %q", got)
+	}
+}
+
+func generateTestCertPEM(t *testing.T, domain string, notAfter time.Time) (certPEM, keyPEM string) {
+	t.Helper()
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: domain},
+		DNSNames:     []string{domain},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     notAfter,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var certBuf, keyBuf strings.Builder
+	if err := pem.Encode(&certBuf, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+		t.Fatal(err)
+	}
+	keyBytes, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pem.Encode(&keyBuf, &pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes}); err != nil {
+		t.Fatal(err)
+	}
+	return certBuf.String(), keyBuf.String()
+}
+
+func TestCreateCertificate_ValidatesPEM(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	certPEM, keyPEM := generateTestCertPEM(t, "valid.example.com", time.Now().Add(24*time.Hour))
+
+	body := map[string]interface{}{
+		"domain":      "valid.example.com",
+		"type":        "custom",
+		"certificate": certPEM,
+		"private_key": keyPEM,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/certificates", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createCertificate(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	certs, err := s.GetCertificates()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(certs) != 1 {
+		t.Fatalf("expected 1 certificate, got %d", len(certs))
+	}
+	if !strings.Contains(certs[0].CertPath, "valid.example.com") {
+		t.Fatalf("expected cert path to contain sanitized domain, got %q", certs[0].CertPath)
+	}
+}
+
+func TestCreateCertificate_RejectsInvalidPEM(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	certPEM, _ := generateTestCertPEM(t, "valid.example.com", time.Now().Add(24*time.Hour))
+
+	cases := []map[string]interface{}{
+		{"domain": "test.example.com", "type": "custom", "certificate": "not-pem", "private_key": "not-pem"},
+		{"domain": "test.example.com", "type": "custom", "certificate": certPEM, "private_key": "not-pem"},
+	}
+
+	for _, body := range cases {
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/api/certificates", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(newAdminRouteContext(t, 0))
+
+		rec := httptest.NewRecorder()
+		a.createCertificate(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for %v, got %d: %s", body, rec.Code, rec.Body.String())
+		}
+	}
+
+	certs, err := s.GetCertificates()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(certs) != 0 {
+		t.Fatalf("expected no certificates stored, got %d", len(certs))
+	}
+}
+
+func TestCreateCertificate_RejectsExpired(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	certPEM, keyPEM := generateTestCertPEM(t, "expired.example.com", time.Now().Add(-time.Hour))
+
+	body := map[string]interface{}{
+		"domain":      "expired.example.com",
+		"type":        "custom",
+		"certificate": certPEM,
+		"private_key": keyPEM,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/certificates", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createCertificate(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for expired cert, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateCertificate_RejectsMismatchedKeyPair(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	certPEM, _ := generateTestCertPEM(t, "valid.example.com", time.Now().Add(24*time.Hour))
+	_, unrelatedKey := generateTestCertPEM(t, "other.example.com", time.Now().Add(24*time.Hour))
+
+	body := map[string]interface{}{
+		"domain":      "valid.example.com",
+		"type":        "custom",
+		"certificate": certPEM,
+		"private_key": unrelatedKey,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/certificates", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createCertificate(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for mismatched key pair, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	certs, err := s.GetCertificates()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(certs) != 0 {
+		t.Fatalf("expected no certificates stored, got %d", len(certs))
+	}
+}
+
+func TestCreateCertificate_SanitizesFileName(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	// Domain validation already rejects path separators; this test covers the
+	// defense-in-depth filename sanitizer for otherwise-valid domains with
+	// characters that could be risky in filesystem paths.
+	domain := "sub.example.com"
+	certPEM, keyPEM := generateTestCertPEM(t, domain, time.Now().Add(24*time.Hour))
+
+	body := map[string]interface{}{
+		"domain":      domain,
+		"type":        "custom",
+		"certificate": certPEM,
+		"private_key": keyPEM,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/certificates", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createCertificate(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	certs, err := s.GetCertificates()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(certs) != 1 {
+		t.Fatalf("expected 1 certificate, got %d", len(certs))
+	}
+	base := filepath.Base(certs[0].CertPath)
+	if base != "sub.example.com.crt" {
+		t.Fatalf("expected sanitized file name sub.example.com.crt, got %q", base)
 	}
 }
