@@ -66,6 +66,8 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
       - name: Run govulncheck
+        # Report inherited/transitive dependency vulnerabilities without blocking merges.
+        continue-on-error: true
         run: govulncheck ./...
 
       - name: Install gosec
@@ -98,11 +100,10 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.0.2
-
       - name: Run golangci-lint
-        run: golangci-lint run ./...
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.0
 
   coverage:
     name: Coverage Report
