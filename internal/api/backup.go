@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kroxy/kroxy/internal/api/dto"
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/crypto"
@@ -40,20 +39,20 @@ type Backup struct {
 
 const backupVersion = version.Version
 
-// backupPayload is the signed subset of a backup. It is kept separate from the
-// import-compatible Backup struct so the signature omits the Signature field
-// itself while covering every other exported field.
+// backupPayload is the signed subset of a backup. It mirrors the import-compatible
+// Backup struct so the signature covers every field that importBackup reads,
+// while omitting the Signature field itself.
 type backupPayload struct {
-	Version       string                    `json:"version"`
-	CreatedAt     time.Time                 `json:"created_at"`
-	Routes        []dto.RouteResponse       `json:"routes"`
-	OIDCProviders []safeOIDCProvider        `json:"oidc_providers,omitempty"`
-	WAFRules      []dto.WAFRuleResponse     `json:"waf_rules,omitempty"`
-	Certificates  []dto.CertificateResponse `json:"certificates,omitempty"`
-	Blacklists    []dto.BlacklistResponse   `json:"blacklists,omitempty"`
-	Whitelists    []dto.WhitelistResponse   `json:"whitelists,omitempty"`
-	RateLimits    []dto.RateLimitResponse   `json:"rate_limits,omitempty"`
-	Settings      map[string]string         `json:"settings,omitempty"`
+	Version       string               `json:"version"`
+	CreatedAt     time.Time            `json:"created_at"`
+	Routes        []store.Route        `json:"routes"`
+	OIDCProviders []store.OIDCProvider `json:"oidc_providers,omitempty"`
+	WAFRules      []store.WAFRule      `json:"waf_rules,omitempty"`
+	Certificates  []store.Certificate  `json:"certificates,omitempty"`
+	Blacklists    []store.Blacklist    `json:"blacklists,omitempty"`
+	Whitelists    []store.Whitelist    `json:"whitelists,omitempty"`
+	RateLimits    []store.RateLimit    `json:"rate_limits,omitempty"`
+	Settings      map[string]string    `json:"settings,omitempty"`
 }
 
 // backupHMAC returns the server-side HMAC of backup data for integrity verification.
@@ -100,15 +99,6 @@ func backupHMACWithKey(data, key []byte) string {
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// safeOIDCProvider is the redacted form used in backup exports.
-type safeOIDCProvider struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	ClientID     string `json:"client_id"`
-	DiscoveryURL string `json:"discovery_url"`
-	RedirectURL  string `json:"redirect_url"`
-}
-
 func (a *API) exportBackup(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUserFromContext(r.Context())
 
@@ -132,87 +122,33 @@ func (a *API) exportBackup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build safe DTO slices for export (omit sensitive fields)
-	routeResponses := make([]dto.RouteResponse, len(routes))
-	for i, r := range routes {
-		routeResponses[i] = dto.RouteFromStore(r)
-	}
-
-	safeProviders := make([]safeOIDCProvider, len(providers))
-	for i, p := range providers {
-		safeProviders[i] = safeOIDCProvider{
-			ID:           p.ID,
-			Name:         p.Name,
-			ClientID:     p.ClientID,
-			DiscoveryURL: p.DiscoveryURL,
-			RedirectURL:  p.RedirectURL,
-		}
-	}
-
-	wafResponses := make([]dto.WAFRuleResponse, len(rules))
-	for i, rl := range rules {
-		wafResponses[i] = dto.WAFFromStore(rl)
-	}
-
-	certResponses := make([]dto.CertificateResponse, len(certs))
-	for i, c := range certs {
-		certResponses[i] = dto.CertificateFromStore(c)
-	}
-
-	blResponses := make([]dto.BlacklistResponse, len(blacklists))
-	for i, b := range blacklists {
-		blResponses[i] = dto.BlacklistFromStore(b)
-	}
-
-	wlResponses := make([]dto.WhitelistResponse, len(whitelists))
-	for i, wl := range whitelists {
-		wlResponses[i] = dto.WhitelistFromStore(wl)
-	}
-
-	rlResponses := make([]dto.RateLimitResponse, len(rateLimits))
-	for i, rl := range rateLimits {
-		rlResponses[i] = dto.RateLimitFromStore(rl)
-	}
-
-	// Use an anonymous struct for JSON serialization so the export
-	// format can differ from the import-compatible Backup struct.
-	response := struct {
-		Version       string                    `json:"version"`
-		CreatedAt     time.Time                 `json:"created_at"`
-		Routes        []dto.RouteResponse       `json:"routes"`
-		OIDCProviders []safeOIDCProvider        `json:"oidc_providers,omitempty"`
-		WAFRules      []dto.WAFRuleResponse     `json:"waf_rules,omitempty"`
-		Certificates  []dto.CertificateResponse `json:"certificates,omitempty"`
-		Blacklists    []dto.BlacklistResponse   `json:"blacklists,omitempty"`
-		Whitelists    []dto.WhitelistResponse   `json:"whitelists,omitempty"`
-		RateLimits    []dto.RateLimitResponse   `json:"rate_limits,omitempty"`
-		Settings      map[string]string         `json:"settings,omitempty"`
-		Signature     string                    `json:"signature,omitempty"`
-	}{
+	// Build the import-compatible backup struct directly so the signed bytes
+	// cover every field that importBackup will read. Sensitive fields such as
+	// OIDC client secrets are excluded from JSON by struct tags on store types.
+	backup := Backup{
 		Version:       backupVersion,
 		CreatedAt:     time.Now(),
-		Routes:        routeResponses,
-		OIDCProviders: safeProviders,
-		WAFRules:      wafResponses,
-		Certificates:  certResponses,
-		Blacklists:    blResponses,
-		Whitelists:    wlResponses,
-		RateLimits:    rlResponses,
+		Routes:        routes,
+		OIDCProviders: providers,
+		WAFRules:      rules,
+		Certificates:  certs,
+		Blacklists:    blacklists,
+		Whitelists:    whitelists,
+		RateLimits:    rateLimits,
 		Settings:      settings,
 	}
 
-	// Serialize with a deterministic field order so the signature is stable.
-	unsigned, err := json.Marshal(response)
+	// Serialize without the signature so the HMAC covers every other field.
+	unsigned, err := json.Marshal(backup)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to serialize backup")
 		return
 	}
 
-	// Sign the backup so imports can verify integrity. Signature is omitted
-	// from the unsigned payload via `omitempty` while it is empty.
-	response.Signature = backupHMAC(unsigned)
+	// Sign the backup so imports can verify integrity.
+	backup.Signature = backupHMAC(unsigned)
 
-	signed, err := json.Marshal(response)
+	signed, err := json.Marshal(backup)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to serialize signed backup")
 		return
