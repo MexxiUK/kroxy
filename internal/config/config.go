@@ -33,7 +33,10 @@ const (
 )
 
 func Load() (*Config, error) {
-	productionMode := getEnvBool("KROXY_PRODUCTION", false)
+	productionMode, err := getEnvBool("KROXY_PRODUCTION", false)
+	if err != nil {
+		return nil, err
+	}
 
 	databasePath := getEnv("KROXY_DB", "./kroxy.db")
 
@@ -47,13 +50,22 @@ func Load() (*Config, error) {
 		}
 	}
 
-	allowPrivateBackends := getEnvBool("KROXY_ALLOW_PRIVATE_BACKENDS", false)
+	allowPrivateBackends, err := getEnvBool("KROXY_ALLOW_PRIVATE_BACKENDS", false)
+	if err != nil {
+		return nil, err
+	}
 	if allowPrivateBackends && productionMode {
 		return nil, fmt.Errorf("KROXY_ALLOW_PRIVATE_BACKENDS cannot be enabled in production mode")
 	}
 
-	tlsEnabled := getEnvBool("KROXY_TLS_ENABLED", false)
-	tlsAutoHTTPS := getEnvBool("KROXY_AUTO_HTTPS", false)
+	tlsEnabled, err := getEnvBool("KROXY_TLS_ENABLED", false)
+	if err != nil {
+		return nil, err
+	}
+	tlsAutoHTTPS, err := getEnvBool("KROXY_AUTO_HTTPS", false)
+	if err != nil {
+		return nil, err
+	}
 	tlsACMEEmail := getEnv("KROXY_ACME_EMAIL", "")
 	tlsCertPath := getEnv("KROXY_TLS_CERT", "")
 	tlsKeyPath := getEnv("KROXY_TLS_KEY", "")
@@ -93,6 +105,19 @@ func Load() (*Config, error) {
 		}
 	}
 
+	enableMetrics, err := getEnvBool("KROXY_ENABLE_METRICS", false)
+	if err != nil {
+		return nil, err
+	}
+	hstsEnabled, err := getEnvBool("KROXY_HSTS_ENABLED", true)
+	if err != nil {
+		return nil, err
+	}
+	redirectHTTP, err := getEnvBool("KROXY_REDIRECT_HTTP", true)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		AdminAddr:            adminAddr,
 		DatabasePath:         databasePath,
@@ -100,7 +125,7 @@ func Load() (*Config, error) {
 		HTTPSAddr:            getEnv("KROXY_HTTPS_ADDR", ":443"),
 		ProductionMode:       productionMode,
 		MaxRequestSize:       getEnvInt64("KROXY_MAX_REQUEST_SIZE", DefaultMaxRequestSize),
-		EnableMetrics:        getEnvBool("KROXY_ENABLE_METRICS", false),
+		EnableMetrics:        enableMetrics,
 		AllowPrivateBackends: allowPrivateBackends,
 		TLSEnabled:           tlsEnabled,
 		TLSCertPath:          tlsCertPath,
@@ -108,8 +133,8 @@ func Load() (*Config, error) {
 		TLSACMEEmail:         tlsACMEEmail,
 		TLSAutoHTTPS:         tlsAutoHTTPS,
 		TLSMinVersion:        getEnv("KROXY_TLS_MIN_VERSION", "1.2"),
-		HSTSEnabled:          getEnvBool("KROXY_HSTS_ENABLED", true),
-		RedirectHTTP:         getEnvBool("KROXY_REDIRECT_HTTP", true),
+		HSTSEnabled:          hstsEnabled,
+		RedirectHTTP:         redirectHTTP,
 	}
 
 	return cfg, nil
@@ -138,16 +163,16 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-func getEnvBool(key string, defaultVal bool) bool {
+func getEnvBool(key string, defaultVal bool) (bool, error) {
 	val := os.Getenv(key)
 	if val == "" {
-		return defaultVal
+		return defaultVal, nil
 	}
 	b, err := strconv.ParseBool(val)
 	if err != nil {
-		return defaultVal
+		return false, fmt.Errorf("%s must be a valid boolean (true/false/1/0), got %q", key, val)
 	}
-	return b
+	return b, nil
 }
 
 func getEnvInt64(key string, defaultVal int64) int64 {
