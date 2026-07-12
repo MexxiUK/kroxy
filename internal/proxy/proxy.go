@@ -122,14 +122,11 @@ func New(s *store.Store, cfg *config.Config) (*Proxy, error) {
 		SigningKey:    signingKey,
 	}, audit.GetLogger(), nil, "block")
 	if err != nil {
-		log.Printf("Warning: WAF initialization failed: %v", err)
-		// Continue without WAF
+		return nil, fmt.Errorf("WAF initialization failed: %w", err)
 	}
 
 	// Set global WAF for handler access
-	if wafInstance != nil {
-		SetGlobalWAF(wafInstance)
-	}
+	SetGlobalWAF(wafInstance)
 
 	return &Proxy{
 		store:      s,
