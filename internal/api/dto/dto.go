@@ -283,6 +283,82 @@ func RateLimitFromStore(rl store.RateLimit) RateLimitResponse {
 	}
 }
 
+// BlacklistRequest is the API input for creating a blacklist entry.
+// Excludes server-managed fields (ID, CreatedAt) to prevent mass-assignment.
+type BlacklistRequest struct {
+	Type    string `json:"type"`
+	Value   string `json:"value"`
+	Enabled bool   `json:"enabled"`
+}
+
+// ToStore maps a BlacklistRequest to a store.Blacklist.
+func (req BlacklistRequest) ToStore() store.Blacklist {
+	return store.Blacklist{
+		Type:    req.Type,
+		Value:   req.Value,
+		Enabled: req.Enabled,
+	}
+}
+
+// WhitelistRequest is the API input for creating a whitelist entry.
+// Excludes server-managed fields (ID, CreatedAt) to prevent mass-assignment.
+type WhitelistRequest struct {
+	Type    string `json:"type"`
+	Value   string `json:"value"`
+	Enabled bool   `json:"enabled"`
+}
+
+// ToStore maps a WhitelistRequest to a store.Whitelist.
+func (req WhitelistRequest) ToStore() store.Whitelist {
+	return store.Whitelist{
+		Type:    req.Type,
+		Value:   req.Value,
+		Enabled: req.Enabled,
+	}
+}
+
+// RateLimitRequest is the API input for creating or updating a rate limit.
+// Excludes server-managed fields (ID) to prevent mass-assignment.
+type RateLimitRequest struct {
+	Domain            string `json:"domain"`
+	RequestsPerMinute int    `json:"requests_per_minute"`
+	Burst             int    `json:"burst"`
+	Enabled           bool   `json:"enabled"`
+}
+
+// ToStore maps a RateLimitRequest to a store.RateLimit.
+func (req RateLimitRequest) ToStore() store.RateLimit {
+	return store.RateLimit{
+		Domain:            req.Domain,
+		RequestsPerMinute: req.RequestsPerMinute,
+		Burst:             req.Burst,
+		Enabled:           req.Enabled,
+	}
+}
+
+// WAFRuleRequest is the API input for creating or updating a WAF rule.
+// Excludes server-managed fields (ID) to prevent mass-assignment.
+type WAFRuleRequest struct {
+	Name       string `json:"name"`
+	Rule       string `json:"rule"`
+	Enabled    bool   `json:"enabled"`
+	Mode       string `json:"mode"`
+	Exclusions string `json:"exclusions,omitempty"`
+	RouteID    *int   `json:"route_id,omitempty"`
+}
+
+// ToStore maps a WAFRuleRequest to a store.WAFRule.
+func (req WAFRuleRequest) ToStore() store.WAFRule {
+	return store.WAFRule{
+		Name:       req.Name,
+		Rule:       req.Rule,
+		Enabled:    req.Enabled,
+		Mode:       req.Mode,
+		Exclusions: req.Exclusions,
+		RouteID:    req.RouteID,
+	}
+}
+
 // HealthStatusResponse is the safe API representation of a backend health status.
 // Omits Backend (internal URL) to prevent information disclosure.
 type HealthStatusResponse struct {
