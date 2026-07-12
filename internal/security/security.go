@@ -84,23 +84,32 @@ func parseClientIP(s string) (string, bool) {
 // can be configured via KROXY_TRUSTED_PROXIES environment variable
 // (comma-separated list of IP addresses or CIDR ranges)
 func isTrustedProxy(ip string) bool {
-	// Trust localhost
-	if ip == "127.0.0.1" || ip == "::1" {
+	// Canonicalize the candidate before comparison so equivalent forms
+	// (e.g. "::1" vs "0:0:0:0:0:0:0:1") match consistently.
+	candidate, ok := parseClientIP(ip)
+	if !ok {
+		return false
+	}
+
+	// Trust localhost after canonicalization.
+	if candidate == "127.0.0.1" || candidate == "::1" {
 		return true
 	}
 
 	// Check configured trusted proxies
 	trustedProxies := getTrustedProxies()
 	for _, trusted := range trustedProxies {
-		if trusted == ip {
-			return true
-		}
-		// Check CIDR range
-		if strings.Contains(trusted, "/") {
-			_, network, err := net.ParseCIDR(trusted)
-			if err == nil && network.Contains(net.ParseIP(ip)) {
+		// Exact match: canonicalize non-CIDR entries too.
+		if !strings.Contains(trusted, "/") {
+			if parsed, ok := parseClientIP(trusted); ok && parsed == candidate {
 				return true
 			}
+			continue
+		}
+		// Check CIDR range against the raw IP parsed from the connection.
+		_, network, err := net.ParseCIDR(trusted)
+		if err == nil && network.Contains(net.ParseIP(ip)) {
+			return true
 		}
 	}
 
