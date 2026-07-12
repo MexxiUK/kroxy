@@ -32,7 +32,6 @@ linters:
       locale: US
     gosec:
       excludes:
-        - G104  # Unhandled errors (covered by errcheck)
         - G307  # Deferring unsafe Close
         - G115  # Integer overflow conversion
 
