@@ -86,11 +86,6 @@ jobs:
             p/secrets
             p/owasp-top-ten
 
-      - name: Dependency Review
-        # Dependency graph is not enabled for this repository.
-        continue-on-error: true
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
 
   lint:
     name: Lint
