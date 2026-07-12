@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -635,4 +637,95 @@ func TestCheckSessionBinding_LegacySession(t *testing.T) {
 	if !a.checkSessionBinding(req, session, "sess-id") {
 		t.Fatal("expected legacy session to pass")
 	}
+}
+
+func TestAPIKeyRateLimit_Atomic(t *testing.T) {
+	a, _, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	const ip = "127.0.0.1"
+	const workers = 50
+
+	var wg sync.WaitGroup
+	release := make(chan struct{})
+	var acquired int64
+	var rejected int64
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if a.checkAndRecordAPIKeyAttempt(ip) {
+				// Use atomics because the goroutine may be released by main before
+				// it finishes its own bookkeeping.
+				atomic.AddInt64(&acquired, 1)
+				<-release
+				a.releaseAPIKeyAttempt(ip)
+			} else {
+				atomic.AddInt64(&rejected, 1)
+			}
+		}()
+	}
+
+	// Wait until every worker has either acquired a slot or been rejected.
+	for {
+		if atomic.LoadInt64(&acquired)+atomic.LoadInt64(&rejected) == workers {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	if acquired > 10 {
+		t.Fatalf("expected at most 10 concurrent attempts, got %d", acquired)
+	}
+	if rejected == 0 {
+		t.Fatal("expected some requests to be rejected by the rate limit")
+	}
+
+	close(release)
+	wg.Wait()
+}
+
+func Test2FARateLimit_Atomic(t *testing.T) {
+	a, _, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	const userID = 1
+	const ip = "127.0.0.1"
+	const workers = 20
+
+	var wg sync.WaitGroup
+	release := make(chan struct{})
+	var acquired int64
+	var rejected int64
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := a.checkAndRecord2FARateLimit(userID, ip); err == nil {
+				atomic.AddInt64(&acquired, 1)
+				<-release
+			} else {
+				atomic.AddInt64(&rejected, 1)
+			}
+		}()
+	}
+
+	for {
+		if atomic.LoadInt64(&acquired)+atomic.LoadInt64(&rejected) == workers {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	if acquired >= 5 {
+		t.Fatalf("expected fewer than 5 concurrent 2FA attempts before lockout, got %d", acquired)
+	}
+	if rejected == 0 {
+		t.Fatal("expected some 2FA requests to be rejected by the rate limit")
+	}
+
+	close(release)
+	wg.Wait()
 }
