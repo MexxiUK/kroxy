@@ -29,7 +29,7 @@ services:
     volumes:
       - kroxy-data:/data
     environment:
-      - KROXY_ADMIN=:8080
+      - KROXY_ADMIN=127.0.0.1:8080
       - KROXY_DB=/data/kroxy.db
       - KROXY_PRODUCTION=true
       - KROXY_TLS_ENABLED=true
@@ -239,7 +239,7 @@ See [`.env.example`](../.env.example) for a complete reference of all supported 
 
 ### Admin panel is not accessible
 
-- Verify the admin port is bound correctly. By default it is `127.0.0.1:8081` (inside the container). In the compose example above it is changed to `:8080`.
+- Verify the admin port is bound correctly. By default it is `127.0.0.1:8081` (inside the container). In the compose example above it is changed to `127.0.0.1:8080`.
 - Check Docker port mapping: `docker compose ps`.
 - Review logs: `docker compose logs -f kroxy`.
 

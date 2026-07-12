@@ -128,22 +128,22 @@ type pending2FASession struct {
 
 // Auth provides authentication middleware for the Admin API
 type Auth struct {
-	store              *store.Store
-	sessions           sync.Map                  // sessionID -> *Session
-	apiKeys            sync.Map                  // keyID -> *APIKey
-	stateStore         sync.Map                  // state -> *StateInfo
-	failedAttempts     sync.Map                  // email -> *failedAttempt
-	roleCache          sync.Map                  // userID (int) -> *roleCacheEntry
-	sessionMu          sync.Map                  // userID (int) -> *sync.Mutex (for atomic session operations)
-	apiKeyAttempts     sync.Map                  // IP -> *apiKeyAttempt     // Track failed API key attempts (bcrypt DoS protection)
-	distributedAttack  *distributedAttackTracker // Credential stuffing detection
-	pending2FA         sync.Map                  // pendingID -> *pending2FASession
-	twoFARateLimits    sync.Map                  // userID (int) -> *twoFARateLimit
-	jwtSecret          []byte
-	sessionExpiry      time.Duration
-	productionMode     bool        // When false, cookies don't require HTTPS
-	dbUpdateCh         chan func() // Background worker for async DB writes
-	dbUpdateOnce       sync.Once   // Ensures worker starts once
+	store             *store.Store
+	sessions          sync.Map                  // sessionID -> *Session
+	apiKeys           sync.Map                  // keyID -> *APIKey
+	stateStore        sync.Map                  // state -> *StateInfo
+	failedAttempts    sync.Map                  // email -> *failedAttempt
+	roleCache         sync.Map                  // userID (int) -> *roleCacheEntry
+	sessionMu         sync.Map                  // userID (int) -> *sync.Mutex (for atomic session operations)
+	apiKeyAttempts    sync.Map                  // IP -> *apiKeyAttempt     // Track failed API key attempts (bcrypt DoS protection)
+	distributedAttack *distributedAttackTracker // Credential stuffing detection
+	pending2FA        sync.Map                  // pendingID -> *pending2FASession
+	twoFARateLimits   sync.Map                  // userID (int) -> *twoFARateLimit
+	jwtSecret         []byte
+	sessionExpiry     time.Duration
+	productionMode    bool        // When false, cookies don't require HTTPS
+	dbUpdateCh        chan func() // Background worker for async DB writes
+	dbUpdateOnce      sync.Once   // Ensures worker starts once
 }
 
 // twoFARateLimit tracks 2FA verification attempts per user to prevent brute-forcing
@@ -246,9 +246,21 @@ func New(s *store.Store) *Auth {
 		log.Printf("WARNING: KROXY_JWT_SECRET is only %d characters. Recommended minimum is 32 characters.", len(jwtSecret)) // #nosec G706 — %d prints an integer length, not user input
 	}
 
+	// Load session duration from settings, falling back to 24 hours.
+	sessionExpiry := 24 * time.Hour
+	if s != nil {
+		if d := s.GetSettingDefault("session_duration", ""); d != "" {
+			if parsed, err := time.ParseDuration(d); err == nil && parsed > 0 {
+				sessionExpiry = parsed
+			} else if err != nil {
+				log.Printf("WARNING: invalid session_duration setting %q, using default 24h: %v", d, err)
+			}
+		}
+	}
+
 	a := &Auth{
 		store:          s,
-		sessionExpiry:  24 * time.Hour,
+		sessionExpiry:  sessionExpiry,
 		jwtSecret:      []byte(jwtSecret),
 		productionMode: productionMode,
 		dbUpdateCh:     make(chan func(), 100),
@@ -903,7 +915,6 @@ func (a *Auth) checkSessionBinding(r *http.Request, session *Session, sessionID 
 	}
 	return true
 }
-
 
 // Login authenticates a user and creates a session
 func (a *Auth) Login(email, password, ip, userAgent string) (*LoginResponse, error) {

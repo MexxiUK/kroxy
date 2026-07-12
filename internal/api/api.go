@@ -802,17 +802,22 @@ func (a *API) setup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Require a setup token to prevent unauthorized first-admin creation.
+	// Setup is disabled entirely when no token is configured, matching the
+	// warning logged at startup.
 	expectedToken, configured := setupToken()
-	if configured {
-		suppliedToken := r.Header.Get("X-Setup-Token")
-		if suppliedToken == "" {
-			respondError(w, http.StatusUnauthorized, "Setup token required")
-			return
-		}
-		if subtle.ConstantTimeCompare([]byte(suppliedToken), []byte(expectedToken)) != 1 {
-			respondError(w, http.StatusUnauthorized, "Invalid setup token")
-			return
-		}
+	if !configured {
+		respondError(w, http.StatusServiceUnavailable, "Setup is disabled because no KROXY_SETUP_TOKEN is configured")
+		return
+	}
+
+	suppliedToken := r.Header.Get("X-Setup-Token")
+	if suppliedToken == "" {
+		respondError(w, http.StatusUnauthorized, "Setup token required")
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(suppliedToken), []byte(expectedToken)) != 1 {
+		respondError(w, http.StatusUnauthorized, "Invalid setup token")
+		return
 	}
 
 	// Prevent race condition where two concurrent requests both see zero users

@@ -51,7 +51,7 @@ services:
 
     labels:
       - "com.kroxy.description=Self-hosted reverse proxy with WAF and OIDC"
-      - "com.kroxy.security=hardened"
+      - "com.kroxy.security=development"
 
     healthcheck:
       test: ["CMD", "curl", "-f", "-s", "http://127.0.0.1:8080/ready"]
