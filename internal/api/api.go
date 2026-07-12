@@ -3625,6 +3625,10 @@ func (a *API) updateSecuritySettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.SessionDuration != "" {
+		if err := validation.ValidateSessionDuration(req.SessionDuration); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if err := a.store.SetSetting("session_duration", req.SessionDuration); err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to save session duration")
 			return
@@ -3680,24 +3684,40 @@ func (a *API) updateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.ListenPort != "" {
+		if err := validation.ValidatePort(req.ListenPort, "listen_port"); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if err := a.store.SetSetting("listen_port", req.ListenPort); err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to save listen port")
 			return
 		}
 	}
 	if req.HTTPSPort != "" {
+		if err := validation.ValidatePort(req.HTTPSPort, "https_port"); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if err := a.store.SetSetting("https_port", req.HTTPSPort); err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to save HTTPS port")
 			return
 		}
 	}
-	if req.MaxConnections > 0 {
+	if req.MaxConnections != 0 {
+		if err := validation.ValidateMaxConnections(req.MaxConnections); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if err := a.store.SetSetting("max_connections", strconv.Itoa(req.MaxConnections)); err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to save max connections")
 			return
 		}
 	}
 	if req.RequestTimeout != "" {
+		if err := validation.ValidateRequestTimeout(req.RequestTimeout); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if err := a.store.SetSetting("request_timeout", req.RequestTimeout); err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to save request timeout")
 			return

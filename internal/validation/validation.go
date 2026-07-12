@@ -1060,6 +1060,73 @@ func ValidateCustomHeaders(headersJSON string) error {
 	return nil
 }
 
+// ValidateSessionDuration validates a session-duration setting string.
+// The value must be a positive Go duration between 1 minute and 30 days.
+func ValidateSessionDuration(value string) error {
+	if value == "" {
+		return errors.New("session duration is required")
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return fmt.Errorf("invalid session_duration %q: %w", value, err)
+	}
+	if d <= 0 {
+		return fmt.Errorf("invalid session_duration %q: must be positive", value)
+	}
+	const minSessionDuration = time.Minute
+	const maxSessionDuration = 720 * time.Hour // 30 days
+	if d < minSessionDuration || d > maxSessionDuration {
+		return fmt.Errorf("invalid session_duration %q: must be between %s and %s", value, minSessionDuration, maxSessionDuration)
+	}
+	return nil
+}
+
+// ValidatePort validates a TCP port string and labels errors with the supplied
+// field name (e.g. "listen_port" or "https_port").
+func ValidatePort(value, field string) error {
+	if value == "" {
+		return fmt.Errorf("%s is required", field)
+	}
+	port, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("invalid %s %q: must be an integer", field, value)
+	}
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("invalid %s %d: must be between 1 and 65535", field, port)
+	}
+	return nil
+}
+
+// ValidateMaxConnections validates a maximum-connections setting.
+func ValidateMaxConnections(value int) error {
+	const maxMaxConnections = 1_000_000
+	if value < 1 || value > maxMaxConnections {
+		return fmt.Errorf("invalid max_connections %d: must be between 1 and %d", value, maxMaxConnections)
+	}
+	return nil
+}
+
+// ValidateRequestTimeout validates a request-timeout setting string.
+// The value must be a positive Go duration between 1 second and 1 hour.
+func ValidateRequestTimeout(value string) error {
+	if value == "" {
+		return errors.New("request timeout is required")
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return fmt.Errorf("invalid request_timeout %q: %w", value, err)
+	}
+	if d <= 0 {
+		return fmt.Errorf("invalid request_timeout %q: must be positive", value)
+	}
+	const minRequestTimeout = time.Second
+	const maxRequestTimeout = time.Hour
+	if d < minRequestTimeout || d > maxRequestTimeout {
+		return fmt.Errorf("invalid request_timeout %q: must be between %s and %s", value, minRequestTimeout, maxRequestTimeout)
+	}
+	return nil
+}
+
 // ValidateWhitelist validates a whitelist entry
 func ValidateWhitelist(whitelistType, value string) error {
 	// Validate type

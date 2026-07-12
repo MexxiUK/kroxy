@@ -306,3 +306,119 @@ func TestValidateWAFRule(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSessionDuration(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{"valid hours", "24h", false},
+		{"valid minutes", "30m", false},
+		{"valid max", "720h", false},
+		{"empty", "", true},
+		{"invalid format", "tomorrow", true},
+		{"zero", "0s", true},
+		{"negative", "-1h", true},
+		{"too short", "30s", true},
+		{"too long", "721h", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateSessionDuration(tt.value)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateSessionDuration(%q) expected error, got nil", tt.value)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateSessionDuration(%q) unexpected error: %v", tt.value, err)
+			}
+		})
+	}
+}
+
+func TestValidatePort(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{"valid low", "1", false},
+		{"valid high", "65535", false},
+		{"valid http", "80", false},
+		{"empty", "", true},
+		{"not a number", "abc", true},
+		{"zero", "0", true},
+		{"negative", "-1", true},
+		{"too high", "65536", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePort(tt.value, "listen_port")
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidatePort(%q) expected error, got nil", tt.value)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidatePort(%q) unexpected error: %v", tt.value, err)
+			}
+		})
+	}
+}
+
+func TestValidateMaxConnections(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   int
+		wantErr bool
+	}{
+		{"valid low", 1, false},
+		{"valid default", 1000, false},
+		{"valid high", 1_000_000, false},
+		{"zero", 0, true},
+		{"negative", -1, true},
+		{"too high", 1_000_001, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateMaxConnections(tt.value)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateMaxConnections(%d) expected error, got nil", tt.value)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateMaxConnections(%d) unexpected error: %v", tt.value, err)
+			}
+		})
+	}
+}
+
+func TestValidateRequestTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{"valid seconds", "30s", false},
+		{"valid minutes", "5m", false},
+		{"valid max", "1h", false},
+		{"empty", "", true},
+		{"invalid format", "fast", true},
+		{"zero", "0s", true},
+		{"negative", "-1s", true},
+		{"too short", "500ms", true},
+		{"too long", "1h1s", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRequestTimeout(tt.value)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateRequestTimeout(%q) expected error, got nil", tt.value)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateRequestTimeout(%q) unexpected error: %v", tt.value, err)
+			}
+		})
+	}
+}
