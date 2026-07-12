@@ -32,6 +32,10 @@ const (
 	// 12 is recommended for modern systems (higher than DefaultCost of 10)
 	bcryptCost = 12
 
+	// apiKeyHMACPrefix marks API key HMAC values that use the domain-separated
+	// derivation instead of the raw encryption key (legacy).
+	apiKeyHMACPrefix = "v2:"
+
 	// maxFailedAttempts is the number of failed login attempts before account lockout
 	maxFailedAttempts = 3
 
@@ -774,8 +778,16 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 
 	// Fast HMAC pre-check before bcrypt to mitigate DoS from random secrets (CRIT-004).
 	// Legacy keys with no stored HMAC fall through to bcrypt verification.
+	// New keys use a domain-separated HMAC subkey; legacy keys use the raw
+	// encryption key. The version prefix selects the expected algorithm.
 	if apiKey.KeySecretHMAC != "" {
-		if !hmac.Equal([]byte(apiKeyHMAC(keySecret)), []byte(apiKey.KeySecretHMAC)) {
+		var expected string
+		if strings.HasPrefix(apiKey.KeySecretHMAC, apiKeyHMACPrefix) {
+			expected = apiKeyHMAC(keySecret)
+		} else {
+			expected = legacyAPIKeyHMAC(keySecret)
+		}
+		if !hmac.Equal([]byte(expected), []byte(apiKey.KeySecretHMAC)) {
 			a.recordAPIKeyFailure(ip)
 			log.Printf("AUDIT: API key authentication failed for key_id=%s", strings.ReplaceAll(keyID, "\n", " "))
 			return nil, errors.New("invalid API key secret")
@@ -1242,6 +1254,15 @@ func (a *Auth) Verify2FA(pendingID, code, ip, userAgent string) (*LoginResponse,
 		return nil, errors.New("2FA session expired")
 	}
 
+	// Bind the pending 2FA session to the IP and User-Agent used at login.
+	// This prevents an attacker who steals the pending cookie from completing
+	// 2FA from a different device/network.
+	if pending.ip != ip || pending.userAgent != userAgent {
+		a.pending2FA.Delete(pendingID)
+		log.Printf("SECURITY: 2FA session binding mismatch for user_id=%d pending_id=%s", pending.userID, pendingID)
+		return nil, errors.New("2FA session binding mismatch")
+	}
+
 	// Check per-user 2FA rate limit (prevents brute-force across multiple pending sessions)
 	if err := a.check2FARateLimit(pending.userID, ip); err != nil {
 		return nil, err
@@ -1509,11 +1530,25 @@ func sha256Sum(input string) string {
 	return base64.URLEncoding.EncodeToString(hash[:])
 }
 
-// apiKeyHMAC returns a server-side HMAC of an API key secret.
-// It uses the configured encryption key so that guessing random secrets requires
-// both the key ID and a valid HMAC, avoiding bcrypt work for invalid secrets.
-// Returns an empty string when no encryption key is available (legacy/dev fallback).
+// apiKeyHMAC returns a server-side HMAC of an API key secret using a key
+// derived specifically for this purpose (domain separation from AES encryption).
+// Guessing random secrets requires both the key ID and a valid HMAC, avoiding
+// bcrypt work for invalid secrets. Returns an empty string when no encryption
+// key is available (legacy/dev fallback).
 func apiKeyHMAC(secret string) string {
+	key, err := crypto.GetEncryptionKey()
+	if err != nil {
+		return ""
+	}
+	mac := hmac.New(sha256.New, deriveAPIKeyHMACKey(key))
+	mac.Write([]byte(secret))
+	return apiKeyHMACPrefix + base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// legacyAPIKeyHMAC is the original pre-check used for keys created before the
+// domain-separated derivation was introduced. It is kept only so existing keys
+// continue to work; newly created keys always use apiKeyHMAC.
+func legacyAPIKeyHMAC(secret string) string {
 	key, err := crypto.GetEncryptionKey()
 	if err != nil {
 		return ""
@@ -1521,6 +1556,14 @@ func apiKeyHMAC(secret string) string {
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(secret))
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// deriveAPIKeyHMACKey derives a domain-separated HMAC key from the encryption key
+// using HMAC-SHA256 with a fixed context label.
+func deriveAPIKeyHMACKey(key []byte) []byte {
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte("kroxy-api-key-hmac-v1"))
+	return mac.Sum(nil)
 }
 
 // GenerateState creates a cryptographically secure state parameter

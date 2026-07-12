@@ -37,24 +37,46 @@ func GetClientIP(r *http.Request) string {
 				// If the candidate is a trusted proxy, keep walking left;
 				// otherwise we found the client IP.
 				if !isTrustedProxy(candidate) {
-					return candidate
+					if validIP, ok := parseClientIP(candidate); ok {
+						return validIP
+					}
+					// Malformed IP in the chain: keep walking left rather than
+					// returning attacker-controlled text.
+					continue
 				}
 			}
 		}
 
 		// Check X-Real-IP (nginx)
 		if xri := r.Header.Get("X-Real-IP"); xri != "" {
-			return strings.TrimSpace(xri)
+			if validIP, ok := parseClientIP(xri); ok {
+				return validIP
+			}
 		}
 
 		// Check CF-Connecting-IP (Cloudflare)
 		if cf := r.Header.Get("CF-Connecting-IP"); cf != "" {
-			return strings.TrimSpace(cf)
+			if validIP, ok := parseClientIP(cf); ok {
+				return validIP
+			}
 		}
 	}
 
 	// Fall back to RemoteAddr (direct connection or untrusted proxy)
 	return remoteIP
+}
+
+// parseClientIP validates and canonicalizes an IP address string.
+// It returns the canonical IP and true if the input is a valid IPv4 or IPv6
+// address; otherwise it returns "", false.
+func parseClientIP(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, "[]")
+	ip := net.ParseIP(s)
+	if ip == nil {
+		return "", false
+	}
+	return ip.String(), true
 }
 
 // isTrustedProxy checks if the request comes from a trusted proxy

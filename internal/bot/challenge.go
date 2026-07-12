@@ -70,7 +70,9 @@ type ChallengeManager struct {
 
 // NewChallengeManager creates a challenge manager with a secret key.
 func NewChallengeManager(secret string) *ChallengeManager {
-	return &ChallengeManager{secret: []byte(secret)}
+	cm := &ChallengeManager{secret: []byte(secret)}
+	cm.nonceCleanup.Do(cm.startCleanup)
+	return cm
 }
 
 // GenerateChallenge creates a new challenge nonce and difficulty.
@@ -221,7 +223,8 @@ func (cm *ChallengeManager) consumeNonce(nonce string) bool {
 	return !loaded
 }
 
-// startCleanup begins a background goroutine that removes expired nonces.
+// startCleanup begins a background goroutine that removes expired nonces and
+// stale per-IP challenge rate-limit entries.
 func (cm *ChallengeManager) startCleanup() {
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
@@ -229,8 +232,16 @@ func (cm *ChallengeManager) startCleanup() {
 		for range ticker.C {
 			now := time.Now()
 			cm.consumedNonces.Range(func(key, value interface{}) bool {
-				if cn, ok := value.(*consumedNonce); ok {
-					if now.After(cn.expiresAt) {
+				switch v := value.(type) {
+				case *consumedNonce:
+					if now.After(v.expiresAt) {
+						cm.consumedNonces.Delete(key)
+					}
+				case *verifyRateLimit:
+					v.mu.Lock()
+					stale := now.Sub(v.window) > time.Minute
+					v.mu.Unlock()
+					if stale {
 						cm.consumedNonces.Delete(key)
 					}
 				}

@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -283,6 +284,8 @@ var adminInjectionPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)0x[2722]`),
 }
 
+const adminMaxBodySize = 1 << 20 // 1MB
+
 func adminInputValidation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// WAF rule payloads legitimately contain XSS/SQLi patterns for detection;
@@ -293,9 +296,22 @@ func adminInputValidation(next http.Handler) http.Handler {
 		}
 		// Inspect requests with a body (including chunked transfers where ContentLength == -1)
 		if r.Body != nil && r.ContentLength != 0 {
-			body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1MB limit
+			// Reject bodies that are known to exceed the limit up-front.
+			if r.ContentLength > adminMaxBodySize {
+				http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			// Read the body using MaxBytesReader so we detect truncation instead of
+			// silently accepting only the first 1MB.
+			limited := http.MaxBytesReader(w, r.Body, adminMaxBodySize)
+			body, err := io.ReadAll(limited)
 			if err != nil {
-				http.Error(w, "Bad request", http.StatusBadRequest)
+				var maxBytesErr *http.MaxBytesError
+				if errors.As(err, &maxBytesErr) {
+					http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+				} else {
+					http.Error(w, "Bad request", http.StatusBadRequest)
+				}
 				return
 			}
 			r.Body = io.NopCloser(bytes.NewReader(body))
@@ -327,9 +343,10 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		}
 		// Referrer policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		// Content Security Policy with nonce (no unsafe-inline)
+		// Content Security Policy with nonce. 'unsafe-inline' is intentionally
+		// omitted for both scripts and styles so the nonce policy is effective.
 		w.Header().Set("Content-Security-Policy", fmt.Sprintf(
-			"default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'nonce-%s' 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com",
+			"default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'nonce-%s'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com",
 			nonce, nonce,
 		))
 		// Permissions Policy

@@ -409,6 +409,48 @@ func TestVerify2FA_TooManyAttempts(t *testing.T) {
 	}
 }
 
+func TestVerify2FA_SessionBindingMismatch(t *testing.T) {
+	a, s, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	secret, _, err := totp.GenerateSecret("kroxy", "user@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encSecret, err := crypto.Encrypt(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	u := seedUser(t, s, "user@example.com", "Password123!", "user", true)
+	if err := s.UpdateTOTPSecret(u.ID, encSecret); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EnableTOTP(u.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := a.Login("user@example.com", "Password123!", "127.0.0.1", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	code, err := pquernatotp.GenerateCode(secret, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Different IP or User-Agent must be rejected.
+	_, err = a.Verify2FA(resp.PendingID, code, "10.0.0.1", "test")
+	if err == nil {
+		t.Fatal("expected 2FA session binding mismatch error")
+	}
+	_, err = a.Verify2FA(resp.PendingID, code, "127.0.0.1", "attacker")
+	if err == nil {
+		t.Fatal("expected 2FA session binding mismatch error for user agent")
+	}
+}
+
 func TestCheckSessionBinding_Disabled(t *testing.T) {
 	a, _, cleanup := newTestAuth(t)
 	defer cleanup()
