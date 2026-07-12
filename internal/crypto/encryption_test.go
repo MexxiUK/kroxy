@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"os"
 	"testing"
@@ -178,6 +179,39 @@ func TestIsEncryptionAvailable_NotAvailable(t *testing.T) {
 
 	if IsEncryptionAvailable() {
 		t.Fatal("Expected IsEncryptionAvailable to be false without key in production")
+	}
+}
+
+func TestGetBackupHMACKey_DerivedAndStable(t *testing.T) {
+	// #nosec G104 — test environment setup.
+	os.Setenv("KROXY_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	os.Unsetenv("KROXY_PRODUCTION")
+	ResetEncryptionKeyForTest()
+	ResetBackupHMACKeyForTest()
+	defer os.Unsetenv("KROXY_ENCRYPTION_KEY")
+
+	encKey, err := GetEncryptionKey()
+	if err != nil {
+		t.Fatalf("GetEncryptionKey failed: %v", err)
+	}
+
+	derived1, err := GetBackupHMACKey()
+	if err != nil {
+		t.Fatalf("GetBackupHMACKey failed: %v", err)
+	}
+	if len(derived1) != sha256.Size {
+		t.Fatalf("expected derived key length %d, got %d", sha256.Size, len(derived1))
+	}
+	if string(derived1) == string(encKey) {
+		t.Errorf("backup HMAC key must differ from the encryption key")
+	}
+
+	derived2, err := GetBackupHMACKey()
+	if err != nil {
+		t.Fatalf("GetBackupHMACKey second call failed: %v", err)
+	}
+	if string(derived1) != string(derived2) {
+		t.Errorf("backup HMAC key must be deterministic")
 	}
 }
 
