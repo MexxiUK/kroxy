@@ -50,6 +50,58 @@ func newTestStore(t *testing.T) (*store.Store, func()) {
 	return s, cleanup
 }
 
+func newTestAPIWithEnv(t *testing.T, prod, insecure bool) (*API, func()) {
+	s, cleanupStore := newTestStore(t)
+	// #nosec G104 — test environment setup.
+	os.Setenv("KROXY_JWT_SECRET", "test-secret-test-secret-test-secret-test")
+	if prod {
+		// #nosec G104 — test environment setup.
+		os.Setenv("KROXY_PRODUCTION", "true")
+	}
+	if insecure {
+		// #nosec G104 — test environment setup.
+		os.Setenv("KROXY_INSECURE_COOKIES", "true")
+	}
+	a := New(s, 0)
+	cleanup := func() {
+		cleanupStore()
+		os.Unsetenv("KROXY_JWT_SECRET")
+		os.Unsetenv("KROXY_PRODUCTION")
+		os.Unsetenv("KROXY_INSECURE_COOKIES")
+	}
+	return a, cleanup
+}
+
+func TestCsrfCookie_ProductionIgnoresInsecureOverride(t *testing.T) {
+	a, cleanup := newTestAPIWithEnv(t, true, true)
+	defer cleanup()
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/csrf", nil)
+	a.getCsrfToken(w, r)
+	cookies := w.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected csrf cookie")
+	}
+	if !cookies[0].Secure {
+		t.Errorf("production mode must set Secure on CSRF cookie even when KROXY_INSECURE_COOKIES=true")
+	}
+}
+
+func TestCsrfCookie_NonProductionHonoursInsecureOverride(t *testing.T) {
+	a, cleanup := newTestAPIWithEnv(t, false, true)
+	defer cleanup()
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/csrf", nil)
+	a.getCsrfToken(w, r)
+	cookies := w.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected csrf cookie")
+	}
+	if cookies[0].Secure {
+		t.Errorf("non-production mode must allow KROXY_INSECURE_COOKIES to clear Secure")
+	}
+}
+
 func TestParseAdminAllowedIPs(t *testing.T) {
 	tests := []struct {
 		name     string

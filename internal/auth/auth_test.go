@@ -65,6 +65,65 @@ func newTestAuth(t *testing.T) (*Auth, *store.Store, func()) {
 	return a, s, cleanupStore
 }
 
+func newTestAuthWithEnv(t *testing.T, prod, insecure bool) (*Auth, *store.Store, func()) {
+	t.Helper()
+	s, cleanupStore := newTestStore(t)
+	// #nosec G104 — test environment setup.
+	os.Setenv("KROXY_JWT_SECRET", "test-secret-test-secret-test-secret-test")
+	if prod {
+		// #nosec G104 — test environment setup.
+		os.Setenv("KROXY_PRODUCTION", "true")
+	}
+	if insecure {
+		// #nosec G104 — test environment setup.
+		os.Setenv("KROXY_INSECURE_COOKIES", "true")
+	}
+	a := New(s)
+	cleanup := func() {
+		cleanupStore()
+		os.Unsetenv("KROXY_JWT_SECRET")
+		os.Unsetenv("KROXY_PRODUCTION")
+		os.Unsetenv("KROXY_INSECURE_COOKIES")
+	}
+	return a, s, cleanup
+}
+
+func TestCreateSessionCookie_ProductionIgnoresInsecureOverride(t *testing.T) {
+	a, _, cleanup := newTestAuthWithEnv(t, true, true)
+	defer cleanup()
+	c := a.CreateSessionCookie("sid")
+	if !c.Secure {
+		t.Errorf("production mode must set Secure even when KROXY_INSECURE_COOKIES=true")
+	}
+}
+
+func TestCreateSessionCookie_NonProductionHonoursInsecureOverride(t *testing.T) {
+	a, _, cleanup := newTestAuthWithEnv(t, false, true)
+	defer cleanup()
+	c := a.CreateSessionCookie("sid")
+	if c.Secure {
+		t.Errorf("non-production mode must allow KROXY_INSECURE_COOKIES to clear Secure")
+	}
+}
+
+func TestCreateSessionCookie_NonProductionSecureByDefault(t *testing.T) {
+	a, _, cleanup := newTestAuthWithEnv(t, false, false)
+	defer cleanup()
+	c := a.CreateSessionCookie("sid")
+	if !c.Secure {
+		t.Errorf("non-production mode must set Secure by default")
+	}
+}
+
+func TestCreate2FAPendingCookie_ProductionIgnoresInsecureOverride(t *testing.T) {
+	a, _, cleanup := newTestAuthWithEnv(t, true, true)
+	defer cleanup()
+	c := a.Create2FAPendingCookie("pid")
+	if !c.Secure {
+		t.Errorf("production mode must set Secure on pending-2FA cookie even when KROXY_INSECURE_COOKIES=true")
+	}
+}
+
 func seedUser(t *testing.T, s *store.Store, email, password, role string, enabled bool) *store.User {
 	t.Helper()
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
