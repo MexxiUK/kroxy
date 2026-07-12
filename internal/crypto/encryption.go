@@ -16,6 +16,7 @@ import (
 
 var (
 	encryptionKey     []byte
+	encryptionKeyErr  error
 	encryptionKeyOnce sync.Once
 	ErrNoKey          = errors.New("no encryption key configured")
 	errInvalidKey     = errors.New("invalid encryption key size")
@@ -71,42 +72,48 @@ func loadOrGenerateDevKey() ([]byte, error) {
 // In non-production mode without KROXY_ENCRYPTION_KEY set, a random dev key
 // is generated once and persisted to a file (CRIT-002 fix).
 func GetEncryptionKey() ([]byte, error) {
-	var err error
 	encryptionKeyOnce.Do(func() {
 		key := os.Getenv("KROXY_ENCRYPTION_KEY")
 		if key == "" {
 			if os.Getenv("KROXY_PRODUCTION") == "true" {
-				err = ErrNoKey
+				encryptionKeyErr = ErrNoKey
 				return
 			}
 			// Dev mode: generate and persist a random key instead of using a hardcoded one
-			encryptionKey, err = loadOrGenerateDevKey()
+			encryptionKey, encryptionKeyErr = loadOrGenerateDevKey()
 			return
 		}
 
 		// Decode base64 key
 		keyBytes, decodeErr := base64.StdEncoding.DecodeString(key)
 		if decodeErr != nil {
-			err = decodeErr
+			encryptionKeyErr = decodeErr
 			return
 		}
 
 		// Validate key size
 		if len(keyBytes) != 16 && len(keyBytes) != 24 && len(keyBytes) != 32 {
-			err = errInvalidKey
+			encryptionKeyErr = errInvalidKey
 			return
 		}
 
 		encryptionKey = keyBytes
 	})
 
-	return encryptionKey, err
+	if encryptionKeyErr != nil {
+		return nil, encryptionKeyErr
+	}
+	if encryptionKey == nil {
+		return nil, ErrNoKey
+	}
+	return encryptionKey, nil
 }
 
 // ResetEncryptionKeyForTest resets the encryption key state for testing.
 // This is not thread-safe and should only be called in test code.
 func ResetEncryptionKeyForTest() {
 	encryptionKey = nil
+	encryptionKeyErr = nil
 	encryptionKeyOnce = sync.Once{}
 }
 

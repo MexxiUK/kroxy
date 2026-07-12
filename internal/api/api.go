@@ -356,9 +356,16 @@ func GetCSPNonce(r *http.Request) string {
 
 // parseAdminAllowedIPs parses KROXY_ADMIN_ALLOWED_IPS into a slice of IP networks.
 // Supports comma-separated CIDRs and plain IPs (treated as /32).
+// In production mode with no explicit allowlist, defaults to loopback only.
 func parseAdminAllowedIPs() []*net.IPNet {
 	env := os.Getenv("KROXY_ADMIN_ALLOWED_IPS")
 	if env == "" {
+		if os.Getenv("KROXY_PRODUCTION") == "true" {
+			log.Println("INFO: KROXY_ADMIN_ALLOWED_IPS not set in production; defaulting admin allowlist to 127.0.0.1/8 and ::1/128")
+			_, v4, _ := net.ParseCIDR("127.0.0.1/8")
+			_, v6, _ := net.ParseCIDR("::1/128")
+			return []*net.IPNet{v4, v6}
+		}
 		return nil
 	}
 
@@ -392,7 +399,8 @@ func parseAdminAllowedIPs() []*net.IPNet {
 }
 
 // adminIPAllowlistMiddleware restricts admin routes to configured source IPs.
-// If no allowlist is configured, all IPs are permitted (backward compatible).
+// In production mode the allowlist defaults to loopback addresses; otherwise
+// an empty allowlist permits all IPs (backward compatible dev behavior).
 func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// No allowlist configured = allow all (backward compatible)

@@ -358,6 +358,44 @@ func TestStore_FailedAttemptsAndLockout(t *testing.T) {
 	}
 }
 
+func TestStore_FailedAttemptsResetAfterLockoutExpires(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+
+	email := "expired@example.com"
+	lockoutDuration := 2 * time.Second
+
+	for i := 0; i < 3; i++ {
+		if err := s.RecordFailedAttempt(email, 3, lockoutDuration); err != nil {
+			t.Fatalf("RecordFailedAttempt failed: %v", err)
+		}
+	}
+
+	locked, _, err := s.IsLocked(email)
+	if err != nil {
+		t.Fatalf("IsLocked failed: %v", err)
+	}
+	if !locked {
+		t.Fatal("expected account to be locked")
+	}
+
+	// Wait for the lockout to expire
+	time.Sleep(2 * lockoutDuration)
+
+	// A single new failure after expiry should NOT immediately re-lock
+	if err := s.RecordFailedAttempt(email, 3, lockoutDuration); err != nil {
+		t.Fatalf("RecordFailedAttempt after expiry failed: %v", err)
+	}
+
+	locked, _, err = s.IsLocked(email)
+	if err != nil {
+		t.Fatalf("IsLocked after expiry failed: %v", err)
+	}
+	if locked {
+		t.Fatal("expected account to be unlocked after lockout expiry and a single new failure")
+	}
+}
+
 func TestStore_TokenValidation(t *testing.T) {
 	s, cleanup := newTestStore(t)
 	defer cleanup()

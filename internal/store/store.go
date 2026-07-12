@@ -872,21 +872,23 @@ func (s *Store) RecordFailedAttempt(identifier string, maxAttempts int, lockoutD
 	}
 	defer tx.Rollback()
 
-	// Try to update existing record
-	result, err := tx.Exec(
-		"UPDATE failed_attempts SET attempt_count = attempt_count + 1, last_attempt = ? WHERE identifier = ?",
-		now, identifier,
-	)
-	if err != nil {
+	var count int
+
+	// Check for an existing record and whether a previous lockout has expired.
+	// If it has, reset the attempt counter so a single failure does not
+	// immediately re-lock the account (permanent lockout bug).
+	var existingCount int
+	var existingLockedUntil sql.NullTime
+	err = tx.QueryRow(
+		"SELECT attempt_count, locked_until FROM failed_attempts WHERE identifier = ?",
+		identifier,
+	).Scan(&existingCount, &existingLockedUntil)
+	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		// No existing record, create new one
+	if err == sql.ErrNoRows {
+		// No existing record, create one.
 		_, err = tx.Exec(
 			"INSERT INTO failed_attempts (identifier, attempt_count, first_attempt, last_attempt) VALUES (?, 1, ?, ?)",
 			identifier, now, now,
@@ -894,13 +896,27 @@ func (s *Store) RecordFailedAttempt(identifier string, maxAttempts int, lockoutD
 		if err != nil {
 			return err
 		}
-	}
-
-	// Check if should be locked (within the same transaction)
-	var count int
-	err = tx.QueryRow("SELECT attempt_count FROM failed_attempts WHERE identifier = ?", identifier).Scan(&count)
-	if err != nil {
-		return err
+		count = 1
+	} else if existingLockedUntil.Valid && !existingLockedUntil.Time.After(now) {
+		// Previous lockout has expired; reset the counter to start fresh.
+		_, err = tx.Exec(
+			"UPDATE failed_attempts SET attempt_count = 1, first_attempt = ?, last_attempt = ?, locked_until = NULL WHERE identifier = ?",
+			now, now, identifier,
+		)
+		if err != nil {
+			return err
+		}
+		count = 1
+	} else {
+		// Still within an active attempt window/lockout; increment the counter.
+		_, err = tx.Exec(
+			"UPDATE failed_attempts SET attempt_count = attempt_count + 1, last_attempt = ? WHERE identifier = ?",
+			now, identifier,
+		)
+		if err != nil {
+			return err
+		}
+		count = existingCount + 1
 	}
 
 	if count >= maxAttempts {
