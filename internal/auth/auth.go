@@ -752,9 +752,12 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 		return nil, errors.New("unsupported authorization type")
 	}
 
-	// Rate-limit API key validation attempts to prevent bcrypt DoS (CRIT-004)
+	// Rate-limit API key validation attempts to prevent bcrypt DoS (CRIT-004).
+	// This call atomically reserves an attempt slot; the slot is released only
+	// on successful authentication so that concurrent failures cannot exceed the
+	// intended limit.
 	ip := security.GetClientIP(r)
-	if !a.checkAPIKeyRateLimit(ip) {
+	if !a.checkAndRecordAPIKeyAttempt(ip) {
 		log.Printf("AUDIT: API key validation rate limit exceeded for IP=%s", strings.ReplaceAll(ip, "\n", " ")) // #nosec G706 — IP is from security.GetClientIP
 		return nil, errors.New("rate limit exceeded")
 	}
@@ -822,7 +825,6 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 			expected = legacyAPIKeyHMAC(keySecret)
 		}
 		if !hmac.Equal([]byte(expected), []byte(apiKey.KeySecretHMAC)) {
-			a.recordAPIKeyFailure(ip)
 			log.Printf("AUDIT: API key authentication failed for key_id=%s", strings.ReplaceAll(keyID, "\n", " "))
 			return nil, errors.New("invalid API key secret")
 		}
@@ -830,7 +832,6 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 
 	// Verify secret using bcrypt (constant-time comparison)
 	if err := bcrypt.CompareHashAndPassword([]byte(apiKey.KeySecretHash), []byte(keySecret)); err != nil {
-		a.recordAPIKeyFailure(ip)
 		log.Printf("AUDIT: API key authentication failed for key_id=%s", strings.ReplaceAll(keyID, "\n", " "))
 		return nil, errors.New("invalid API key secret")
 	}
@@ -850,45 +851,20 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 
 	log.Printf("AUDIT: API key authenticated: key_id=%s user_id=%d name=%s", strings.ReplaceAll(keyID, "\n", " "), apiKey.UserID, strings.ReplaceAll(apiKey.Name, "\n", " ")) // #nosec G706 — newlines stripped from logged fields
 
+	// Release the reserved attempt slot on successful authentication only.
+	a.releaseAPIKeyAttempt(ip)
+
 	return apiKey, nil
 }
 
-// checkAPIKeyRateLimit enforces rate limiting for API key validation attempts (CRIT-004)
-// Returns false if rate limit exceeded, preventing bcrypt DoS.
-func (a *Auth) checkAPIKeyRateLimit(ip string) bool {
+// checkAndRecordAPIKeyAttempt atomically reserves a slot in the per-IP API-key
+// validation rate limiter. It returns false if the limit has been reached.
+// The caller must call releaseAPIKeyAttempt on successful authentication so that
+// only failed attempts consume budget.
+func (a *Auth) checkAndRecordAPIKeyAttempt(ip string) bool {
 	const maxAttempts = 10
 	const window = time.Minute
 
-	value, ok := a.apiKeyAttempts.Load(ip)
-	if !ok {
-		a.apiKeyAttempts.Store(ip, &apiKeyAttempt{
-			count:     0,
-			firstFail: time.Now(),
-		})
-		return true
-	}
-
-	attempt := value.(*apiKeyAttempt)
-	attempt.mu.Lock()
-	defer attempt.mu.Unlock()
-
-	// Reset if window expired
-	if time.Since(attempt.firstFail) > window {
-		attempt.count = 0
-		attempt.firstFail = time.Now()
-		return true
-	}
-
-	// Check if limit exceeded
-	if attempt.count >= maxAttempts {
-		return false
-	}
-
-	return true
-}
-
-// recordAPIKeyFailure records a failed API key validation attempt for rate limiting
-func (a *Auth) recordAPIKeyFailure(ip string) {
 	value, _ := a.apiKeyAttempts.LoadOrStore(ip, &apiKeyAttempt{
 		count:     0,
 		firstFail: time.Now(),
@@ -899,12 +875,41 @@ func (a *Auth) recordAPIKeyFailure(ip string) {
 	defer attempt.mu.Unlock()
 
 	// Reset if window expired
-	if time.Since(attempt.firstFail) > time.Minute {
+	if time.Since(attempt.firstFail) > window {
 		attempt.count = 0
 		attempt.firstFail = time.Now()
 	}
 
+	if attempt.count >= maxAttempts {
+		return false
+	}
+
 	attempt.count++
+	return true
+}
+
+// releaseAPIKeyAttempt releases a previously reserved API-key validation slot on
+// successful authentication. Failed attempts intentionally keep their count.
+func (a *Auth) releaseAPIKeyAttempt(ip string) {
+	value, ok := a.apiKeyAttempts.Load(ip)
+	if !ok {
+		return
+	}
+
+	attempt := value.(*apiKeyAttempt)
+	attempt.mu.Lock()
+	defer attempt.mu.Unlock()
+
+	// If the window has rolled over, the reservation is stale; reset the entry.
+	if time.Since(attempt.firstFail) > time.Minute {
+		attempt.count = 0
+		attempt.firstFail = time.Now()
+		return
+	}
+
+	if attempt.count > 0 {
+		attempt.count--
+	}
 }
 
 // checkSessionBinding validates that the current request matches the session's
@@ -1299,8 +1304,10 @@ func (a *Auth) Verify2FA(pendingID, code, ip, userAgent string) (*LoginResponse,
 		return nil, errors.New("2FA session binding mismatch")
 	}
 
-	// Check per-user 2FA rate limit (prevents brute-force across multiple pending sessions)
-	if err := a.check2FARateLimit(pending.userID, ip); err != nil {
+	// Check per-user 2FA rate limit (prevents brute-force across multiple pending sessions).
+	// This call atomically records the attempt and applies lockouts, so there is no
+	// check-then-act race with a separate recorder.
+	if err := a.checkAndRecord2FARateLimit(pending.userID, ip); err != nil {
 		return nil, err
 	}
 
@@ -1331,9 +1338,6 @@ func (a *Auth) Verify2FA(pendingID, code, ip, userAgent string) (*LoginResponse,
 
 	// Validate TOTP code
 	if !totp.ValidateCode(secret, code) {
-		if exceeded := a.atomicallyRecord2FAFailure(pending.userID); exceeded {
-			return nil, errors.New("too many failed 2FA attempts, please log in again")
-		}
 		return nil, errors.New("invalid 2FA code")
 	}
 
@@ -1693,10 +1697,11 @@ func getSessionFromContext(ctx context.Context) *Session {
 	return nil
 }
 
-// check2FARateLimit enforces per-user rate limiting for 2FA verification attempts.
-// Prevents brute-forcing TOTP codes by creating new pending sessions.
-// Lockouts escalate: 1st=5m, 2nd=1h, 3rd=IP ban.
-func (a *Auth) check2FARateLimit(userID int, ip string) error {
+// checkAndRecord2FARateLimit atomically records a 2FA verification attempt and
+// enforces the per-user rate limit in the same critical section. Lockouts
+// escalate: 1st=5m, 2nd=1h, 3rd+ IP ban. This closes the check-then-act race
+// between a separate limit checker and failure recorder.
+func (a *Auth) checkAndRecord2FARateLimit(userID int, ip string) error {
 	const maxAttempts = 5
 	const window = 5 * time.Minute
 
@@ -1719,6 +1724,13 @@ func (a *Auth) check2FARateLimit(userID int, ip string) error {
 	if entry.locked && entry.lockedUntil != nil && now.Before(*entry.lockedUntil) {
 		return fmt.Errorf("too many failed 2FA attempts, try again in %v", time.Until(*entry.lockedUntil).Round(time.Second))
 	}
+
+	// Record this attempt and start the window if it is the first one.
+	entry.attempts++
+	if entry.firstFail.IsZero() {
+		entry.firstFail = now
+	}
+
 	if entry.attempts >= maxAttempts {
 		entry.lockoutCount++
 		var lockoutDuration time.Duration
@@ -1740,37 +1752,6 @@ func (a *Auth) check2FARateLimit(userID int, ip string) error {
 	}
 
 	return nil
-}
-
-// atomicallyRecord2FAFailure increments the per-user 2FA attempt counter under lock
-// and returns whether the limit was exceeded. This avoids the check-then-act race.
-func (a *Auth) atomicallyRecord2FAFailure(userID int) bool {
-	const maxAttempts = 5
-	value, _ := a.twoFARateLimits.LoadOrStore(userID, &twoFARateLimit{})
-	entry := value.(*twoFARateLimit)
-
-	entry.mu.Lock()
-	defer entry.mu.Unlock()
-
-	if entry.firstFail.IsZero() {
-		entry.firstFail = time.Now()
-	}
-	entry.attempts++
-	return entry.attempts >= maxAttempts
-}
-
-// record2FAFailure increments the per-user 2FA attempt counter.
-func (a *Auth) record2FAFailure(userID int) {
-	value, _ := a.twoFARateLimits.LoadOrStore(userID, &twoFARateLimit{})
-	entry := value.(*twoFARateLimit)
-
-	entry.mu.Lock()
-	defer entry.mu.Unlock()
-
-	if entry.firstFail.IsZero() {
-		entry.firstFail = time.Now()
-	}
-	entry.attempts++
 }
 
 // clear2FARateLimit resets the per-user 2FA attempt counter on successful verification.
