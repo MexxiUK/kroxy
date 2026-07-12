@@ -9,6 +9,8 @@ import (
 
 	corazacrs "github.com/corazawaf/coraza-coreruleset/v4"
 	"github.com/corazawaf/coraza/v3"
+	"github.com/kroxy/kroxy/internal/store"
+	"github.com/kroxy/kroxy/internal/testutil"
 )
 
 func TestWAF_CRSLoads(t *testing.T) {
@@ -373,5 +375,49 @@ func TestInspectRequest_BodyStreamed(t *testing.T) {
 	}
 	if string(body) != payload {
 		t.Fatalf("expected body %q after inspection, got %q", payload, string(body))
+	}
+}
+
+func TestWAF_CustomRule_ctlDisableSkipped(t *testing.T) {
+	engine, err := createWAFEngine(Config{
+		Mode: "block",
+		CustomRules: []string{
+			`SecRule ARGS "@rx foo" "id:999990,phase:2,ctl:ruleEngine=Off"`,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("createWAFEngine: %v", err)
+	}
+
+	w := &WAF{secEngine: engine, enabled: true, mode: "block"}
+	res := w.TestPayload("GET", "/test?q=1'+UNION+SELECT+*+FROM+users--", "", nil)
+	if !res.Blocked {
+		t.Fatal("expected WAF to remain blocking after skipping ctl:ruleEngine=Off rule")
+	}
+}
+
+func TestWAF_DBRule_SecRuleEngineOffSkipped(t *testing.T) {
+	s, cleanup := testutil.NewTestStore(t)
+	defer cleanup()
+
+	rule := &store.WAFRule{
+		Name:    "engine-off",
+		Rule:    "SecRuleEngine Off",
+		Enabled: true,
+		Mode:    "block",
+	}
+	if err := s.CreateWAFRule(rule); err != nil {
+		t.Fatalf("create WAF rule: %v", err)
+	}
+
+	engine, err := createWAFEngine(Config{Mode: "block"}, s, nil)
+	if err != nil {
+		t.Fatalf("createWAFEngine: %v", err)
+	}
+
+	w := &WAF{secEngine: engine, enabled: true, mode: "block"}
+	res := w.TestPayload("GET", "/test?q=1'+UNION+SELECT+*+FROM+users--", "", nil)
+	if !res.Blocked {
+		t.Fatal("expected WAF to remain blocking after skipping SecRuleEngine Off rule")
 	}
 }
