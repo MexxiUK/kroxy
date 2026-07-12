@@ -190,12 +190,19 @@ func (l *Logger) Log(event Event) {
 
 	// Write to file if configured
 	if l.logFile != nil {
-		n, _ := l.logFile.Write(append(data, '\n'))
-		l.currentSize += int64(n)
-
-		// Rotate if file exceeds max size
-		if l.currentSize >= l.maxSize {
-			l.rotate()
+		n, err := l.logFile.Write(append(data, '\n'))
+		if err != nil {
+			log.Printf("audit: failed to write audit log: %v", err)
+			// Continue to stdout/webhook fallback below; do not return so the
+			// event still reaches other sinks.
+		} else {
+			l.currentSize += int64(n)
+			// Rotate if file exceeds max size
+			if l.currentSize >= l.maxSize {
+				if rotErr := l.rotate(); rotErr != nil {
+					log.Printf("audit: failed to rotate audit log: %v", rotErr)
+				}
+			}
 		}
 	}
 
@@ -409,33 +416,46 @@ func (ah *AlertHandler) Check(event Event) {
 }
 
 // rotate performs log file rotation. Must be called with l.mu held.
-func (l *Logger) rotate() {
+// Returns the first error encountered; the caller logs it and continues.
+func (l *Logger) rotate() error {
 	if l.logFile == nil || l.logPath == "" {
-		return
+		return nil
 	}
 
-	l.logFile.Close()
+	var firstErr error
+
+	if err := l.logFile.Close(); err != nil {
+		firstErr = fmt.Errorf("failed to close audit log for rotation: %w", err)
+	}
 
 	// Shift existing backups: .4 -> .5, .3 -> .4, etc.
 	for i := l.maxBackups - 1; i > 0; i-- {
 		src := fmt.Sprintf("%s.%d", l.logPath, i)
 		dst := fmt.Sprintf("%s.%d", l.logPath, i+1)
-		os.Rename(src, dst)
+		if err := os.Rename(src, dst); err != nil && firstErr == nil && !os.IsNotExist(err) {
+			firstErr = fmt.Errorf("failed to shift backup %s: %w", src, err)
+		}
 	}
 
 	// Rename current log to .1
-	os.Rename(l.logPath, l.logPath+".1")
+	if err := os.Rename(l.logPath, l.logPath+".1"); err != nil && firstErr == nil {
+		firstErr = fmt.Errorf("failed to rotate audit log: %w", err)
+	}
 
 	// Remove oldest backup if over limit
 	oldest := fmt.Sprintf("%s.%d", l.logPath, l.maxBackups+1)
 	os.Remove(oldest)
 
 	// Open new log file
-	var err error
-	l.logFile, err = os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) // #nosec G304 — logPath is from server-side configuration
+	f, err := os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) // #nosec G304 — logPath is from server-side configuration
 	if err != nil {
-		log.Printf("audit: failed to open new log file after rotation: %v", err)
+		if firstErr == nil {
+			firstErr = fmt.Errorf("failed to open new audit log: %w", err)
+		}
 		l.logFile = nil
+	} else {
+		l.logFile = f
 	}
 	l.currentSize = 0
+	return firstErr
 }

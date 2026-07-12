@@ -212,8 +212,11 @@ func (s *Store) CreateOIDCProvider(p *OIDCProvider) error {
 }
 
 func (s *Store) DeleteOIDCProvider(id int) error {
-	_, err := s.db.Exec("DELETE FROM oidc_providers WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM oidc_providers WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // Session methods
@@ -237,13 +240,19 @@ func (s *Store) CreateSession(sess *Session) error {
 }
 
 func (s *Store) DeleteSession(id string) error {
-	_, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func (s *Store) UpdateSessionExpiry(id string, expiresAt time.Time) error {
-	_, err := s.db.Exec("UPDATE sessions SET expires_at = ? WHERE id = ?", expiresAt, id)
-	return err
+	res, err := s.db.Exec("UPDATE sessions SET expires_at = ? WHERE id = ?", expiresAt, id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func (s *Store) CleanupSessions() error {
@@ -288,8 +297,11 @@ func (s *Store) CreateBlacklist(b *Blacklist) error {
 }
 
 func (s *Store) DeleteBlacklist(id int) error {
-	_, err := s.db.Exec("DELETE FROM blacklists WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM blacklists WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // Whitelist methods
@@ -329,8 +341,11 @@ func (s *Store) CreateWhitelist(w *Whitelist) error {
 }
 
 func (s *Store) DeleteWhitelist(id int) error {
-	_, err := s.db.Exec("DELETE FROM whitelists WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM whitelists WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // RateLimit methods
@@ -370,13 +385,19 @@ func (s *Store) CreateRateLimit(r *RateLimit) error {
 }
 
 func (s *Store) UpdateRateLimit(r *RateLimit) error {
-	_, err := s.db.Exec("UPDATE rate_limits SET domain = ?, requests_per_minute = ?, burst = ?, enabled = ? WHERE id = ?", r.Domain, r.RequestsPerMinute, r.Burst, r.Enabled, r.ID)
-	return err
+	res, err := s.db.Exec("UPDATE rate_limits SET domain = ?, requests_per_minute = ?, burst = ?, enabled = ? WHERE id = ?", r.Domain, r.RequestsPerMinute, r.Burst, r.Enabled, r.ID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func (s *Store) DeleteRateLimit(id int) error {
-	_, err := s.db.Exec("DELETE FROM rate_limits WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM rate_limits WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // User methods
@@ -437,25 +458,37 @@ func (s *Store) CreateUser(u *User) error {
 
 // UpdateTOTPSecret stores the encrypted TOTP secret for a user
 func (s *Store) UpdateTOTPSecret(userID int, encryptedSecret string) error {
-	_, err := s.db.Exec("UPDATE users SET totp_secret = ? WHERE id = ?", encryptedSecret, userID)
-	return err
+	res, err := s.db.Exec("UPDATE users SET totp_secret = ? WHERE id = ?", encryptedSecret, userID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // EnableTOTP enables TOTP verification for a user
 func (s *Store) EnableTOTP(userID int) error {
-	_, err := s.db.Exec("UPDATE users SET totp_enabled = 1 WHERE id = ?", userID)
-	return err
+	res, err := s.db.Exec("UPDATE users SET totp_enabled = 1 WHERE id = ?", userID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // DisableTOTP disables TOTP and clears the secret for a user
 func (s *Store) DisableTOTP(userID int) error {
-	_, err := s.db.Exec("UPDATE users SET totp_enabled = 0, totp_secret = '' WHERE id = ?", userID)
-	return err
+	res, err := s.db.Exec("UPDATE users SET totp_enabled = 0, totp_secret = '' WHERE id = ?", userID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func (s *Store) DeleteUser(id int) error {
-	_, err := s.db.Exec("DELETE FROM users WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM users WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // Certificate methods
@@ -498,8 +531,11 @@ func (s *Store) CreateCertificate(c *Certificate) error {
 }
 
 func (s *Store) DeleteCertificate(id int) error {
-	_, err := s.db.Exec("DELETE FROM certificates WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM certificates WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func (s *Store) GetCertificateByID(id int) (*Certificate, error) {
@@ -513,13 +549,19 @@ func (s *Store) GetCertificateByID(id int) (*Certificate, error) {
 }
 
 func (s *Store) UpdateCertificateExpiry(id int, expiresAt time.Time) error {
-	_, err := s.db.Exec("UPDATE certificates SET expires_at = ? WHERE id = ?", expiresAt, id)
-	return err
+	res, err := s.db.Exec("UPDATE certificates SET expires_at = ? WHERE id = ?", expiresAt, id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func (s *Store) UpdateCertificateStatus(id int, status string) error {
-	_, err := s.db.Exec("UPDATE certificates SET status = ? WHERE id = ?", status, id)
-	return err
+	res, err := s.db.Exec("UPDATE certificates SET status = ? WHERE id = ?", status, id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // WAF Rule methods
@@ -606,13 +648,19 @@ func (s *Store) CreateWAFRule(r *WAFRule) error {
 }
 
 func (s *Store) DeleteWAFRule(id int) error {
-	_, err := s.db.Exec("DELETE FROM waf_rules WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM waf_rules WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func (s *Store) UpdateWAFRule(r *WAFRule) error {
-	_, err := s.db.Exec("UPDATE waf_rules SET name = ?, rule = ?, enabled = ?, mode = ?, exclusions = ?, route_id = ? WHERE id = ?", r.Name, r.Rule, r.Enabled, r.Mode, r.Exclusions, r.RouteID, r.ID)
-	return err
+	res, err := s.db.Exec("UPDATE waf_rules SET name = ?, rule = ?, enabled = ?, mode = ?, exclusions = ?, route_id = ? WHERE id = ?", r.Name, r.Rule, r.Enabled, r.Mode, r.Exclusions, r.RouteID, r.ID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // APIKey methods
@@ -679,13 +727,21 @@ func (s *Store) CreateAPIKey(key *APIKey) error {
 }
 
 func (s *Store) DeleteAPIKey(keyID string) error {
-	_, err := s.db.Exec("DELETE FROM api_keys WHERE key_id = ?", keyID)
-	return err
+	res, err := s.db.Exec("DELETE FROM api_keys WHERE key_id = ?", keyID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // DeleteAPIKeysByUser deletes every API key belonging to a user.
 func (s *Store) DeleteAPIKeysByUser(userID int) error {
-	_, err := s.db.Exec("DELETE FROM api_keys WHERE user_id = ?", userID)
+	res, err := s.db.Exec("DELETE FROM api_keys WHERE user_id = ?", userID)
+	if err != nil {
+		return err
+	}
+	// A user may legitimately have zero API keys; accept 0 or more.
+	_, err = res.RowsAffected()
 	return err
 }
 
@@ -703,32 +759,49 @@ func (s *Store) DeleteAPIKeyByUser(keyID string, userID int) (bool, error) {
 }
 
 func (s *Store) UpdateAPIKeyLastUsed(keyID string) error {
-	_, err := s.db.Exec("UPDATE api_keys SET last_used = CURRENT_TIMESTAMP WHERE key_id = ?", keyID)
-	return err
+	res, err := s.db.Exec("UPDATE api_keys SET last_used = CURRENT_TIMESTAMP WHERE key_id = ?", keyID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // DeleteUserSessions deletes all sessions for a user (for security events)
 func (s *Store) DeleteUserSessions(userID int) error {
-	_, err := s.db.Exec("DELETE FROM sessions WHERE user_id = ?", fmt.Sprintf("%d", userID))
+	res, err := s.db.Exec("DELETE FROM sessions WHERE user_id = ?", fmt.Sprintf("%d", userID))
+	if err != nil {
+		return err
+	}
+	// User may have zero sessions; just report error from RowsAffected itself.
+	_, err = res.RowsAffected()
 	return err
 }
 
 // UpdateUserPassword updates a user's password hash
 func (s *Store) UpdateUserPassword(userID int, passwordHash string) error {
-	_, err := s.db.Exec("UPDATE users SET password = ? WHERE id = ?", passwordHash, userID)
-	return err
+	res, err := s.db.Exec("UPDATE users SET password = ? WHERE id = ?", passwordHash, userID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // UpdateUserRole updates a user's role
 func (s *Store) UpdateUserRole(userID int, role string) error {
-	_, err := s.db.Exec("UPDATE users SET role = ? WHERE id = ?", role, userID)
-	return err
+	res, err := s.db.Exec("UPDATE users SET role = ? WHERE id = ?", role, userID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // UpdateUserEnabled updates whether a user account is enabled
 func (s *Store) UpdateUserEnabled(userID int, enabled bool) error {
-	_, err := s.db.Exec("UPDATE users SET enabled = ? WHERE id = ?", enabled, userID)
-	return err
+	res, err := s.db.Exec("UPDATE users SET enabled = ? WHERE id = ?", enabled, userID)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // CreatePasswordResetToken creates a password reset token
@@ -845,7 +918,12 @@ func (s *Store) RecordFailedAttempt(identifier string, maxAttempts int, lockoutD
 
 // ClearFailedAttempts clears failed attempts for an identifier (on successful login)
 func (s *Store) ClearFailedAttempts(identifier string) error {
-	_, err := s.db.Exec("DELETE FROM failed_attempts WHERE identifier = ?", identifier)
+	res, err := s.db.Exec("DELETE FROM failed_attempts WHERE identifier = ?", identifier)
+	if err != nil {
+		return err
+	}
+	// It's normal for no row to exist if the user had no failed attempts.
+	_, err = res.RowsAffected()
 	return err
 }
 
@@ -896,8 +974,11 @@ func (s *Store) AddRedirectDomain(domain string) error {
 
 // RemoveRedirectDomain removes a domain from the allowlist
 func (s *Store) RemoveRedirectDomain(domain string) error {
-	_, err := s.db.Exec("DELETE FROM redirect_domains WHERE domain = ?", domain)
-	return err
+	res, err := s.db.Exec("DELETE FROM redirect_domains WHERE domain = ?", domain)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // Session methods for user management
@@ -1047,11 +1128,14 @@ func (s *Store) UpdateOIDCProvider(p *OIDCProvider) error {
 		return fmt.Errorf("failed to encrypt client secret: %w", err)
 	}
 
-	_, err = s.db.Exec(
+	res, err := s.db.Exec(
 		"UPDATE oidc_providers SET name = ?, client_id = ?, client_secret = ?, discovery_url = ?, redirect_url = ? WHERE id = ?",
 		p.Name, p.ClientID, encryptedSecret, p.DiscoveryURL, p.RedirectURL, p.ID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // Webhook methods
@@ -1114,16 +1198,22 @@ func (s *Store) UpdateWebhook(w *Webhook) error {
 		return fmt.Errorf("failed to encrypt webhook secret: %w", err)
 	}
 
-	_, err = s.db.Exec(
+	res, err := s.db.Exec(
 		"UPDATE webhooks SET name = ?, url = ?, events = ?, secret = ?, enabled = ? WHERE id = ?",
 		w.Name, w.URL, w.Events, encryptedSecret, boolToInt(w.Enabled), w.ID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func (s *Store) DeleteWebhook(id int) error {
-	_, err := s.db.Exec("DELETE FROM webhooks WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM webhooks WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func boolToInt(b bool) int {
