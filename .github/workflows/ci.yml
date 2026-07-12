@@ -77,9 +77,9 @@ jobs:
         run: gosec -exclude=${{ env.GOSEC_EXCLUDES }} ./...
 
       - name: Run Semgrep
-        # Registry rule packs may use severities unsupported by this action version; keep advisory.
-        continue-on-error: true
-        uses: semgrep/semgrep-action@v1
+        # Pin to the last pre-v1 wrapper that forwards flags directly to the Semgrep CLI,
+        # avoiding the severity-parsing regression in the v1 action.
+        uses: semgrep/semgrep-action@v0.58.0
         with:
           config: >-
             p/security-audit
