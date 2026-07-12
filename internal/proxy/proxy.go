@@ -439,7 +439,7 @@ func (p *Proxy) buildConfig() ([]byte, error) {
 	servers := map[string]interface{}{
 		"kroxy": map[string]interface{}{
 			"listen": []string{p.cfg.ProxyAddr},
-			"routes": allHTTPSRoutes,
+			"routes": allHTTPRoutes,
 			"logs": map[string]interface{}{
 				"logger_names": map[string]interface{}{
 					"kroxy": "kroxy-access",

@@ -215,6 +215,38 @@ func TestProxy_buildConfig_HTTPOnly(t *testing.T) {
 		t.Errorf("expected 3 routes (2 enabled + default), got %d", len(routesArr))
 	}
 
+	// In HTTP-only mode, a.com (RequireHTTPS=false) should proxy traffic,
+	// while b.com (RequireHTTPS=true) must redirect to HTTPS rather than
+	// being served over plain HTTP (SEC-034).
+	aRoute, ok := routesArr[0].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected route map")
+	}
+	aMatch := aRoute["match"].([]interface{})[0].(map[string]interface{})
+	if hosts, ok := aMatch["host"].([]interface{}); !ok || len(hosts) != 1 || hosts[0].(string) != "a.com" {
+		t.Fatalf("expected first route to match a.com, got %v", aMatch)
+	}
+	aHandle := aRoute["handle"].([]interface{})[0].(map[string]interface{})
+	if aHandle["handler"].(string) != "strip_internal_headers" {
+		t.Errorf("expected a.com to start with strip_internal_headers handler, got %v", aHandle["handler"])
+	}
+
+	bRoute, ok := routesArr[1].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected route map")
+	}
+	bMatch := bRoute["match"].([]interface{})[0].(map[string]interface{})
+	if hosts, ok := bMatch["host"].([]interface{}); !ok || len(hosts) != 1 || hosts[0].(string) != "b.com" {
+		t.Fatalf("expected second route to match b.com, got %v", bMatch)
+	}
+	bHandle := bRoute["handle"].([]interface{})[0].(map[string]interface{})
+	if bHandle["handler"].(string) != "static_response" {
+		t.Errorf("expected b.com (RequireHTTPS) to redirect via static_response in HTTP-only mode, got %v", bHandle["handler"])
+	}
+	if status, ok := bHandle["status_code"].(float64); !ok || status != 308 {
+		t.Errorf("expected b.com redirect status 308, got %v", bHandle["status_code"])
+	}
+
 	// Verify TLS app is absent
 	if _, hasTLS := apps["tls"]; hasTLS {
 		t.Error("expected no tls app for HTTP-only config")
