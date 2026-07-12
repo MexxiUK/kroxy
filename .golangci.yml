@@ -27,15 +27,6 @@ linters:
     - wrapcheck     # Too strict for MVP phase
     - goconst       # Noisy on SQL strings
     - errcheck      # Too many unchecked errors in existing codebase; enable after cleanup
-
-formatters:
-  enable:
-    - gofmt
-  settings:
-    gofmt:
-      simplify: true
-
-linters:
   settings:
     misspell:
       locale: US
@@ -44,3 +35,10 @@ linters:
         - G104  # Unhandled errors (covered by errcheck)
         - G307  # Deferring unsafe Close
         - G115  # Integer overflow conversion
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true
