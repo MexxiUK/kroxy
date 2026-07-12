@@ -1383,6 +1383,16 @@ func (a *Auth) Verify2FA(pendingID, code, ip, userAgent string) (*LoginResponse,
 	}, nil
 }
 
+// secureCookieFlag decides whether to set the Secure flag on a cookie.
+// In production mode the flag is always set; in non-production mode it may be
+// disabled via KROXY_INSECURE_COOKIES for local development.
+func (a *Auth) secureCookieFlag() bool {
+	if a.productionMode {
+		return true
+	}
+	return os.Getenv("KROXY_INSECURE_COOKIES") != "true"
+}
+
 // Create2FAPendingCookie creates the cookie for pending 2FA sessions
 func (a *Auth) Create2FAPendingCookie(pendingID string) *http.Cookie {
 	c := &http.Cookie{
@@ -1392,9 +1402,7 @@ func (a *Auth) Create2FAPendingCookie(pendingID string) *http.Cookie {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(5 * time.Minute),
-	}
-	if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
-		c.Secure = true
+		Secure:   a.secureCookieFlag(),
 	}
 	return c
 }
@@ -1897,9 +1905,7 @@ func (a *Auth) CreateSessionCookie(sessionID string) *http.Cookie {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode, // Lax required for OAuth redirects
 		Expires:  time.Now().Add(a.sessionExpiry),
-	}
-	if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
-		c.Secure = true
+		Secure:   a.secureCookieFlag(),
 	}
 	return c
 }

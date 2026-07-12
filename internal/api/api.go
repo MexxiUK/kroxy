@@ -58,6 +58,16 @@ type API struct {
 	maxBodyBytes    int64 // Maximum request body size for backup import
 }
 
+// secureCookieFlag decides whether to set the Secure flag on a cookie.
+// In production mode the flag is always set; in non-production mode it may be
+// disabled via KROXY_INSECURE_COOKIES for local development.
+func (a *API) secureCookieFlag() bool {
+	if a.productionMode {
+		return true
+	}
+	return os.Getenv("KROXY_INSECURE_COOKIES") != "true"
+}
+
 // RateLimiter implements a sliding window rate limiter to prevent burst attacks
 // at window boundaries. It uses two half-windows and weighted counting.
 type RateLimiter struct {
@@ -765,7 +775,8 @@ func isValidRedirect(redirect string) bool {
 func (a *API) getCsrfToken(w http.ResponseWriter, r *http.Request) {
 	token := generateCSRFToken()
 
-	// Secure cookies by default; opt-out via KROXY_INSECURE_COOKIES for local dev
+	// Secure cookies by default; opt-out via KROXY_INSECURE_COOKIES for local dev.
+	// In production mode the Secure flag is always enforced.
 	c := &http.Cookie{
 		Name:     "csrf_token",
 		Value:    token,
@@ -773,9 +784,7 @@ func (a *API) getCsrfToken(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   3600,
-	}
-	if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
-		c.Secure = true
+		Secure:   a.secureCookieFlag(),
 	}
 	http.SetCookie(w, c)
 
@@ -1036,9 +1045,7 @@ func (a *API) verify2FA(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
-	}
-	if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
-		c2fa.Secure = true
+		Secure:   a.secureCookieFlag(),
 	}
 	http.SetCookie(w, c2fa)
 
@@ -1750,9 +1757,7 @@ func (a *API) oauthLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   600,
-	}
-	if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
-		c.Secure = true
+		Secure:   a.secureCookieFlag(),
 	}
 	http.SetCookie(w, c)
 
@@ -1790,9 +1795,7 @@ func (a *API) oauthCallback(w http.ResponseWriter, r *http.Request) {
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
 			MaxAge:   -1, // Delete cookie
-		}
-		if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
-			c.Secure = true
+			Secure:   a.secureCookieFlag(),
 		}
 		http.SetCookie(w, c)
 	}
