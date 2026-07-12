@@ -138,7 +138,7 @@ type Webhook struct {
 	Name      string    `json:"name"`
 	URL       string    `json:"url"`
 	Events    string    `json:"events"`
-	Secret    string    `json:"secret,omitempty"`
+	Secret    string    `json:"secret,omitempty"` // Encrypted at rest; decrypted in memory when needed
 	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`
 }
