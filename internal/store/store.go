@@ -1204,6 +1204,30 @@ func (s *Store) GetWebhooks() ([]Webhook, error) {
 	return webhooks, nil
 }
 
+// GetWebhook returns a single webhook by ID, decrypting its stored secret.
+func (s *Store) GetWebhook(id int) (*Webhook, error) {
+	row := s.db.QueryRow("SELECT id, name, url, events, secret, enabled, created_at FROM webhooks WHERE id = ?", id)
+
+	var w Webhook
+	var enabled int
+	var encryptedSecret string
+	if err := row.Scan(&w.ID, &w.Name, &w.URL, &w.Events, &encryptedSecret, &enabled, &w.CreatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	w.Enabled = enabled == 1
+	if encryptedSecret != "" {
+		secret, err := crypto.Decrypt(encryptedSecret)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt webhook secret: %w", err)
+		}
+		w.Secret = secret
+	}
+	return &w, nil
+}
+
 func (s *Store) CreateWebhook(w *Webhook) error {
 	encryptedSecret, err := crypto.Encrypt(w.Secret)
 	if err != nil {
