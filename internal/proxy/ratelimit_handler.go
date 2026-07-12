@@ -33,6 +33,12 @@ var (
 	ipBucketsMu sync.RWMutex
 )
 
+// maxIPBuckets caps the global rate-limit map to prevent unbounded memory growth
+// under a distributed attack. When the map is full, a random stale/idle bucket is
+// evicted before inserting a new one. The cleanup goroutine also removes buckets
+// older than 10 minutes, so this cap only matters for high-volume traffic.
+var maxIPBuckets = 100000
+
 // CaddyModule returns the Caddy module information.
 func (h *RateLimitHandler) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
@@ -64,6 +70,14 @@ func (h *RateLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request, nex
 	ipBucketsMu.Lock()
 	bucket, ok := ipBuckets[ip]
 	if !ok || bucket.window != windowStart {
+		if !ok && len(ipBuckets) >= maxIPBuckets {
+			// Evict a random existing bucket to bound memory under a
+			// distributed request flood from many source IPs.
+			for victim := range ipBuckets {
+				delete(ipBuckets, victim)
+				break
+			}
+		}
 		bucket = &ipBucket{count: 0, window: windowStart}
 		ipBuckets[ip] = bucket
 	}

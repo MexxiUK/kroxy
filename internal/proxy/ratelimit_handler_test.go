@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -132,5 +133,42 @@ func TestRateLimitHandler_CaddyModule(t *testing.T) {
 	info := h.CaddyModule()
 	if info.ID != "http.handlers.rate_limit" {
 		t.Errorf("expected module id http.handlers.rate_limit, got %s", info.ID)
+	}
+}
+
+func TestRateLimitHandler_ServeHTTP_BoundedBuckets(t *testing.T) {
+	origMax := maxIPBuckets
+	origBuckets := ipBuckets
+	maxIPBuckets = 5
+	ipBuckets = make(map[string]*ipBucket)
+	defer func() {
+		maxIPBuckets = origMax
+		ipBuckets = origBuckets
+	}()
+
+	h := &RateLimitHandler{Rate: 100, Burst: 100}
+	for i := 0; i < maxIPBuckets; i++ {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = fmt.Sprintf("192.0.2.%d:12345", i)
+		_ = h.ServeHTTP(w, req, &mockNextHandler{})
+	}
+	if len(ipBuckets) != maxIPBuckets {
+		t.Fatalf("expected %d buckets, got %d", maxIPBuckets, len(ipBuckets))
+	}
+
+	// One more unique IP must still succeed and not grow the map beyond the cap.
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.0.2.200:12345"
+	next := &mockNextHandler{}
+	if err := h.ServeHTTP(w, req, next); err != nil {
+		t.Fatalf("ServeHTTP: %v", err)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for new IP, got %d", w.Code)
+	}
+	if len(ipBuckets) > maxIPBuckets {
+		t.Errorf("expected bucket count bounded at %d, got %d", maxIPBuckets, len(ipBuckets))
 	}
 }
