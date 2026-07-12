@@ -641,3 +641,73 @@ func TestUpdateRoute_OIDCRejectsNonExistentProvider(t *testing.T) {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestHealthEndpoint_Public(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.RemoteAddr = "203.0.113.1:12345"
+	rec := httptest.NewRecorder()
+	a.router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestReadyEndpoint_RequiresLoopback(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	cases := []struct {
+		name       string
+		remoteAddr string
+		want       int
+	}{
+		{"loopback_ipv4", "127.0.0.1:12345", http.StatusOK},
+		{"loopback_ipv6", "[::1]:12345", http.StatusOK},
+		{"public_ip", "203.0.113.1:12345", http.StatusForbidden},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+			req.RemoteAddr = tt.remoteAddr
+			rec := httptest.NewRecorder()
+			a.router.ServeHTTP(rec, req)
+			if rec.Code != tt.want {
+				t.Fatalf("expected %d, got %d", tt.want, rec.Code)
+			}
+		})
+	}
+}
+
+func TestHealthzEndpoint_RequiresLoopback(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	cases := []struct {
+		name       string
+		remoteAddr string
+		want       int
+	}{
+		{"loopback_ipv4", "127.0.0.1:12345", http.StatusOK},
+		{"loopback_ipv6", "[::1]:12345", http.StatusOK},
+		{"public_ip", "203.0.113.1:12345", http.StatusForbidden},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+			req.RemoteAddr = tt.remoteAddr
+			rec := httptest.NewRecorder()
+			a.router.ServeHTTP(rec, req)
+			if rec.Code != tt.want {
+				t.Fatalf("expected %d, got %d", tt.want, rec.Code)
+			}
+		})
+	}
+}

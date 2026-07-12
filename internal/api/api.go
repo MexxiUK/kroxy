@@ -488,6 +488,24 @@ func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// requireLoopback restricts a handler to loopback addresses only.
+// Used for readiness/comprehensive health endpoints so they do not expose
+// internal component state beyond the local host.
+func (a *API) requireLoopback(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			respondError(w, http.StatusForbidden, "Access denied")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // rateLimitMiddleware returns a middleware that uses the shared rate limiter
 func (a *API) rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -565,9 +583,9 @@ func (a *API) registerRoutes() {
 	// Public routes (no auth required)
 	a.router.Get("/api/status", a.getStatus)
 	a.router.Get("/api/version", a.getVersion)
-	a.router.Get("/health", a.health)                                      // Liveness probe (public)
-	a.router.With(a.adminIPAllowlistMiddleware).Get("/ready", a.ready)     // Readiness probe (admin IPs only)
-	a.router.With(a.adminIPAllowlistMiddleware).Get("/healthz", a.healthz) // Comprehensive health (admin IPs only)
+	a.router.Get("/health", a.health)                    // Liveness probe (public)
+	a.router.With(a.requireLoopback).Get("/ready", a.ready)     // Readiness probe (loopback only)
+	a.router.With(a.requireLoopback).Get("/healthz", a.healthz) // Comprehensive health (loopback only)
 
 	// OAuth routes (public)
 	a.router.Get("/api/oauth/login", a.oauthLogin)
