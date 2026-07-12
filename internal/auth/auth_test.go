@@ -9,6 +9,7 @@ import (
 	"github.com/kroxy/kroxy/internal/crypto"
 	"github.com/kroxy/kroxy/internal/store"
 	"github.com/kroxy/kroxy/internal/totp"
+	"github.com/pquerna/otp"
 	pquernatotp "github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -354,7 +355,12 @@ func TestVerify2FA_Success(t *testing.T) {
 	}
 
 	// Generate valid TOTP code
-	code, err := pquernatotp.GenerateCode(secret, time.Now().UTC())
+	code, err := pquernatotp.GenerateCodeCustom(secret, time.Now().UTC(), pquernatotp.ValidateOpts{
+		Period:    30,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA256,
+		Skew:      0,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,7 +441,12 @@ func TestVerify2FA_SessionBindingMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	code, err := pquernatotp.GenerateCode(secret, time.Now().UTC())
+	code, err := pquernatotp.GenerateCodeCustom(secret, time.Now().UTC(), pquernatotp.ValidateOpts{
+		Period:    30,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA256,
+		Skew:      0,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

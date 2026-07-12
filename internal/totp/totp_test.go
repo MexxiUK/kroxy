@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -54,7 +55,12 @@ func TestValidateCode_Valid(t *testing.T) {
 		t.Fatalf("GenerateSecret failed: %v", err)
 	}
 
-	code, err := totp.GenerateCode(secret, time.Now().UTC())
+	code, err := totp.GenerateCodeCustom(secret, time.Now().UTC(), totp.ValidateOpts{
+		Period:    30,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA256,
+		Skew:      0,
+	})
 	if err != nil {
 		t.Fatalf("GenerateCode failed: %v", err)
 	}
@@ -94,7 +100,12 @@ func TestValidateCode_TimeSkew(t *testing.T) {
 
 	// Generate code for 30 seconds in the past (1 period skew)
 	past := time.Now().UTC().Add(-30 * time.Second)
-	code, err := totp.GenerateCode(secret, past)
+	code, err := totp.GenerateCodeCustom(secret, past, totp.ValidateOpts{
+		Period:    30,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA256,
+		Skew:      0,
+	})
 	if err != nil {
 		t.Fatalf("GenerateCode failed: %v", err)
 	}
@@ -106,7 +117,12 @@ func TestValidateCode_TimeSkew(t *testing.T) {
 
 	// Generate code for 90 seconds in the past (3 periods — beyond skew)
 	old := time.Now().UTC().Add(-90 * time.Second)
-	oldCode, err := totp.GenerateCode(secret, old)
+	oldCode, err := totp.GenerateCodeCustom(secret, old, totp.ValidateOpts{
+		Period:    30,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA256,
+		Skew:      0,
+	})
 	if err != nil {
 		t.Fatalf("GenerateCode failed: %v", err)
 	}
@@ -123,7 +139,12 @@ func TestValidateCodeExact_Valid(t *testing.T) {
 		t.Fatalf("GenerateSecret failed: %v", err)
 	}
 
-	code, err := totp.GenerateCode(secret, time.Now().UTC())
+	code, err := totp.GenerateCodeCustom(secret, time.Now().UTC(), totp.ValidateOpts{
+		Period:    30,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA256,
+		Skew:      0,
+	})
 	if err != nil {
 		t.Fatalf("GenerateCode failed: %v", err)
 	}
@@ -141,7 +162,12 @@ func TestValidateCodeExact_NoSkew(t *testing.T) {
 
 	// Generate code for 30 seconds in the past
 	past := time.Now().UTC().Add(-30 * time.Second)
-	code, err := totp.GenerateCode(secret, past)
+	code, err := totp.GenerateCodeCustom(secret, past, totp.ValidateOpts{
+		Period:    30,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA256,
+		Skew:      0,
+	})
 	if err != nil {
 		t.Fatalf("GenerateCode failed: %v", err)
 	}

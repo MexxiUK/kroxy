@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -137,6 +138,7 @@ func (a *API) exportBackup(w http.ResponseWriter, r *http.Request) {
 		Whitelists    []dto.WhitelistResponse   `json:"whitelists,omitempty"`
 		RateLimits    []dto.RateLimitResponse   `json:"rate_limits,omitempty"`
 		Settings      map[string]string         `json:"settings,omitempty"`
+		Signature     string                    `json:"signature,omitempty"`
 	}{
 		Version:       backupVersion,
 		CreatedAt:     time.Now(),
@@ -151,16 +153,26 @@ func (a *API) exportBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serialize with a deterministic field order so the signature is stable.
-	data, err := json.Marshal(response)
+	unsigned, err := json.Marshal(response)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to serialize backup")
+		return
+	}
+
+	// Sign the backup so imports can verify integrity. Signature is omitted
+	// from the unsigned payload via `omitempty` while it is empty.
+	response.Signature = backupHMAC(unsigned)
+
+	signed, err := json.Marshal(response)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to serialize signed backup")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", "attachment; filename=kroxy-backup-"+time.Now().Format("20060102-150405")+".json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	w.Write(signed)
 
 	a.audit.Log(audit.Event{
 		Type:      "backup_exported",
@@ -191,6 +203,12 @@ func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
 
 	if backup.Version == "" {
 		respondError(w, http.StatusBadRequest, "Invalid backup: missing version")
+		return
+	}
+
+	// In production mode, backups must be signed to prevent tampered imports.
+	if os.Getenv("KROXY_PRODUCTION") == "true" && backup.Signature == "" {
+		respondError(w, http.StatusForbidden, "Backup signature required in production mode")
 		return
 	}
 
