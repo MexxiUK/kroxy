@@ -462,6 +462,18 @@ func SetProxyAddrs(addrs ...string) {
 	}
 }
 
+// SelfReferenceAddrs returns the current list of registered self-reference
+// addresses. It is intended for tests that need to save and restore state.
+func SelfReferenceAddrs() []string {
+	return append([]string(nil), selfReferenceAddrs...)
+}
+
+// ResetSelfReferenceAddrs clears all registered self-reference addresses.
+// It is intended for tests that need isolated self-reference state.
+func ResetSelfReferenceAddrs() {
+	selfReferenceAddrs = nil
+}
+
 // ValidateNoSelfReference checks that a backend URL does not point to
 // one of Kroxy's own listen addresses, which would create a proxy loop.
 // Admin routes (isAdminRoute=true) are exempt since they intentionally proxy to self.

@@ -19,6 +19,7 @@ import (
 	"github.com/kroxy/kroxy/internal/config"
 	"github.com/kroxy/kroxy/internal/store"
 	"github.com/kroxy/kroxy/internal/testutil"
+	"github.com/kroxy/kroxy/internal/validation"
 	"github.com/kroxy/kroxy/internal/waf"
 )
 
@@ -787,5 +788,138 @@ func TestProxy_buildTLSApp_AdminAddrFullHost(t *testing.T) {
 	endpoint := perm["endpoint"].(string)
 	if !strings.Contains(endpoint, "127.0.0.1:8081") {
 		t.Errorf("expected 127.0.0.1:8081 in endpoint, got %s", endpoint)
+	}
+}
+
+// unmarshalHTTPRoutes extracts the "routes" array from an HTTP-only buildConfig
+// result (TLSEnabled=false). It fails the test if the expected structure is missing.
+func unmarshalHTTPRoutes(t *testing.T, data []byte) []interface{} {
+	t.Helper()
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	apps, ok := cfg["apps"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected apps key")
+	}
+	httpApp, ok := apps["http"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected http app")
+	}
+	servers, ok := httpApp["servers"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected servers")
+	}
+	kroxy, ok := servers["kroxy"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected kroxy server")
+	}
+	routesArr, ok := kroxy["routes"].([]interface{})
+	if !ok {
+		t.Fatal("expected routes array")
+	}
+	return routesArr
+}
+
+func TestProxy_buildConfig_SkipInvalidBackend_BadScheme(t *testing.T) {
+	s, cleanup := testutil.NewTestStore(t)
+	defer cleanup()
+
+	r := &store.Route{Domain: "badscheme.com", Backend: "ftp://1.2.3.4/", Enabled: true, WAFMode: "block"}
+	if err := s.CreateRoute(r); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	p := &Proxy{store: s, cfg: &config.Config{ProxyAddr: ":8080"}, waf: nil}
+	data, err := p.buildConfig()
+	if err != nil {
+		t.Fatalf("buildConfig: %v", err)
+	}
+
+	routes := unmarshalHTTPRoutes(t, data)
+	if len(routes) != 1 {
+		t.Errorf("expected only default route for bad-scheme backend, got %d", len(routes))
+	}
+}
+
+func TestProxy_buildConfig_SkipInvalidBackend_PrivateIP(t *testing.T) {
+	// The proxy test package defaults to allowing private backends via TestMain.
+	// Re-enable strict SSRF blocking for this test.
+	validation.SetAllowPrivateBackends(false)
+	t.Cleanup(func() { validation.SetAllowPrivateBackends(true) })
+
+	s, cleanup := testutil.NewTestStore(t)
+	defer cleanup()
+
+	r := &store.Route{Domain: "private.com", Backend: "http://10.0.0.1:8080/", Enabled: true, WAFMode: "block"}
+	if err := s.CreateRoute(r); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	p := &Proxy{store: s, cfg: &config.Config{ProxyAddr: ":8080"}, waf: nil}
+	data, err := p.buildConfig()
+	if err != nil {
+		t.Fatalf("buildConfig: %v", err)
+	}
+
+	routes := unmarshalHTTPRoutes(t, data)
+	if len(routes) != 1 {
+		t.Errorf("expected only default route for private-IP backend, got %d", len(routes))
+	}
+}
+
+func TestProxy_buildConfig_SkipInvalidBackend_SelfReference(t *testing.T) {
+	// Save and restore self-reference address state so this test does not
+	// pollute the global registry for later tests.
+	previous := validation.SelfReferenceAddrs()
+	validation.ResetSelfReferenceAddrs()
+	validation.SetProxyAddrs(":8080")
+	t.Cleanup(func() {
+		validation.ResetSelfReferenceAddrs()
+		validation.SetProxyAddrs(previous...)
+	})
+
+	s, cleanup := testutil.NewTestStore(t)
+	defer cleanup()
+
+	r := &store.Route{Domain: "loop.com", Backend: "http://127.0.0.1:8080/", Enabled: true, WAFMode: "block"}
+	if err := s.CreateRoute(r); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	p := &Proxy{store: s, cfg: &config.Config{ProxyAddr: ":8080"}, waf: nil}
+	data, err := p.buildConfig()
+	if err != nil {
+		t.Fatalf("buildConfig: %v", err)
+	}
+
+	routes := unmarshalHTTPRoutes(t, data)
+	if len(routes) != 1 {
+		t.Errorf("expected only default route for self-referencing backend, got %d", len(routes))
+	}
+}
+
+func TestProxy_buildConfig_KeepsValidBackend_PublicIP(t *testing.T) {
+	validation.SetAllowPrivateBackends(false)
+	t.Cleanup(func() { validation.SetAllowPrivateBackends(true) })
+
+	s, cleanup := testutil.NewTestStore(t)
+	defer cleanup()
+
+	r := &store.Route{Domain: "public.com", Backend: "http://1.2.3.4:80/", Enabled: true, WAFMode: "block"}
+	if err := s.CreateRoute(r); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	p := &Proxy{store: s, cfg: &config.Config{ProxyAddr: ":8080"}, waf: nil}
+	data, err := p.buildConfig()
+	if err != nil {
+		t.Fatalf("buildConfig: %v", err)
+	}
+
+	routes := unmarshalHTTPRoutes(t, data)
+	if len(routes) != 2 {
+		t.Errorf("expected valid route + default route for public-IP backend, got %d", len(routes))
 	}
 }
