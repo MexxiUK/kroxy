@@ -24,11 +24,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/skip2/go-qrcode"
 	"github.com/kroxy/kroxy/internal/api/dto"
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/auth"
-	"github.com/kroxy/kroxy/internal/bot"
 	"github.com/kroxy/kroxy/internal/config"
 	"github.com/kroxy/kroxy/internal/crypto"
 	"github.com/kroxy/kroxy/internal/metrics"
@@ -41,6 +39,7 @@ import (
 	"github.com/kroxy/kroxy/internal/version"
 	"github.com/kroxy/kroxy/internal/waf"
 	"github.com/kroxy/kroxy/web"
+	"github.com/skip2/go-qrcode"
 )
 
 type API struct {
@@ -56,7 +55,7 @@ type API struct {
 	productionMode  bool       // Controls security settings like Secure cookie flag
 	setupMu         sync.Mutex // Prevents race condition in initial setup (CRIT-005)
 	adminAllowedIPs []*net.IPNet
-	maxBodyBytes    int64      // Maximum request body size for backup import
+	maxBodyBytes    int64 // Maximum request body size for backup import
 }
 
 // RateLimiter implements a sliding window rate limiter to prevent burst attacks
@@ -550,8 +549,8 @@ func (a *API) registerRoutes() {
 	// Public routes (no auth required)
 	a.router.Get("/api/status", a.getStatus)
 	a.router.Get("/api/version", a.getVersion)
-	a.router.Get("/health", a.health)                         // Liveness probe (public)
-	a.router.With(a.adminIPAllowlistMiddleware).Get("/ready", a.ready)   // Readiness probe (admin IPs only)
+	a.router.Get("/health", a.health)                                      // Liveness probe (public)
+	a.router.With(a.adminIPAllowlistMiddleware).Get("/ready", a.ready)     // Readiness probe (admin IPs only)
 	a.router.With(a.adminIPAllowlistMiddleware).Get("/healthz", a.healthz) // Comprehensive health (admin IPs only)
 
 	// OAuth routes (public)
@@ -576,7 +575,6 @@ func (a *API) registerRoutes() {
 
 	// CSRF token endpoint (public)
 	a.router.Get("/api/csrf", a.getCsrfToken)
-	a.router.Post("/.kroxy/challenge/verify", botChallengeVerify)
 
 	// Protected routes (auth required)
 	a.router.Group(func(r chi.Router) {
@@ -3824,10 +3822,6 @@ func (a *API) deleteOwnAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 // findCertDir searches Caddy's certificate directory for a domain's certificate folder
-func botChallengeVerify(w http.ResponseWriter, r *http.Request) {
-	bot.NewVerifyEndpoint().ServeHTTP(w, r)
-}
-
 func findCertDir(baseDir, domain string) string {
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {

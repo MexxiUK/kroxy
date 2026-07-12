@@ -86,9 +86,8 @@
                     <select id="bot_protection" name="bot_protection" class="form-select" style="max-width: 280px;">
                         <option value="off" {{ if .Route }}{{ if eq .Route.BotProtection "off" }}selected{{ end }}{{ else }}selected{{ end }}>Off</option>
                         <option value="passive" {{ if .Route }}{{ if eq .Route.BotProtection "passive" }}selected{{ end }}{{ end }}>Passive — Block obvious bots</option>
-                        <option value="challenge" {{ if .Route }}{{ if eq .Route.BotProtection "challenge" }}selected{{ end }}{{ end }}>Challenge — JavaScript proof-of-work</option>
                     </select>
-                    <p class="form-hint">Passive blocks known bot signatures. Challenge serves a lightweight JavaScript proof-of-work to suspicious clients.</p>
+                    <p class="form-hint">Passive mode scores requests based on User-Agent, headers, and behavior; high-confidence bot requests are blocked.</p>
                 </div>
                 <div class="form-group">
                     <div class="form-checkbox">

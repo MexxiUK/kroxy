@@ -76,7 +76,7 @@ func main() {
 	}
 
 	// Initialize bot detection
-	bot.InitGlobals(os.Getenv("KROXY_BOT_SECRET"))
+	bot.InitGlobals()
 
 	// Initialize access log store
 	logStorePath := os.Getenv("KROXY_ACCESS_LOG")

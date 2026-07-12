@@ -3,11 +3,9 @@ package bot
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"github.com/kroxy/kroxy/internal/security"
 )
 
 func init() {
@@ -16,7 +14,9 @@ func init() {
 
 // BotProtectionHandler implements caddyhttp.MiddlewareHandler for bot detection.
 type BotProtectionHandler struct {
-	// Mode: "off", "passive", "challenge"
+	// Mode: "off", "passive", or "challenge".
+	// "challenge" is deprecated and now behaves as "passive" because the
+	// previous JavaScript proof-of-work implementation was trivially bypassable.
 	Mode string `json:"mode,omitempty"`
 }
 
@@ -41,79 +41,31 @@ func (h *BotProtectionHandler) Validate() error {
 	}
 }
 
-// ServeHTTP runs bot detection and either blocks, challenges, or passes through.
+// ServeHTTP runs bot detection and either blocks or passes through.
 func (h *BotProtectionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	if h.Mode == "" || h.Mode == "off" {
 		return next.ServeHTTP(w, r)
 	}
 
-	// Skip challenge verification endpoint itself
-	if strings.HasPrefix(r.URL.Path, "/.kroxy/challenge/") {
-		return next.ServeHTTP(w, r)
-	}
-
-	// Skip static assets (CSS, JS, images, fonts)
-	if isStaticAsset(r.URL.Path) {
-		return next.ServeHTTP(w, r)
-	}
-
-	realIP := security.GetClientIP(r)
-	ip := NormalizeIP(realIP)
-
-	// Check bypass cookie
-	secret := getGlobalSecret()
-	if CheckPassCookie(r, realIP, secret) {
-		return next.ServeHTTP(w, r)
-	}
-
-	// Run detection
 	detector := getGlobalDetector()
 	score := detector.Score(r)
 
-	cache := getGlobalCache()
-
-	// Check cache for this IP
-	if entry := cache.Get(ip); entry != nil {
-		if entry.passed {
-			return next.ServeHTTP(w, r)
-		}
-		score = entry.score
-	}
-
-	// Decision
 	if ShouldBlock(score) {
 		logBotEvent(r, score, "blocked")
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte("Access denied."))
+		_, _ = w.Write([]byte("Access denied."))
 		return nil
 	}
 
-	if h.Mode == "challenge" && ShouldChallenge(score) {
-		logBotEvent(r, score, "challenged")
-		cm := getGlobalChallengeManager()
-		cm.ServeChallengePage(w)
-		return nil
-	}
-
-	// Low-score pass: do NOT cache passed=true so that a single benign request
-	// cannot whitelist a bot IP. Only explicit challenge success sets passed=true.
+	// Legacy "challenge" mode no longer serves a client-side puzzle; it falls
+	// back to passive detection so existing route configurations remain safe.
 	return next.ServeHTTP(w, r)
 }
 
-func isStaticAsset(path string) bool {
-	exts := []string{".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".woff", ".woff2", ".ttf", ".eot"}
-	for _, ext := range exts {
-		if strings.HasSuffix(strings.ToLower(path), ext) {
-			return true
-		}
-	}
-	return false
-}
-
 func logBotEvent(r *http.Request, score float64, action string) {
-	// Use existing audit logger if available, otherwise stdout
-	// This is kept minimal to avoid import cycles
+	// Use existing audit logger if available, otherwise stdout.
+	// This is kept minimal to avoid import cycles.
 }
 
 var _ caddy.Module = (*BotProtectionHandler)(nil)
