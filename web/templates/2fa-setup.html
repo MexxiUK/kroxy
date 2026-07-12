@@ -87,9 +87,9 @@
 
                 document.getElementById('totp-secret-display').textContent = data.secret;
 
-                // Generate QR code using a simple data URI approach
+                // Generate QR code locally from the server-side endpoint
                 const qr = document.createElement('img');
-                qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(data.uri);
+                qr.src = '/api/user/2fa/qr';
                 qr.style.width = '200px';
                 qr.style.height = '200px';
                 qr.style.borderRadius = '12px';

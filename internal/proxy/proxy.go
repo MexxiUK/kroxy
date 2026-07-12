@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -245,22 +246,24 @@ func (p *Proxy) buildConfig() ([]byte, error) {
 		}
 
 		// Add WAF handler if enabled
-		if route.WAFEnabled && p.waf != nil {
+		if route.WAFEnabled {
 			routeWAFMode := route.WAFMode
 			if routeWAFMode == "" {
 				routeWAFMode = "block"
 			}
-			routeWAF, wafErr := waf.New(p.store, waf.Config{
-				Enabled:       true,
-				Mode:          routeWAFMode,
-				Ruleset:       "owasp-crs",
-				ParanoiaLevel: route.WAFParanoiaLevel,
-				SigningKey:    p.signingKey,
-			}, audit.GetLogger(), &route.ID, routeWAFMode)
-			if wafErr != nil {
-				log.Printf("Warning: failed to create WAF for route %s: %v", route.Domain, wafErr)
-			} else {
-				SetRouteWAF(route.ID, routeWAF)
+			if p.waf != nil {
+				routeWAF, wafErr := waf.New(p.store, waf.Config{
+					Enabled:       true,
+					Mode:          routeWAFMode,
+					Ruleset:       "owasp-crs",
+					ParanoiaLevel: route.WAFParanoiaLevel,
+					SigningKey:    p.signingKey,
+				}, audit.GetLogger(), &route.ID, routeWAFMode)
+				if wafErr != nil {
+					log.Printf("Warning: failed to create WAF for route %s: %v", route.Domain, wafErr)
+				} else {
+					SetRouteWAF(route.ID, routeWAF)
+				}
 			}
 
 			handlers = append(handlers, map[string]interface{}{
@@ -321,13 +324,43 @@ func (p *Proxy) buildConfig() ([]byte, error) {
 
 		// Add reverse proxy handler (always last)
 		backendDial := route.Backend
-		if u, err := url.Parse(route.Backend); err == nil {
-			backendDial = u.Host
+		scheme := "http"
+		var backendHost, backendPort string
+		parsedURL, err := url.Parse(route.Backend)
+		if err == nil {
+			backendDial = parsedURL.Host
+			scheme = parsedURL.Scheme
+			backendHost = parsedURL.Hostname()
+			backendPort = parsedURL.Port()
 		}
-		handlers = append(handlers, map[string]interface{}{
+
+		// Enforce Kroxy's DNS-cache resolution so Caddy cannot perform
+		// independent per-request DNS lookups (DNS-rebinding/SSRF guard).
+		if backendHost != "" {
+			if ips, err := validation.GetDNSCache().Resolve(backendHost); err == nil && len(ips) > 0 {
+				if backendPort != "" {
+					backendDial = net.JoinHostPort(ips[0].String(), backendPort)
+				} else if scheme == "https" {
+					backendDial = net.JoinHostPort(ips[0].String(), "443")
+				} else {
+					backendDial = net.JoinHostPort(ips[0].String(), "80")
+				}
+			}
+		}
+
+		rpHandler := map[string]interface{}{
 			"handler":   "reverse_proxy",
 			"upstreams": []map[string]interface{}{{"dial": backendDial}},
-		})
+		}
+		if scheme == "https" {
+			rpHandler["transport"] = map[string]interface{}{
+				"protocol": "http",
+				"tls": map[string]interface{}{
+					"server_name": backendHost,
+				},
+			}
+		}
+		handlers = append(handlers, rpHandler)
 
 		httpsRoutes = append(httpsRoutes, map[string]interface{}{
 			"match": []map[string]interface{}{

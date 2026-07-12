@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/skip2/go-qrcode"
 	"github.com/kroxy/kroxy/internal/api/dto"
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/auth"
@@ -323,7 +324,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		// Content Security Policy with nonce (no unsafe-inline)
 		w.Header().Set("Content-Security-Policy", fmt.Sprintf(
-			"default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'nonce-%s'",
+			"default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'nonce-%s' 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com",
 			nonce, nonce,
 		))
 		// Permissions Policy
@@ -548,6 +549,7 @@ func (a *API) registerRoutes() {
 		r.Put("/api/user/password", a.changePassword)
 		r.Delete("/api/user", a.deleteOwnAccount)
 		r.Post("/api/user/2fa/setup", a.setup2FA)
+		r.Get("/api/user/2fa/qr", a.generate2FAQR)
 		r.Post("/api/user/2fa/enable", a.enable2FA)
 		r.Post("/api/user/2fa/disable", a.disable2FA)
 		r.Post("/api/auth/api-key", a.generateAPIKey)
@@ -1021,6 +1023,50 @@ func (a *API) setup2FA(w http.ResponseWriter, r *http.Request) {
 		"issuer":    "Kroxy",
 		"account":   dbUser.Email,
 	})
+}
+
+func (a *API) generate2FAQR(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r.Context())
+	if user == nil {
+		respondError(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+
+	dbUser, err := a.store.GetUserByID(user.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to get user")
+		return
+	}
+	if dbUser.TOTPEnabled {
+		respondError(w, http.StatusConflict, "2FA is already enabled")
+		return
+	}
+	if dbUser.TOTPSecret == "" {
+		respondError(w, http.StatusBadRequest, "No pending TOTP setup. Call /api/user/2fa/setup first")
+		return
+	}
+
+	secret, err := crypto.Decrypt(dbUser.TOTPSecret)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to decrypt TOTP secret")
+		return
+	}
+
+	uri, err := totp.GenerateURI("Kroxy", dbUser.Email, secret)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to generate TOTP URI")
+		return
+	}
+
+	png, err := qrcode.Encode(uri, qrcode.Medium, 200)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to generate QR code")
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Write(png) // #nosec G104 — best-effort PNG response; client will retry on error
 }
 
 func (a *API) enable2FA(w http.ResponseWriter, r *http.Request) {
@@ -1605,14 +1651,14 @@ func (a *API) oauthLogin(w http.ResponseWriter, r *http.Request) {
 	// without this browser-bound cookie
 	bindingToken := auth.GenerateSecret(32)
 
-	// Set binding cookie (HttpOnly, Secure, SameSite=Strict)
+	// Set binding cookie (HttpOnly, Secure, SameSite=Lax)
 	c := &http.Cookie{
-		Name:     "kroxy_session",
-		Value:    "",
+		Name:     "kroxy_oauth_binding",
+		Value:    bindingToken,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
+		MaxAge:   600,
 	}
 	if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
 		c.Secure = true

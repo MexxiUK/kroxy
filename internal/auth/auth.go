@@ -1005,7 +1005,8 @@ func getIPFromRequest(r *http.Request) string {
 // do NOT delete the session (prevents forced-logout DoS by stolen cookies).
 // Legacy sessions with empty stored IP/UA are grandfathered.
 func (a *Auth) checkSessionBinding(r *http.Request, session *Session, sessionID string) bool {
-	if os.Getenv("KROXY_STRICT_SESSION_BINDING") != "true" {
+	// Session binding is enabled by default; it can only be explicitly disabled.
+	if os.Getenv("KROXY_STRICT_SESSION_BINDING") == "false" {
 		return true
 	}
 
@@ -1017,7 +1018,7 @@ func (a *Auth) checkSessionBinding(r *http.Request, session *Session, sessionID 
 	currentIP := security.GetClientIP(r)
 	currentUA := r.UserAgent()
 
-	ipMatch := session.IP == currentIP || sameIPv4Subnet24(session.IP, currentIP)
+	ipMatch := session.IP == currentIP
 	uaMatch := session.UserAgent == currentUA
 
 	if !ipMatch || !uaMatch {
@@ -1030,20 +1031,6 @@ func (a *Auth) checkSessionBinding(r *http.Request, session *Session, sessionID 
 	return true
 }
 
-// sameIPv4Subnet24 returns true if both IPs are valid IPv4 addresses in the same /24 subnet.
-func sameIPv4Subnet24(ipA, ipB string) bool {
-	a := net.ParseIP(ipA)
-	b := net.ParseIP(ipB)
-	if a == nil || b == nil {
-		return false
-	}
-	a = a.To4()
-	b = b.To4()
-	if a == nil || b == nil {
-		return false
-	}
-	return a[0] == b[0] && a[1] == b[1] && a[2] == b[2]
-}
 
 // Login authenticates a user and creates a session
 func (a *Auth) Login(email, password, ip, userAgent string) (*LoginResponse, error) {

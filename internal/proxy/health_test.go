@@ -12,7 +12,13 @@ import (
 	"github.com/kroxy/kroxy/internal/alerts"
 	"github.com/kroxy/kroxy/internal/store"
 	"github.com/kroxy/kroxy/internal/testutil"
+	"github.com/kroxy/kroxy/internal/validation"
 )
+
+func TestMain(m *testing.M) {
+	validation.SetAllowPrivateBackends(true)
+	m.Run()
+}
 
 func TestNewHealthChecker(t *testing.T) {
 	s, cleanup := testutil.NewTestStore(t)
@@ -309,8 +315,8 @@ func TestHealthChecker_checkRoute_InvalidURL(t *testing.T) {
 	if status.Healthy {
 		t.Error("expected unhealthy for invalid URL")
 	}
-	if !strings.Contains(status.Error, "invalid backend URL") {
-		t.Errorf("expected 'invalid backend URL' error, got: %s", status.Error)
+	if !strings.Contains(status.Error, "invalid URL") {
+		t.Errorf("expected 'invalid URL' error, got: %s", status.Error)
 	}
 }
 

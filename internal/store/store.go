@@ -114,16 +114,22 @@ func (s *Store) CreateRoute(r *Route) error {
 }
 
 func (s *Store) DeleteRoute(id int) error {
-	_, err := s.db.Exec("DELETE FROM routes WHERE id = ?", id)
-	return err
+	res, err := s.db.Exec("DELETE FROM routes WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 func (s *Store) UpdateRoute(r *Route) error {
-	_, err := s.db.Exec(
+	res, err := s.db.Exec(
 		"UPDATE routes SET domain = ?, backend = ?, enabled = ?, waf_enabled = ?, waf_mode = ?, waf_paranoia_level = ?, oidc_enabled = ?, oidc_provider_id = ?, rate_limit = ?, enable_gzip = ?, enable_brotli = ?, enable_cache = ?, custom_headers = ?, block_countries = ?, allow_countries = ?, require_https = ?, is_admin_route = ?, bot_protection = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
 		r.Domain, r.Backend, r.Enabled, r.WAFEnabled, r.WAFMode, r.WAFParanoiaLevel, r.OIDCEnabled, r.OIDCProviderID, r.RateLimit, r.EnableGzip, r.EnableBrotli, r.EnableCache, r.CustomHeaders, r.BlockCountries, r.AllowCountries, r.RequireHTTPS, r.IsAdminRoute, r.BotProtection, r.ID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return requireRowsAffected(res, 1)
 }
 
 // GetAdminRoute returns the admin self-route (is_admin_route = 1)
@@ -1079,10 +1085,18 @@ func (s *Store) GetWebhooks() ([]Webhook, error) {
 	for rows.Next() {
 		var w Webhook
 		var enabled int
-		if err := rows.Scan(&w.ID, &w.Name, &w.URL, &w.Events, &w.Secret, &enabled, &w.CreatedAt); err != nil {
+		var encryptedSecret string
+		if err := rows.Scan(&w.ID, &w.Name, &w.URL, &w.Events, &encryptedSecret, &enabled, &w.CreatedAt); err != nil {
 			return nil, err
 		}
 		w.Enabled = enabled == 1
+		if encryptedSecret != "" {
+			secret, err := crypto.Decrypt(encryptedSecret)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decrypt webhook secret: %w", err)
+			}
+			w.Secret = secret
+		}
 		webhooks = append(webhooks, w)
 	}
 	if err := rows.Err(); err != nil {
@@ -1092,9 +1106,14 @@ func (s *Store) GetWebhooks() ([]Webhook, error) {
 }
 
 func (s *Store) CreateWebhook(w *Webhook) error {
+	encryptedSecret, err := crypto.Encrypt(w.Secret)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt webhook secret: %w", err)
+	}
+
 	result, err := s.db.Exec(
 		"INSERT INTO webhooks (name, url, events, secret, enabled) VALUES (?, ?, ?, ?, ?)",
-		w.Name, w.URL, w.Events, w.Secret, boolToInt(w.Enabled),
+		w.Name, w.URL, w.Events, encryptedSecret, boolToInt(w.Enabled),
 	)
 	if err != nil {
 		return err
@@ -1108,9 +1127,14 @@ func (s *Store) CreateWebhook(w *Webhook) error {
 }
 
 func (s *Store) UpdateWebhook(w *Webhook) error {
-	_, err := s.db.Exec(
+	encryptedSecret, err := crypto.Encrypt(w.Secret)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt webhook secret: %w", err)
+	}
+
+	_, err = s.db.Exec(
 		"UPDATE webhooks SET name = ?, url = ?, events = ?, secret = ?, enabled = ? WHERE id = ?",
-		w.Name, w.URL, w.Events, w.Secret, boolToInt(w.Enabled), w.ID,
+		w.Name, w.URL, w.Events, encryptedSecret, boolToInt(w.Enabled), w.ID,
 	)
 	return err
 }
@@ -1125,4 +1149,20 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// requireRowsAffected checks that a mutation affected exactly one row and
+// returns sql.ErrNoRows when nothing was updated or deleted.
+func requireRowsAffected(res sql.Result, want int64) error {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	if n != want {
+		return fmt.Errorf("expected %d rows affected, got %d", want, n)
+	}
+	return nil
 }

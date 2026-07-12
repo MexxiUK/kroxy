@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -29,13 +30,17 @@ type AccessLogEntry struct {
 
 // LogStore holds recent access logs in memory with rotation.
 type LogStore struct {
-	mu      sync.RWMutex
-	entries []AccessLogEntry
-	maxSize int
-	logFile *os.File
+	mu          sync.RWMutex
+	entries     []AccessLogEntry
+	maxSize     int
+	logFile     *os.File
+	logPath     string
+	currentSize int64
+	maxFileSize int64
 }
 
 const maxLogEntries = 10000
+const maxAccessLogSize = 100 * 1024 * 1024 // 100 MB
 
 // NewLogStore creates an access log store.
 func NewLogStore(logPath string) (*LogStore, error) {
@@ -50,9 +55,11 @@ func NewLogStore(logPath string) (*LogStore, error) {
 	}
 
 	return &LogStore{
-		entries: make([]AccessLogEntry, 0, maxLogEntries),
-		maxSize: maxLogEntries,
-		logFile: f,
+		entries:     make([]AccessLogEntry, 0, maxLogEntries),
+		maxSize:     maxLogEntries,
+		logFile:     f,
+		logPath:     logPath,
+		maxFileSize: maxAccessLogSize,
 	}, nil
 }
 
@@ -70,9 +77,41 @@ func (ls *LogStore) Log(entry AccessLogEntry) {
 	// Write to file
 	if ls.logFile != nil {
 		line, _ := json.Marshal(entry)
-		ls.logFile.Write(line)
-		ls.logFile.Write([]byte("\n"))
+		n, err := ls.logFile.Write(line)
+		if err != nil {
+			log.Printf("access log: failed to write entry: %v", err)
+			return
+		}
+		ls.currentSize += int64(n)
+
+		if _, err := ls.logFile.Write([]byte("\n")); err != nil {
+			log.Printf("access log: failed to write newline: %v", err)
+			return
+		}
+		ls.currentSize++
+
+		if ls.currentSize >= ls.maxFileSize {
+			ls.rotate()
+		}
 	}
+}
+
+// rotate closes the current access log and reopens a fresh one.
+func (ls *LogStore) rotate() {
+	if ls.logFile == nil || ls.logPath == "" {
+		return
+	}
+	ls.logFile.Close()
+	os.Remove(ls.logPath) // discard old access log; no backups needed
+
+	f, err := os.OpenFile(ls.logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600) // #nosec G304 — logPath is from server-side configuration
+	if err != nil {
+		log.Printf("access log: failed to reopen log after rotation: %v", err)
+		ls.logFile = nil
+		return
+	}
+	ls.logFile = f
+	ls.currentSize = 0
 }
 
 // Query returns log entries matching filters.

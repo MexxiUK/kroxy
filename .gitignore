@@ -138,3 +138,9 @@ audits/
 
 # Claude Code local workspace state
 .claude/
+
+# Internal LLM test plan (not for repo)
+docs/LLM_E2E_TEST_PLAN.md
+
+# Internal UI check plan (not for repo)
+docs/UI_CHECK_PLAN.md

@@ -11,6 +11,7 @@ import (
 
 	"github.com/kroxy/kroxy/internal/alerts"
 	"github.com/kroxy/kroxy/internal/store"
+	"github.com/kroxy/kroxy/internal/validation"
 )
 
 // HealthChecker monitors backend health for all routes.
@@ -141,6 +142,17 @@ func (hc *HealthChecker) checkRoute(route store.Route) {
 		Domain:      route.Domain,
 		Backend:     route.Backend,
 		LastChecked: start,
+	}
+
+	if err := validation.RevalidateBackendDNS(route.Backend); err != nil {
+		status.Error = fmt.Sprintf("backend failed security revalidation: %v", err)
+		hc.setStatusWithFailCount(&status)
+		return
+	}
+	if err := validation.ValidateBackendURL(route.Backend); err != nil {
+		status.Error = fmt.Sprintf("backend failed security validation: %v", err)
+		hc.setStatusWithFailCount(&status)
+		return
 	}
 
 	req, err := http.NewRequest("GET", route.Backend, nil)

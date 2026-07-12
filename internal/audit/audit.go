@@ -318,12 +318,41 @@ const (
 
 // NewAlertHandler creates a new alert handler with default log-based alerting
 func NewAlertHandler() *AlertHandler {
-	return &AlertHandler{
+	ah := &AlertHandler{
 		failedLogins: make(map[string]*alertCounter),
 		wafBlocks:    make(map[string]*alertCounter),
 		alertCallback: func(alertType, message string) {
 			log.Printf("SECURITY ALERT [%s]: %s", alertType, message)
 		},
+	}
+	go ah.cleanupLoop()
+	return ah
+}
+
+// cleanupLoop periodically evicts stale per-IP counters to prevent
+// unbounded memory growth from distributed attackers.
+func (ah *AlertHandler) cleanupLoop() {
+	ticker := time.NewTicker(alertWindowDuration)
+	defer ticker.Stop()
+	for range ticker.C {
+		ah.evictStaleCounters()
+	}
+}
+
+func (ah *AlertHandler) evictStaleCounters() {
+	ah.mu.Lock()
+	defer ah.mu.Unlock()
+
+	cutoff := time.Now().Add(-alertWindowDuration)
+	for ip, c := range ah.failedLogins {
+		if c.firstSeen.Before(cutoff) {
+			delete(ah.failedLogins, ip)
+		}
+	}
+	for ip, c := range ah.wafBlocks {
+		if c.firstSeen.Before(cutoff) {
+			delete(ah.wafBlocks, ip)
+		}
 	}
 }
 

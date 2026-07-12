@@ -203,13 +203,18 @@ func (m *Manager) ExchangeCode(ctx context.Context, providerID int, code string,
 
 	// Extract claims
 	var claims struct {
-		Email    string `json:"email"`
-		Name     string `json:"name"`
-		Subject  string `json:"sub"`
-		Username string `json:"preferred_username"`
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		Subject       string `json:"sub"`
+		Username      string `json:"preferred_username"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to extract claims: %w", err)
+	}
+
+	if !claims.EmailVerified {
+		return nil, fmt.Errorf("OIDC provider did not verify the email address")
 	}
 
 	// Create session

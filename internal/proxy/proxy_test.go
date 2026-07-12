@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -593,7 +594,7 @@ func TestProxy_buildConfig_BackendDial(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	// Verify the upstream dial uses Host only (no path)
+	// Verify the upstream dial resolves to the cached IP:port (no path)
 	apps := cfg["apps"].(map[string]interface{})
 	httpApp := apps["http"].(map[string]interface{})
 	servers := httpApp["servers"].(map[string]interface{})
@@ -604,9 +605,12 @@ func TestProxy_buildConfig_BackendDial(t *testing.T) {
 	handlers := firstRoute["handle"].([]interface{})
 	reverseProxy := handlers[len(handlers)-1].(map[string]interface{})
 	upstreams := reverseProxy["upstreams"].([]interface{})
-	dial := upstreams[0].(map[string]interface{})["dial"]
-	if dial != "localhost:3001" {
-		t.Errorf("expected dial localhost:3001, got %v", dial)
+	dial := upstreams[0].(map[string]interface{})["dial"].(string)
+
+	// DNS resolution may return 127.0.0.1 or ::1 for localhost; accept either.
+	expected := []string{"127.0.0.1:3001", "[::1]:3001"}
+	if !slices.Contains(expected, dial) {
+		t.Errorf("expected dial one of %v, got %v", expected, dial)
 	}
 }
 

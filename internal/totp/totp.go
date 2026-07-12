@@ -61,3 +61,19 @@ func ValidateCodeExact(secret, code string) bool {
 func ConstantTimeEqual(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
+
+// GenerateURI builds the otpauth:// TOTP URI from the raw secret.
+func GenerateURI(issuer, accountName, secret string) (string, error) {
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      issuer,
+		AccountName: accountName,
+		Secret:      []byte(secret),
+		Period:      30,
+		Digits:      otp.DigitsSix,
+		Algorithm:   otp.AlgorithmSHA1,
+	})
+	if err != nil {
+		return "", err
+	}
+	return key.URL(), nil
+}

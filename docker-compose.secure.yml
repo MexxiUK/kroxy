@@ -39,13 +39,18 @@ services:
     environment:
       - KROXY_PROXY=:80            # HTTP listener (redirects to HTTPS)
       - KROXY_HTTPS_ADDR=:443      # HTTPS listener
-      - KROXY_ADMIN=:8080
+      - KROXY_ADMIN=127.0.0.1:8080 # Admin API bound to localhost inside container
       - KROXY_DB=/data/kroxy.db
       - KROXY_ADMIN_TOKEN_FILE=/data/admin_token
+      - KROXY_PRODUCTION=true
+      # Generate persistent secrets with: openssl rand -base64 32
+      - KROXY_ENCRYPTION_KEY=${KROXY_ENCRYPTION_KEY:?KROXY_ENCRYPTION_KEY is required}
+      - KROXY_JWT_SECRET=${KROXY_JWT_SECRET:?KROXY_JWT_SECRET is required}
+      - KROXY_WAF_SIGNING_KEY=${KROXY_WAF_SIGNING_KEY:?KROXY_WAF_SIGNING_KEY is required}
       # TLS Configuration
       - KROXY_TLS_ENABLED=true
       - KROXY_AUTO_HTTPS=true
-      - KROXY_ACME_EMAIL=admin@example.com  # Change this!
+      - KROXY_ACME_EMAIL=${KROXY_ACME_EMAIL:?KROXY_ACME_EMAIL is required}
       - KROXY_REDIRECT_HTTP=true
       - KROXY_HSTS_ENABLED=true
 
