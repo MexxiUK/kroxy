@@ -74,10 +74,12 @@ func (s *Store) Ping(ctx context.Context) error {
 
 // Route methods
 
+const defaultListLimit = 1000
+
 func (s *Store) GetRoutes() ([]Route, error) {
 	rows, err := s.db.Query(`SELECT id, domain, backend, enabled, waf_enabled, waf_mode, waf_paranoia_level, oidc_enabled, oidc_provider_id,
 		rate_limit, enable_gzip, enable_brotli, enable_cache, custom_headers, block_countries, allow_countries, require_https,
-		is_admin_route, bot_protection, created_at, updated_at FROM routes`)
+		is_admin_route, bot_protection, created_at, updated_at FROM routes LIMIT ?`, defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +154,7 @@ func (s *Store) GetAdminRoute() (*Route, error) {
 // OIDC Provider methods
 
 func (s *Store) GetOIDCProviders() ([]OIDCProvider, error) {
-	rows, err := s.db.Query("SELECT id, name, client_id, client_secret, discovery_url, redirect_url FROM oidc_providers")
+	rows, err := s.db.Query("SELECT id, name, client_id, client_secret, discovery_url, redirect_url FROM oidc_providers LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +265,7 @@ func (s *Store) CleanupSessions() error {
 // Blacklist methods
 
 func (s *Store) GetBlacklists() ([]Blacklist, error) {
-	rows, err := s.db.Query("SELECT id, type, value, enabled, created_at FROM blacklists")
+	rows, err := s.db.Query("SELECT id, type, value, enabled, created_at FROM blacklists LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +309,7 @@ func (s *Store) DeleteBlacklist(id int) error {
 // Whitelist methods
 
 func (s *Store) GetWhitelists() ([]Whitelist, error) {
-	rows, err := s.db.Query("SELECT id, type, value, enabled, created_at FROM whitelists")
+	rows, err := s.db.Query("SELECT id, type, value, enabled, created_at FROM whitelists LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +353,7 @@ func (s *Store) DeleteWhitelist(id int) error {
 // RateLimit methods
 
 func (s *Store) GetRateLimits() ([]RateLimit, error) {
-	rows, err := s.db.Query("SELECT id, domain, requests_per_minute, burst, enabled FROM rate_limits")
+	rows, err := s.db.Query("SELECT id, domain, requests_per_minute, burst, enabled FROM rate_limits LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +405,7 @@ func (s *Store) DeleteRateLimit(id int) error {
 // User methods
 
 func (s *Store) GetUsers() ([]User, error) {
-	rows, err := s.db.Query("SELECT id, email, name, role, enabled, totp_enabled FROM users")
+	rows, err := s.db.Query("SELECT id, email, name, role, enabled, totp_enabled FROM users LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +511,7 @@ func (s *Store) DeleteUser(id int) error {
 // Certificate methods
 
 func (s *Store) GetCertificates() ([]Certificate, error) {
-	rows, err := s.db.Query("SELECT id, domain, type, issuer, cert_path, key_path, auto_renew, status, expires_at FROM certificates")
+	rows, err := s.db.Query("SELECT id, domain, type, issuer, cert_path, key_path, auto_renew, status, expires_at FROM certificates LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -582,7 +584,7 @@ func (s *Store) UpdateCertificateStatus(id int, status string) error {
 // WAF Rule methods
 
 func (s *Store) GetWAFRules() ([]WAFRule, error) {
-	rows, err := s.db.Query("SELECT id, name, rule, enabled, mode, exclusions, route_id FROM waf_rules")
+	rows, err := s.db.Query("SELECT id, name, rule, enabled, mode, exclusions, route_id FROM waf_rules LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -604,7 +606,7 @@ func (s *Store) GetWAFRules() ([]WAFRule, error) {
 
 // GetGlobalWAFRules returns only global WAF rules (route_id IS NULL)
 func (s *Store) GetGlobalWAFRules() ([]WAFRule, error) {
-	rows, err := s.db.Query("SELECT id, name, rule, enabled, mode, exclusions, route_id FROM waf_rules WHERE route_id IS NULL")
+	rows, err := s.db.Query("SELECT id, name, rule, enabled, mode, exclusions, route_id FROM waf_rules WHERE route_id IS NULL LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -626,7 +628,7 @@ func (s *Store) GetGlobalWAFRules() ([]WAFRule, error) {
 
 // GetWAFRulesForRoute returns both global rules and route-specific rules for a given route
 func (s *Store) GetWAFRulesForRoute(routeID int) ([]WAFRule, error) {
-	rows, err := s.db.Query("SELECT id, name, rule, enabled, mode, exclusions, route_id FROM waf_rules WHERE route_id IS NULL OR route_id = ?", routeID)
+	rows, err := s.db.Query("SELECT id, name, rule, enabled, mode, exclusions, route_id FROM waf_rules WHERE route_id IS NULL OR route_id = ? LIMIT ?", routeID, defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -698,7 +700,7 @@ func (s *Store) GetAPIKey(keyID string) (*APIKey, error) {
 }
 
 func (s *Store) GetAPIKeysByUser(userID int) ([]APIKey, error) {
-	rows, err := s.db.Query("SELECT id, key_id, key_secret_hash, key_secret_hmac, user_id, name, created_at, expires_at, last_used FROM api_keys WHERE user_id = ?", userID)
+	rows, err := s.db.Query("SELECT id, key_id, key_secret_hash, key_secret_hmac, user_id, name, created_at, expires_at, last_used FROM api_keys WHERE user_id = ? LIMIT ?", userID, defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -977,7 +979,7 @@ func (s *Store) IsLocked(identifier string) (bool, *time.Time, error) {
 
 // GetRedirectDomains returns all allowed redirect domains
 func (s *Store) GetRedirectDomains() ([]string, error) {
-	rows, err := s.db.Query("SELECT domain FROM redirect_domains")
+	rows, err := s.db.Query("SELECT domain FROM redirect_domains LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1018,8 +1020,8 @@ func (s *Store) RemoveRedirectDomain(domain string) error {
 func (s *Store) GetSessionsByUser(userID int) ([]Session, error) {
 	rows, err := s.db.Query(`
 		SELECT id, user_email, user_name, user_id, provider_name, client_ip, user_agent, created_at, expires_at
-		FROM sessions WHERE user_id = ?
-	`, userID)
+		FROM sessions WHERE user_id = ? LIMIT ?
+	`, userID, defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1172,7 +1174,7 @@ func (s *Store) UpdateOIDCProvider(p *OIDCProvider) error {
 // Webhook methods
 
 func (s *Store) GetWebhooks() ([]Webhook, error) {
-	rows, err := s.db.Query("SELECT id, name, url, events, secret, enabled, created_at FROM webhooks")
+	rows, err := s.db.Query("SELECT id, name, url, events, secret, enabled, created_at FROM webhooks LIMIT ?", defaultListLimit)
 	if err != nil {
 		return nil, err
 	}
