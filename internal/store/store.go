@@ -484,11 +484,26 @@ func (s *Store) DisableTOTP(userID int) error {
 }
 
 func (s *Store) DeleteUser(id int) error {
-	res, err := s.db.Exec("DELETE FROM users WHERE id = ?", id)
+	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
-	return requireRowsAffected(res, 1)
+	defer tx.Rollback()
+
+	// Remove API keys first so they are not orphaned when the user is deleted.
+	if _, err := tx.Exec("DELETE FROM api_keys WHERE user_id = ?", id); err != nil {
+		return err
+	}
+
+	res, err := tx.Exec("DELETE FROM users WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	if err := requireRowsAffected(res, 1); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // Certificate methods

@@ -106,6 +106,12 @@ func (cm *ChallengeManager) ServeChallengePage(w http.ResponseWriter) {
 	nonce, diff := cm.GenerateChallenge()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	// The challenge page uses an inline script, so we allow only that and block
+	// all other resource types (styles, images, fonts, etc.).
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, challengePage, nonce, diff)
 }

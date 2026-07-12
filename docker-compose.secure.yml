@@ -15,12 +15,13 @@ services:
     tmpfs:
       - /tmp:size=64M,mode=1777
 
-    # Security: Drop all capabilities, add only what's needed
+    # Security: Drop all capabilities, add only what's needed.
+    # Named volumes inherit the ownership of /data and /home/kroxy from the
+    # image, so SQLite can create files without the CHOWN capability.
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE  # Required for ports < 1024
-      - CHOWN             # Required for SQLite file creation
 
     # Security: Prevent privilege escalation
     privileged: false

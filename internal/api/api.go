@@ -550,9 +550,9 @@ func (a *API) registerRoutes() {
 	// Public routes (no auth required)
 	a.router.Get("/api/status", a.getStatus)
 	a.router.Get("/api/version", a.getVersion)
-	a.router.Get("/health", a.health)   // Liveness probe
-	a.router.Get("/ready", a.ready)     // Readiness probe
-	a.router.Get("/healthz", a.healthz) // Comprehensive health
+	a.router.Get("/health", a.health)                         // Liveness probe (public)
+	a.router.With(a.adminIPAllowlistMiddleware).Get("/ready", a.ready)   // Readiness probe (admin IPs only)
+	a.router.With(a.adminIPAllowlistMiddleware).Get("/healthz", a.healthz) // Comprehensive health (admin IPs only)
 
 	// OAuth routes (public)
 	a.router.Get("/api/oauth/login", a.oauthLogin)
