@@ -35,9 +35,9 @@ services:
       - KROXY_TLS_ENABLED=true
       - KROXY_AUTO_HTTPS=true
       - KROXY_ACME_EMAIL=admin@example.com
-      - KROXY_ENCRYPTION_KEY=CHANGE_ME_32_CHAR_MINIMUM
+      - KROXY_ENCRYPTION_KEY=CHANGE_ME_BASE64_32_BYTE_MINIMUM
       - KROXY_JWT_SECRET=CHANGE_ME_32_CHAR_MINIMUM
-      - KROXY_WAF_SIGNING_KEY=CHANGE_ME_32_CHAR_MINIMUM
+      - KROXY_WAF_SIGNING_KEY=CHANGE_ME_BASE64_32_BYTE_MINIMUM
     deploy:
       resources:
         limits:
@@ -47,6 +47,11 @@ services:
 volumes:
   kroxy-data:
 ```
+
+> **Security note:** `KROXY_ENCRYPTION_KEY` and `KROXY_WAF_SIGNING_KEY` must be base64-encoded 32-byte values. Generate them with:
+> ```bash
+> openssl rand -base64 32
+> ```
 
 Start Kroxy:
 

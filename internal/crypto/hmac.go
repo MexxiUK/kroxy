@@ -42,14 +42,15 @@ var (
 )
 
 // GetWAFSigningKey returns the WAF signing key, loading it once from the
-// KROXY_WAF_SIGNING_KEY environment variable. In production mode, the key
-// is required. In dev mode, a random key is auto-generated.
+// KROXY_WAF_SIGNING_KEY environment variable. The key must be base64-encoded
+// and decode to at least 32 bytes. In production mode, the key is required.
+// In dev mode, a random key is auto-generated when the variable is empty.
 func GetWAFSigningKey() ([]byte, error) {
 	wafSigningKeyOnce.Do(func() {
 		key := os.Getenv("KROXY_WAF_SIGNING_KEY")
 		if key == "" {
 			if os.Getenv("KROXY_PRODUCTION") == "true" {
-				wafKeyLoadErr = errors.New("KROXY_WAF_SIGNING_KEY must be set in production mode")
+				wafKeyLoadErr = ErrNoSigningKey
 				return
 			}
 			keyBytes := make([]byte, 32)
@@ -60,14 +61,20 @@ func GetWAFSigningKey() ([]byte, error) {
 			log.Println("WARNING: Using random WAF signing key (not persistent across restarts). Set KROXY_WAF_SIGNING_KEY for production use.")
 			return
 		}
-		if len(key) < 32 {
+
+		keyBytes, decodeErr := base64.StdEncoding.DecodeString(key)
+		if decodeErr != nil {
+			wafKeyLoadErr = fmt.Errorf("KROXY_WAF_SIGNING_KEY must be a valid base64 string: %w", decodeErr)
+			return
+		}
+		if len(keyBytes) < 32 {
 			if os.Getenv("KROXY_PRODUCTION") == "true" {
-				wafKeyLoadErr = fmt.Errorf("KROXY_WAF_SIGNING_KEY must be at least 32 characters, got %d", len(key))
+				wafKeyLoadErr = fmt.Errorf("KROXY_WAF_SIGNING_KEY must decode to at least 32 bytes, got %d", len(keyBytes))
 				return
 			}
-			log.Printf("WARNING: KROXY_WAF_SIGNING_KEY is only %d characters. Recommended minimum is 32 characters.", len(key)) // #nosec G706 — %d prints an integer length, not user input
+			log.Printf("WARNING: KROXY_WAF_SIGNING_KEY decodes to only %d bytes. Recommended minimum is 32 bytes.", len(keyBytes)) // #nosec G706 — %d prints an integer length, not user input
 		}
-		wafSigningKey = []byte(key)
+		wafSigningKey = keyBytes
 	})
 	return wafSigningKey, wafKeyLoadErr
 }

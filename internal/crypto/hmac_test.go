@@ -14,7 +14,7 @@ const testBodyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b78
 
 func TestSignAndVerifyWAFHeader(t *testing.T) {
 	// Set a known signing key for predictable results
-	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
 	os.Setenv("KROXY_PRODUCTION", "")
 	// Reset the once for testing
 	ResetSigningKeyForTest()
@@ -31,7 +31,7 @@ func TestSignAndVerifyWAFHeader(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_WrongHost(t *testing.T) {
-	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -44,7 +44,7 @@ func TestVerifyWAFHeader_WrongHost(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_WrongMethod(t *testing.T) {
-	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -57,7 +57,7 @@ func TestVerifyWAFHeader_WrongMethod(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_WrongRouteID(t *testing.T) {
-	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -70,7 +70,7 @@ func TestVerifyWAFHeader_WrongRouteID(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_WrongBodyHash(t *testing.T) {
-	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -83,7 +83,7 @@ func TestVerifyWAFHeader_WrongBodyHash(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_ExpiredTimestamp(t *testing.T) {
-	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -103,7 +103,7 @@ func TestVerifyWAFHeader_ExpiredTimestamp(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_TamperedHMAC(t *testing.T) {
-	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -118,7 +118,7 @@ func TestVerifyWAFHeader_TamperedHMAC(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_InvalidFormat(t *testing.T) {
-	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -170,7 +170,7 @@ func TestGetWAFSigningKey_ProductionRequired(t *testing.T) {
 }
 
 func TestGetWAFSigningKey_ProductionWithKey(t *testing.T) {
-	os.Setenv("KROXY_WAF_SIGNING_KEY", "this-is-a-very-long-production-key-that-is-at-least-32-chars")
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGhpcy1pcy1hLXZlcnktbG9uZy1wcm9kdWN0aW9uLWtleS10aGF0LWlzLWF0LWxlYXN0LTMyLWNoYXJz")
 	os.Setenv("KROXY_PRODUCTION", "true")
 	ResetSigningKeyForTest()
 	defer os.Unsetenv("KROXY_WAF_SIGNING_KEY")
@@ -182,5 +182,31 @@ func TestGetWAFSigningKey_ProductionWithKey(t *testing.T) {
 	}
 	if string(key) != "this-is-a-very-long-production-key-that-is-at-least-32-chars" {
 		t.Errorf("Key mismatch")
+	}
+}
+
+func TestGetWAFSigningKey_InvalidBase64(t *testing.T) {
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "not-valid-base64!!!")
+	os.Setenv("KROXY_PRODUCTION", "true")
+	ResetSigningKeyForTest()
+	defer os.Unsetenv("KROXY_WAF_SIGNING_KEY")
+	defer os.Unsetenv("KROXY_PRODUCTION")
+
+	_, err := GetWAFSigningKey()
+	if err == nil {
+		t.Error("Expected error when KROXY_WAF_SIGNING_KEY is not valid base64")
+	}
+}
+
+func TestGetWAFSigningKey_TooShort(t *testing.T) {
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "dG9vLXNob3J0") // base64 of "too-short"
+	os.Setenv("KROXY_PRODUCTION", "true")
+	ResetSigningKeyForTest()
+	defer os.Unsetenv("KROXY_WAF_SIGNING_KEY")
+	defer os.Unsetenv("KROXY_PRODUCTION")
+
+	_, err := GetWAFSigningKey()
+	if err == nil {
+		t.Error("Expected error when KROXY_WAF_SIGNING_KEY decodes to fewer than 32 bytes")
 	}
 }
