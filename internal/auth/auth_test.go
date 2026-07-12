@@ -511,7 +511,6 @@ func TestCheckSessionBinding_EnabledMismatch(t *testing.T) {
 	}
 }
 
-
 func TestCheckSessionBinding_LegacySession(t *testing.T) {
 	a, _, cleanup := newTestAuth(t)
 	defer cleanup()
@@ -527,5 +526,37 @@ func TestCheckSessionBinding_LegacySession(t *testing.T) {
 	session := &Session{UserID: 1, IP: "", UserAgent: ""}
 	if !a.checkSessionBinding(req, session, "sess-id") {
 		t.Fatal("expected legacy session to pass")
+	}
+}
+
+func TestGenerateState_IncludesPKCEAndNonce(t *testing.T) {
+	a, _, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	stateInfo := a.GenerateState(7, "/dashboard", "binding-token")
+	if stateInfo == nil {
+		t.Fatal("expected state info")
+	}
+	if stateInfo.State == "" {
+		t.Fatal("expected state")
+	}
+	// PKCE verifier must be 43 characters (32 random bytes in unpadded base64url).
+	if len(stateInfo.CodeVerifier) != 43 {
+		t.Fatalf("expected code verifier length 43, got %d", len(stateInfo.CodeVerifier))
+	}
+	if stateInfo.Nonce == "" {
+		t.Fatal("expected nonce")
+	}
+
+	// Validating the state must return the same PKCE verifier and nonce.
+	validated, err := a.ValidateState(stateInfo.State, "binding-token")
+	if err != nil {
+		t.Fatalf("expected valid state, got: %v", err)
+	}
+	if validated.CodeVerifier != stateInfo.CodeVerifier {
+		t.Fatal("code verifier mismatch after state validation")
+	}
+	if validated.Nonce != stateInfo.Nonce {
+		t.Fatal("nonce mismatch after state validation")
 	}
 }

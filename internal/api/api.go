@@ -1748,11 +1748,11 @@ func (a *API) oauthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, c)
 
-	// Generate state with session binding
+	// Generate state with session binding, PKCE verifier and OIDC nonce.
 	redirectURL := r.URL.Query().Get("redirect")
-	state := a.auth.GenerateState(providerID, redirectURL, bindingToken)
+	stateInfo := a.auth.GenerateState(providerID, redirectURL, bindingToken)
 
-	authURL, err := a.oidcManager.GetAuthURL(providerID, state)
+	authURL, err := a.oidcManager.GetAuthURL(providerID, stateInfo.State, stateInfo.CodeVerifier, stateInfo.Nonce)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to generate auth URL")
 		return
@@ -1809,7 +1809,7 @@ func (a *API) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip := security.GetClientIP(r)
-	session, err := a.oidcManager.ExchangeCode(r.Context(), providerID, code, ip, r.UserAgent())
+	session, err := a.oidcManager.ExchangeCode(r.Context(), providerID, code, stateInfo.CodeVerifier, stateInfo.Nonce, ip, r.UserAgent())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to exchange code")
 		return

@@ -3,6 +3,7 @@ package oidc
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"log"
@@ -159,8 +160,8 @@ func (m *Manager) InitializeAllProviders(ctx context.Context) error {
 	return nil
 }
 
-// GetAuthURL returns the OAuth authorization URL for a provider
-func (m *Manager) GetAuthURL(providerID int, state string) (string, error) {
+// GetAuthURL returns the OAuth authorization URL for a provider with PKCE and nonce.
+func (m *Manager) GetAuthURL(providerID int, state, codeVerifier, nonce string) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -169,12 +170,19 @@ func (m *Manager) GetAuthURL(providerID int, state string) (string, error) {
 		return "", fmt.Errorf("provider not found: %d", providerID)
 	}
 
-	return p.oauthConfig.AuthCodeURL(state), nil
+	opts := []oauth2.AuthCodeOption{
+		oauth2.SetAuthURLParam("code_challenge", pkceChallenge(codeVerifier)),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+	}
+	if nonce != "" {
+		opts = append(opts, oidc.Nonce(nonce))
+	}
+	return p.oauthConfig.AuthCodeURL(state, opts...), nil
 }
 
-// ExchangeCode exchanges an authorization code for tokens.
+// ExchangeCode exchanges an authorization code for tokens using PKCE.
 // The ip and userAgent parameters are persisted in the database session for binding validation.
-func (m *Manager) ExchangeCode(ctx context.Context, providerID int, code string, ip string, userAgent string) (*Session, error) {
+func (m *Manager) ExchangeCode(ctx context.Context, providerID int, code, codeVerifier, nonce, ip, userAgent string) (*Session, error) {
 	m.mu.RLock()
 	p, ok := m.providers[providerID]
 	m.mu.RUnlock()
@@ -183,8 +191,8 @@ func (m *Manager) ExchangeCode(ctx context.Context, providerID int, code string,
 		return nil, fmt.Errorf("provider not found: %d", providerID)
 	}
 
-	// Exchange code for token
-	token, err := p.oauthConfig.Exchange(ctx, code)
+	// Exchange code for token, sending the PKCE code verifier.
+	token, err := p.oauthConfig.Exchange(ctx, code, oauth2.VerifierOption(codeVerifier))
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
 	}
@@ -208,9 +216,14 @@ func (m *Manager) ExchangeCode(ctx context.Context, providerID int, code string,
 		Name          string `json:"name"`
 		Subject       string `json:"sub"`
 		Username      string `json:"preferred_username"`
+		Nonce         string `json:"nonce"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to extract claims: %w", err)
+	}
+
+	if nonce != "" && claims.Nonce != nonce {
+		return nil, fmt.Errorf("OIDC nonce mismatch")
 	}
 
 	if !claims.EmailVerified {
@@ -340,4 +353,10 @@ func generateState(redirectURL string) string {
 	// Store redirect URL with state (in production, use Redis)
 	// For now, we'll use a simple approach
 	return state
+}
+
+// pkceChallenge returns the S256 code challenge for a PKCE verifier.
+func pkceChallenge(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }

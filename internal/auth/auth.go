@@ -192,6 +192,8 @@ type StateInfo struct {
 	ProviderID     int
 	RedirectURL    string
 	SessionBinding string // Hash of session cookie to prevent state token theft
+	CodeVerifier   string // PKCE code verifier (single-use)
+	Nonce          string // OIDC nonce for replay mitigation
 	CreatedAt      time.Time
 	ExpiresAt      time.Time
 }
@@ -1577,9 +1579,9 @@ func deriveAPIKeyHMACKey(key []byte) []byte {
 	return mac.Sum(nil)
 }
 
-// GenerateState creates a cryptographically secure state parameter
-// sessionBinding should be a value from the user's session cookie to bind the state to their browser
-func (a *Auth) GenerateState(providerID int, redirectURL, sessionBinding string) string {
+// GenerateState creates a cryptographically secure state parameter and returns the stored state info.
+// sessionBinding should be a value from the user's session cookie to bind the state to their browser.
+func (a *Auth) GenerateState(providerID int, redirectURL, sessionBinding string) *StateInfo {
 	state := generateSecret(32)
 
 	// Hash the session binding for storage (don't store raw session value)
@@ -1593,12 +1595,14 @@ func (a *Auth) GenerateState(providerID int, redirectURL, sessionBinding string)
 		ProviderID:     providerID,
 		RedirectURL:    redirectURL,
 		SessionBinding: bindingHash,
+		CodeVerifier:   generateCodeVerifier(),
+		Nonce:          generateOIDCNonce(),
 		CreatedAt:      time.Now(),
 		ExpiresAt:      time.Now().Add(10 * time.Minute),
 	}
 
 	a.stateStore.Store(state, stateInfo)
-	return state
+	return stateInfo
 }
 
 // ValidateState validates and consumes a state parameter
@@ -1865,6 +1869,25 @@ func GenerateSecret(length int) string {
 // generateSecret is an alias for GenerateSecret (internal use)
 func generateSecret(length int) string {
 	return GenerateSecret(length)
+}
+
+// generateCodeVerifier creates a PKCE code verifier: 32 random bytes encoded
+// as unpadded base64url, yielding 43 characters (within the 43-128 char spec).
+func generateCodeVerifier() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatalf("FATAL: crypto/rand failed in generateCodeVerifier: %v", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// generateOIDCNonce creates a cryptographically random OIDC nonce.
+func generateOIDCNonce() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatalf("FATAL: crypto/rand failed in generateOIDCNonce: %v", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 // CreateSessionCookie creates an HTTP cookie for a session
