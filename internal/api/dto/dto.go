@@ -9,7 +9,7 @@ import (
 )
 
 // RouteRequest is the API input for creating or updating a route.
-// It excludes internal fields (ID, IsAdminRoute, OIDCProviderID, CreatedAt, UpdatedAt)
+// It excludes internal/readonly fields (ID, IsAdminRoute, CreatedAt, UpdatedAt)
 // so callers cannot mass-assign flags that bypass security controls.
 type RouteRequest struct {
 	Domain           string `json:"domain"`
@@ -19,6 +19,7 @@ type RouteRequest struct {
 	WAFMode          string `json:"waf_mode"`
 	WAFParanoiaLevel int    `json:"waf_paranoia_level"`
 	OIDCEnabled      bool   `json:"oidc_enabled"`
+	OIDCProviderID   int    `json:"oidc_provider_id"`
 	RateLimit        int    `json:"rate_limit"`
 	EnableGzip       bool   `json:"enable_gzip"`
 	EnableBrotli     bool   `json:"enable_brotli"`
@@ -40,6 +41,7 @@ func (req RouteRequest) ToStore() store.Route {
 		WAFMode:          req.WAFMode,
 		WAFParanoiaLevel: req.WAFParanoiaLevel,
 		OIDCEnabled:      req.OIDCEnabled,
+		OIDCProviderID:   req.OIDCProviderID,
 		RateLimit:        req.RateLimit,
 		EnableGzip:       req.EnableGzip,
 		EnableBrotli:     req.EnableBrotli,
@@ -54,7 +56,7 @@ func (req RouteRequest) ToStore() store.Route {
 }
 
 // RouteResponse is the safe API representation of a route.
-// Omits Backend (internal URL), OIDCProviderID, and IsAdminRoute.
+// Omits Backend (internal URL) and IsAdminRoute.
 type RouteResponse struct {
 	ID               int       `json:"id"`
 	Domain           string    `json:"domain"`
@@ -63,6 +65,7 @@ type RouteResponse struct {
 	WAFMode          string    `json:"waf_mode"`
 	WAFParanoiaLevel int       `json:"waf_paranoia_level"`
 	OIDCEnabled      bool      `json:"oidc_enabled"`
+	OIDCProviderID   int       `json:"oidc_provider_id"`
 	RateLimit        int       `json:"rate_limit"`
 	EnableGzip       bool      `json:"enable_gzip"`
 	EnableBrotli     bool      `json:"enable_brotli"`
@@ -86,6 +89,7 @@ func RouteFromStore(r store.Route) RouteResponse {
 		WAFMode:          r.WAFMode,
 		WAFParanoiaLevel: r.WAFParanoiaLevel,
 		OIDCEnabled:      r.OIDCEnabled,
+		OIDCProviderID:   r.OIDCProviderID,
 		RateLimit:        r.RateLimit,
 		EnableGzip:       r.EnableGzip,
 		EnableBrotli:     r.EnableBrotli,
