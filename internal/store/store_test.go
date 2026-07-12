@@ -436,3 +436,90 @@ func TestStore_TokenValidation(t *testing.T) {
 		t.Fatal("expected second validation to fail")
 	}
 }
+
+func TestStore_WebhookSecretEncryptedAtRest(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+
+	plain := "super-secret-webhook-key"
+	wh := &Webhook{
+		Name:    "test-webhook",
+		URL:     "https://example.com/webhook",
+		Events:  "*",
+		Secret:  plain,
+		Enabled: true,
+	}
+	if err := s.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook failed: %v", err)
+	}
+	if wh.ID == 0 {
+		t.Fatal("Expected webhook ID to be set")
+	}
+
+	// Verify the raw DB value is not the plaintext secret.
+	var raw string
+	if err := s.db.QueryRow("SELECT secret FROM webhooks WHERE id = ?", wh.ID).Scan(&raw); err != nil {
+		t.Fatalf("failed to read raw secret: %v", err)
+	}
+	if raw == plain {
+		t.Fatal("webhook secret stored plaintext in database")
+	}
+
+	// Verify reading the webhook returns the decrypted plaintext.
+	got, err := s.GetWebhook(wh.ID)
+	if err != nil {
+		t.Fatalf("GetWebhook failed: %v", err)
+	}
+	if got == nil {
+		t.Fatal("GetWebhook returned nil")
+	}
+	if got.Secret != plain {
+		t.Fatalf("expected decrypted secret %q, got %q", plain, got.Secret)
+	}
+}
+
+func TestStore_MigratePlaintextWebhookSecrets(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+
+	plain := "legacy-plaintext-secret"
+	// Insert a webhook with a plaintext secret, simulating a database that
+	// predates at-rest encryption.
+	res, err := s.db.Exec(
+		"INSERT INTO webhooks (name, url, events, secret, enabled) VALUES (?, ?, ?, ?, ?)",
+		"legacy-webhook", "https://example.com/webhook", "*", plain, 1,
+	)
+	if err != nil {
+		t.Fatalf("failed to insert legacy webhook: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get webhook id: %v", err)
+	}
+
+	// Re-running the store constructor triggers the migration.
+	if _, err := New(s.dbPath); err != nil {
+		t.Fatalf("New failed during migration: %v", err)
+	}
+
+	// The previously plaintext secret must now be readable as the original value.
+	got, err := s.GetWebhook(int(id))
+	if err != nil {
+		t.Fatalf("GetWebhook after migration failed: %v", err)
+	}
+	if got == nil {
+		t.Fatal("GetWebhook returned nil after migration")
+	}
+	if got.Secret != plain {
+		t.Fatalf("expected migrated secret %q, got %q", plain, got.Secret)
+	}
+
+	// The raw DB value must no longer be plaintext.
+	var raw string
+	if err := s.db.QueryRow("SELECT secret FROM webhooks WHERE id = ?", id).Scan(&raw); err != nil {
+		t.Fatalf("failed to read raw secret after migration: %v", err)
+	}
+	if raw == plain {
+		t.Fatal("webhook secret still plaintext after migration")
+	}
+}

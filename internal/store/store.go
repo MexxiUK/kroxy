@@ -31,6 +31,13 @@ func New(path string) (*Store, error) {
 		return nil, fmt.Errorf("database migration failed: %w", err)
 	}
 
+	s := &Store{db: db, dbPath: path}
+
+	// Migrate any webhook secrets that predate at-rest encryption.
+	if err := s.migrateWebhookSecrets(); err != nil {
+		return nil, fmt.Errorf("webhook secret migration failed: %w", err)
+	}
+
 	// Set database file permissions to owner read/write only (0600)
 	// This prevents other users from reading sensitive data
 	if err := os.Chmod(path, 0600); err != nil {
@@ -56,7 +63,7 @@ func New(path string) (*Store, error) {
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(0)
 
-	return &Store{db: db, dbPath: path}, nil
+	return s, nil
 }
 
 func (s *Store) DatabasePath() string {
@@ -1271,6 +1278,45 @@ func (s *Store) DeleteWebhook(id int) error {
 		return err
 	}
 	return requireRowsAffected(res, 1)
+}
+
+// migrateWebhookSecrets re-encrypts any webhook secrets that were stored in
+// plaintext before at-rest encryption was introduced. It is idempotent:
+// secrets that already decrypt cleanly are left alone.
+func (s *Store) migrateWebhookSecrets() error {
+	rows, err := s.db.Query("SELECT id, secret FROM webhooks WHERE secret != '' AND secret IS NOT NULL")
+	if err != nil {
+		return fmt.Errorf("failed to query webhook secrets for migration: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var secret string
+		if err := rows.Scan(&id, &secret); err != nil {
+			return fmt.Errorf("failed to scan webhook secret for migration: %w", err)
+		}
+
+		// Already encrypted values decrypt cleanly.
+		if _, err := crypto.Decrypt(secret); err == nil {
+			continue
+		}
+
+		encrypted, err := crypto.Encrypt(secret)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt legacy webhook secret %d: %w", id, err)
+		}
+
+		if _, err := s.db.Exec("UPDATE webhooks SET secret = ? WHERE id = ?", encrypted, id); err != nil {
+			return fmt.Errorf("failed to update migrated webhook secret %d: %w", id, err)
+		}
+		log.Printf("Migrated plaintext webhook secret to encrypted at rest (webhook %d)", id)
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("webhook secret migration iteration error: %w", err)
+	}
+	return nil
 }
 
 func boolToInt(b bool) int {
