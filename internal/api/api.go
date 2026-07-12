@@ -583,7 +583,7 @@ func (a *API) registerRoutes() {
 	// Public routes (no auth required)
 	a.router.Get("/api/status", a.getStatus)
 	a.router.Get("/api/version", a.getVersion)
-	a.router.Get("/health", a.health)                    // Liveness probe (public)
+	a.router.Get("/health", a.health)                           // Liveness probe (public)
 	a.router.With(a.requireLoopback).Get("/ready", a.ready)     // Readiness probe (loopback only)
 	a.router.With(a.requireLoopback).Get("/healthz", a.healthz) // Comprehensive health (loopback only)
 
@@ -1589,6 +1589,11 @@ func (a *API) createRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validateRouteRequest(req); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	route := req.ToStore()
 	if err := a.store.CreateRoute(&route); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create route")
@@ -1609,6 +1614,33 @@ func (a *API) createRoute(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respondJSON(w, http.StatusCreated, dto.RouteFromStore(route))
+}
+
+// validateRouteRequest validates security-relevant fields that are copied
+// verbatim from the API request into the route store.
+func validateRouteRequest(req dto.RouteRequest) error {
+	if err := validation.ValidateWAFMode(req.WAFMode); err != nil {
+		return err
+	}
+	if err := validation.ValidateWAFParanoiaLevel(req.WAFParanoiaLevel); err != nil {
+		return err
+	}
+	if err := validation.ValidateRouteRateLimit(req.RateLimit); err != nil {
+		return err
+	}
+	if err := validation.ValidateBotProtection(req.BotProtection); err != nil {
+		return err
+	}
+	if err := validation.ValidateCountries(req.BlockCountries); err != nil {
+		return fmt.Errorf("block_countries: %w", err)
+	}
+	if err := validation.ValidateCountries(req.AllowCountries); err != nil {
+		return fmt.Errorf("allow_countries: %w", err)
+	}
+	if err := validation.ValidateCustomHeaders(req.CustomHeaders); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *API) listRoutes(w http.ResponseWriter, r *http.Request) {
@@ -1714,6 +1746,11 @@ func (a *API) updateRoute(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusInternalServerError, "Failed to validate OIDC provider")
 			return
 		}
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := validateRouteRequest(req); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
