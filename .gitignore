@@ -145,5 +145,3 @@ docs/LLM_E2E_TEST_PLAN.md
 # Internal UI check plan (not for repo)
 docs/UI_CHECK_PLAN.md
 
-# Shelved work-in-progress / deferred features
-.k8s-shelved/
