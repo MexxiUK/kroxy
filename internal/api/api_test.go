@@ -792,3 +792,112 @@ func TestHealthzEndpoint_RequiresLoopback(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateSecuritySettings_InvalidSessionDuration(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	cases := []string{"not-a-duration", "-1h", "0s", "30s", "721h"}
+	for _, value := range cases {
+		body := map[string]interface{}{"session_duration": value}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/security", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(newAdminRouteContext(t, 0))
+
+		rec := httptest.NewRecorder()
+		a.updateSecuritySettings(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for session_duration %q, got %d: %s", value, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestUpdateSecuritySettings_ValidSessionDuration(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	body := map[string]interface{}{"session_duration": "12h"}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/security", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.updateSecuritySettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	got := s.GetSettingDefault("session_duration", "")
+	if got != "12h" {
+		t.Fatalf("expected session_duration to be saved as 12h, got %q", got)
+	}
+}
+
+func TestUpdateNetworkSettings_InvalidValues(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	cases := []map[string]interface{}{
+		{"listen_port": "0"},
+		{"listen_port": "abc"},
+		{"listen_port": "70000"},
+		{"https_port": "-1"},
+		{"max_connections": -1},
+		{"max_connections": 1_000_001},
+		{"request_timeout": "not-a-duration"},
+		{"request_timeout": "500ms"},
+		{"request_timeout": "1h1s"},
+	}
+
+	for _, body := range cases {
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/network", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(newAdminRouteContext(t, 0))
+
+		rec := httptest.NewRecorder()
+		a.updateNetworkSettings(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for %v, got %d: %s", body, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestUpdateNetworkSettings_ValidValues(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	body := map[string]interface{}{
+		"listen_port":     "8080",
+		"https_port":      "8443",
+		"max_connections": 5000,
+		"request_timeout": "45s",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/network", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.updateNetworkSettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := s.GetSettingDefault("listen_port", ""); got != "8080" {
+		t.Fatalf("expected listen_port 8080, got %q", got)
+	}
+	if got := s.GetSettingDefault("https_port", ""); got != "8443" {
+		t.Fatalf("expected https_port 8443, got %q", got)
+	}
+	if got := s.GetSettingDefault("max_connections", ""); got != "5000" {
+		t.Fatalf("expected max_connections 5000, got %q", got)
+	}
+	if got := s.GetSettingDefault("request_timeout", ""); got != "45s" {
+		t.Fatalf("expected request_timeout 45s, got %q", got)
+	}
+}
