@@ -75,7 +75,7 @@ func TestAdminIPAllowlistMiddleware_NoAllowlist(t *testing.T) {
 	defer cleanup()
 
 	os.Unsetenv("KROXY_ADMIN_ALLOWED_IPS")
-	api := New(s)
+	api := New(s, 0)
 
 	called := false
 	handler := api.adminIPAllowlistMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +102,7 @@ func TestAdminIPAllowlistMiddleware_AllowedIP(t *testing.T) {
 
 	os.Setenv("KROXY_ADMIN_ALLOWED_IPS", "192.168.1.0/24")
 	defer os.Unsetenv("KROXY_ADMIN_ALLOWED_IPS")
-	api := New(s)
+	api := New(s, 0)
 
 	called := false
 	handler := api.adminIPAllowlistMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +129,7 @@ func TestAdminIPAllowlistMiddleware_BlockedIP(t *testing.T) {
 
 	os.Setenv("KROXY_ADMIN_ALLOWED_IPS", "192.168.1.0/24")
 	defer os.Unsetenv("KROXY_ADMIN_ALLOWED_IPS")
-	api := New(s)
+	api := New(s, 0)
 
 	called := false
 	handler := api.adminIPAllowlistMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

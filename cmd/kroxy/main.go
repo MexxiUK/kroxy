@@ -134,7 +134,7 @@ func main() {
 	}
 
 	// Start API server
-	apiServer := api.New(db)
+	apiServer := api.New(db, cfg.MaxRequestSize)
 	apiServer.SetProxyReloadFunc(func() error {
 		return px.Reload()
 	})

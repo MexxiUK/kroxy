@@ -28,6 +28,7 @@ import (
 	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/bot"
+	"github.com/kroxy/kroxy/internal/config"
 	"github.com/kroxy/kroxy/internal/crypto"
 	"github.com/kroxy/kroxy/internal/metrics"
 	"github.com/kroxy/kroxy/internal/oidc"
@@ -54,6 +55,7 @@ type API struct {
 	productionMode  bool       // Controls security settings like Secure cookie flag
 	setupMu         sync.Mutex // Prevents race condition in initial setup (CRIT-005)
 	adminAllowedIPs []*net.IPNet
+	maxBodyBytes    int64      // Maximum request body size for backup import
 }
 
 // RateLimiter implements a sliding window rate limiter to prevent burst attacks
@@ -174,10 +176,14 @@ func (rl *RateLimiter) cleanupLoop() {
 	}
 }
 
-func New(s *store.Store) *API {
+func New(s *store.Store, maxBodyBytes int64) *API {
 	r := chi.NewRouter()
 
 	productionMode := os.Getenv("KROXY_PRODUCTION") == "true"
+
+	if maxBodyBytes <= 0 {
+		maxBodyBytes = config.DefaultMaxRequestSize
+	}
 
 	api := &API{
 		store:           s,
@@ -187,6 +193,7 @@ func New(s *store.Store) *API {
 		rateLimiter:     NewRateLimiter(),
 		productionMode:  productionMode,
 		adminAllowedIPs: parseAdminAllowedIPs(),
+		maxBodyBytes:    maxBodyBytes,
 	}
 
 	// Start background cleanup for stale rate limit entries

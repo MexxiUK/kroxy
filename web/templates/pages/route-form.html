@@ -265,8 +265,8 @@ var allowCountries = [];
 
 // Parse existing country data from route
 {{ if .Route }}
-{{ if .Route.BlockCountries }}blockCountries = '{{ .Route.BlockCountries }}'.split(',').filter(function(c) { return c; });{{ end }}
-{{ if .Route.AllowCountries }}allowCountries = '{{ .Route.AllowCountries }}'.split(',').filter(function(c) { return c; });{{ end }}
+{{ if .Route.BlockCountries }}blockCountries = {{ .Route.BlockCountries | json }}.split(',').filter(function(c) { return c; });{{ end }}
+{{ if .Route.AllowCountries }}allowCountries = {{ .Route.AllowCountries | json }}.split(',').filter(function(c) { return c; });{{ end }}
 {{ end }}
 
 function populateCountrySelects() {
