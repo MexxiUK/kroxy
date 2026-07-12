@@ -480,7 +480,17 @@ func ValidateNoSelfReference(backend string, isAdminRoute bool) error {
 	host := u.Hostname()
 	port := u.Port()
 	if port == "" {
-		return nil
+		// Infer the default port from the scheme so backends like
+		// http://127.0.0.1/ or https://localhost/ are checked against the
+		// corresponding Kroxy listener.
+		switch u.Scheme {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		default:
+			return nil
+		}
 	}
 
 	localIPs, _ := net.InterfaceAddrs()

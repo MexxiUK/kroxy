@@ -256,6 +256,11 @@ func TestValidateNoSelfReference(t *testing.T) {
 		{"different port on same host", "http://127.0.0.1:8080/api", false, false},
 		{"https proxy port", "https://127.0.0.1:443/api", false, true},
 		{"encoded loopback", "http://0x7f000001:80/api", false, true},
+		{"default http port loopback", "http://127.0.0.1/api", false, true},
+		{"default https port loopback", "https://127.0.0.1/api", false, true},
+		{"default http port localhost", "http://localhost/api", false, true},
+		{"default http port 0.0.0.0", "http://0.0.0.0/api", false, true},
+		{"default http port different listener", "http://127.0.0.1:8080", false, false},
 	}
 
 	for _, tt := range tests {
