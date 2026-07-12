@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const testBodyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
 func TestSignAndVerifyWAFHeader(t *testing.T) {
 	// Set a known signing key for predictable results
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
@@ -17,12 +19,12 @@ func TestSignAndVerifyWAFHeader(t *testing.T) {
 	// Reset the once for testing
 	ResetSigningKeyForTest()
 
-	signed, err := SignWAFHeader("example.com", "GET", "/api/test", 1)
+	signed, err := SignWAFHeader("example.com", "GET", "/api/test", 1, testBodyHash)
 	if err != nil {
 		t.Fatalf("SignWAFHeader failed: %v", err)
 	}
 
-	err = VerifyWAFHeader(signed, "example.com", "GET", "/api/test", 1, 5*time.Minute)
+	err = VerifyWAFHeader(signed, "example.com", "GET", "/api/test", 1, testBodyHash, 5*time.Minute)
 	if err != nil {
 		t.Errorf("VerifyWAFHeader failed: %v", err)
 	}
@@ -33,9 +35,9 @@ func TestVerifyWAFHeader_WrongHost(t *testing.T) {
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
-	signed, _ := SignWAFHeader("example.com", "GET", "/api/test", 1)
+	signed, _ := SignWAFHeader("example.com", "GET", "/api/test", 1, testBodyHash)
 
-	err := VerifyWAFHeader(signed, "evil.com", "GET", "/api/test", 1, 5*time.Minute)
+	err := VerifyWAFHeader(signed, "evil.com", "GET", "/api/test", 1, testBodyHash, 5*time.Minute)
 	if err == nil {
 		t.Error("Expected verification to fail with wrong host")
 	}
@@ -46,9 +48,9 @@ func TestVerifyWAFHeader_WrongMethod(t *testing.T) {
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
-	signed, _ := SignWAFHeader("example.com", "GET", "/api/test", 1)
+	signed, _ := SignWAFHeader("example.com", "GET", "/api/test", 1, testBodyHash)
 
-	err := VerifyWAFHeader(signed, "example.com", "POST", "/api/test", 1, 5*time.Minute)
+	err := VerifyWAFHeader(signed, "example.com", "POST", "/api/test", 1, testBodyHash, 5*time.Minute)
 	if err == nil {
 		t.Error("Expected verification to fail with wrong method")
 	}
@@ -59,11 +61,24 @@ func TestVerifyWAFHeader_WrongRouteID(t *testing.T) {
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
-	signed, _ := SignWAFHeader("example.com", "GET", "/api/test", 1)
+	signed, _ := SignWAFHeader("example.com", "GET", "/api/test", 1, testBodyHash)
 
-	err := VerifyWAFHeader(signed, "example.com", "GET", "/api/test", 2, 5*time.Minute)
+	err := VerifyWAFHeader(signed, "example.com", "GET", "/api/test", 2, testBodyHash, 5*time.Minute)
 	if err == nil {
 		t.Error("Expected verification to fail with wrong route ID")
+	}
+}
+
+func TestVerifyWAFHeader_WrongBodyHash(t *testing.T) {
+	os.Setenv("KROXY_WAF_SIGNING_KEY", "test-secret-key-that-is-at-least-32-characters-long")
+	os.Setenv("KROXY_PRODUCTION", "")
+	ResetSigningKeyForTest()
+
+	signed, _ := SignWAFHeader("example.com", "GET", "/api/test", 1, testBodyHash)
+
+	err := VerifyWAFHeader(signed, "example.com", "GET", "/api/test", 1, "0000000000000000000000000000000000000000000000000000000000000000", 5*time.Minute)
+	if err == nil {
+		t.Error("Expected verification to fail with wrong body hash")
 	}
 }
 
@@ -75,13 +90,13 @@ func TestVerifyWAFHeader_ExpiredTimestamp(t *testing.T) {
 	// Manually construct a header with a timestamp 10 minutes in the past
 	oldTimestamp := time.Now().UTC().Add(-10 * time.Minute).Unix()
 	key, _ := GetWAFSigningKey()
-	message := fmt.Sprintf("%d|%s|%s|%s|%d", oldTimestamp, "example.com", "GET", "/api/test", 1)
+	message := fmt.Sprintf("%d|%s|%s|%s|%d|%s", oldTimestamp, "example.com", "GET", "/api/test", 1, testBodyHash)
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(message))
 	sig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	header := fmt.Sprintf("v1:%d:%s", oldTimestamp, sig)
 
-	err := VerifyWAFHeader(header, "example.com", "GET", "/api/test", 1, 5*time.Minute)
+	err := VerifyWAFHeader(header, "example.com", "GET", "/api/test", 1, testBodyHash, 5*time.Minute)
 	if err != ErrExpiredHeader {
 		t.Errorf("Expected ErrExpiredHeader, got: %v", err)
 	}
@@ -92,11 +107,11 @@ func TestVerifyWAFHeader_TamperedHMAC(t *testing.T) {
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
-	signed, _ := SignWAFHeader("example.com", "GET", "/api/test", 1)
+	signed, _ := SignWAFHeader("example.com", "GET", "/api/test", 1, testBodyHash)
 
 	// Tamper with the HMAC portion (last part after the second colon)
 	tampered := signed[:len(signed)-4] + "XXXX"
-	err := VerifyWAFHeader(tampered, "example.com", "GET", "/api/test", 1, 5*time.Minute)
+	err := VerifyWAFHeader(tampered, "example.com", "GET", "/api/test", 1, testBodyHash, 5*time.Minute)
 	if err == nil {
 		t.Error("Expected verification to fail with tampered HMAC")
 	}
@@ -120,7 +135,7 @@ func TestVerifyWAFHeader_InvalidFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := VerifyWAFHeader(tt.value, "example.com", "GET", "/test", 1, 5*time.Minute)
+			err := VerifyWAFHeader(tt.value, "example.com", "GET", "/test", 1, testBodyHash, 5*time.Minute)
 			if err == nil {
 				t.Error("Expected verification to fail for invalid format")
 			}

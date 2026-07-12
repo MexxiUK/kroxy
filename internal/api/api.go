@@ -3222,6 +3222,7 @@ func (a *API) verifyWAFHeader(w http.ResponseWriter, r *http.Request) {
 		Method      string `json:"method"`
 		Path        string `json:"path"`
 		RouteID     int    `json:"route_id"`
+		BodyHash    string `json:"body_hash"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
@@ -3231,6 +3232,10 @@ func (a *API) verifyWAFHeader(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "header_value is required")
 		return
 	}
+	if req.BodyHash == "" {
+		respondError(w, http.StatusBadRequest, "body_hash is required")
+		return
+	}
 
 	err := crypto.VerifyWAFHeader(
 		req.HeaderValue,
@@ -3238,6 +3243,7 @@ func (a *API) verifyWAFHeader(w http.ResponseWriter, r *http.Request) {
 		req.Method,
 		req.Path,
 		req.RouteID,
+		req.BodyHash,
 		crypto.WAFHeaderTimestampMaxSkew,
 	)
 

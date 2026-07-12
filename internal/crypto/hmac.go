@@ -74,16 +74,18 @@ func GetWAFSigningKey() ([]byte, error) {
 
 // SignWAFHeader produces the full header value for X-Kroxy-WAF-Verified.
 // The format is: v1:<unix_timestamp>:<base64_hmac>
-// The HMAC covers: timestamp|host|method|path|routeID
-func SignWAFHeader(host, method, path string, routeID int) (string, error) {
+// The HMAC covers: timestamp|host|method|path|routeID|bodyHash
+// bodyHash should be a hex-encoded SHA-256 of the request body (empty-body requests
+// must use the hash of an empty string so the signature binds to the body).
+func SignWAFHeader(host, method, path string, routeID int, bodyHash string) (string, error) {
 	key, err := GetWAFSigningKey()
 	if err != nil {
 		return "", err
 	}
 
 	timestamp := time.Now().UTC().Unix()
-	message := fmt.Sprintf("%d|%s|%s|%s|%d",
-		timestamp, host, method, path, routeID)
+	message := fmt.Sprintf("%d|%s|%s|%s|%d|%s",
+		timestamp, host, method, path, routeID, bodyHash)
 
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(message))
@@ -95,7 +97,9 @@ func SignWAFHeader(host, method, path string, routeID int) (string, error) {
 // VerifyWAFHeader parses and verifies a X-Kroxy-WAF-Verified header value.
 // It checks the version prefix, timestamp freshness (within maxSkew),
 // and recomputes the HMAC to compare against the provided signature.
-func VerifyWAFHeader(headerValue, host, method, path string, routeID int, maxSkew time.Duration) error {
+// bodyHash must match the value used when signing; for empty-body requests use
+// the SHA-256 hash of an empty string.
+func VerifyWAFHeader(headerValue, host, method, path string, routeID int, bodyHash string, maxSkew time.Duration) error {
 	parts := strings.SplitN(headerValue, ":", 3)
 	if len(parts) != 3 {
 		return ErrInvalidHeader
@@ -126,8 +130,8 @@ func VerifyWAFHeader(headerValue, host, method, path string, routeID int, maxSke
 		return err
 	}
 
-	message := fmt.Sprintf("%d|%s|%s|%s|%d",
-		timestamp, host, method, path, routeID)
+	message := fmt.Sprintf("%d|%s|%s|%s|%d|%s",
+		timestamp, host, method, path, routeID, bodyHash)
 
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(message))

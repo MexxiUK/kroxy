@@ -1,7 +1,9 @@
 package waf
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"html"
 	"io"
@@ -24,6 +26,9 @@ import (
 
 // MaxRequestBodySize limits the maximum request body size to prevent memory exhaustion
 const MaxRequestBodySize = 10 * 1024 * 1024 // 10MB
+
+// sha256EmptyBodyHash is the hex-encoded SHA-256 of an empty request body.
+const sha256EmptyBodyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 // WAF wraps the Coraza Web Application Firewall
 type WAF struct {
@@ -689,6 +694,7 @@ func (w *WAF) InspectRequest(rw http.ResponseWriter, r *http.Request) (allowed b
 
 	// Read and process request body with size limit to prevent memory exhaustion.
 	// Inspect body for any method that carries one — including OPTIONS.
+	bodyHash := sha256EmptyBodyHash
 	if r.Body != nil && r.ContentLength != 0 {
 		limitedBody := http.MaxBytesReader(rw, r.Body, MaxRequestBodySize)
 		body, err := io.ReadAll(limitedBody)
@@ -705,6 +711,9 @@ func (w *WAF) InspectRequest(rw http.ResponseWriter, r *http.Request) (allowed b
 			log.Printf("WAF: Error writing request body: %v", err)
 		}
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
+		h := sha256.New()
+		h.Write(body)
+		bodyHash = hex.EncodeToString(h.Sum(nil))
 	}
 
 	if intervention, _ := tx.ProcessRequestBody(); intervention != nil {
@@ -719,7 +728,7 @@ func (w *WAF) InspectRequest(rw http.ResponseWriter, r *http.Request) (allowed b
 
 	// Add WAF verification header for requests that passed inspection
 	if !wafDetected && len(w.signingKey) > 0 {
-		signedValue, err := crypto.SignWAFHeader(r.Host, r.Method, r.URL.RequestURI(), w.routeID)
+		signedValue, err := crypto.SignWAFHeader(r.Host, r.Method, r.URL.RequestURI(), w.routeID, bodyHash)
 		if err != nil {
 			log.Printf("WAF: failed to sign verification header: %v", err)
 		} else {
