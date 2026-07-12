@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -39,14 +40,62 @@ type Backup struct {
 
 const backupVersion = version.Version
 
+// backupPayload is the signed subset of a backup. It is kept separate from the
+// import-compatible Backup struct so the signature omits the Signature field
+// itself while covering every other exported field.
+type backupPayload struct {
+	Version       string                    `json:"version"`
+	CreatedAt     time.Time                 `json:"created_at"`
+	Routes        []dto.RouteResponse       `json:"routes"`
+	OIDCProviders []safeOIDCProvider        `json:"oidc_providers,omitempty"`
+	WAFRules      []dto.WAFRuleResponse     `json:"waf_rules,omitempty"`
+	Certificates  []dto.CertificateResponse `json:"certificates,omitempty"`
+	Blacklists    []dto.BlacklistResponse   `json:"blacklists,omitempty"`
+	Whitelists    []dto.WhitelistResponse   `json:"whitelists,omitempty"`
+	RateLimits    []dto.RateLimitResponse   `json:"rate_limits,omitempty"`
+	Settings      map[string]string         `json:"settings,omitempty"`
+}
+
 // backupHMAC returns the server-side HMAC of backup data for integrity verification.
-// Returns an empty string when no encryption key is available (legacy/dev fallback).
+// The key is derived from the encryption key via HKDF so the same master secret
+// is not reused for both AES-GCM and backup authentication.
 func backupHMAC(data []byte) string {
-	key, err := crypto.GetEncryptionKey()
+	key, err := crypto.GetBackupHMACKey()
 	if err != nil {
 		return ""
 	}
 	mac := hmac.New(sha256.New, key)
+	// #nosec G104 — hmac.Write never returns an error in practice.
+	mac.Write(data)
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// verifyBackupHMAC checks a backup signature against the signed payload.
+// To preserve compatibility with backups created before the dedicated key was
+// introduced, it also accepts a signature produced with the raw encryption key.
+func verifyBackupHMAC(data []byte, sig string) bool {
+	derivedKey, err := crypto.GetBackupHMACKey()
+	if err != nil {
+		return false
+	}
+
+	expectedDerived := backupHMACWithKey(data, derivedKey)
+	matchDerived := subtle.ConstantTimeCompare([]byte(expectedDerived), []byte(sig))
+
+	// Legacy fallback: old backups were signed with the raw encryption key.
+	legacyKey, legacyErr := crypto.GetEncryptionKey()
+	matchLegacy := 0
+	if legacyErr == nil {
+		expectedLegacy := backupHMACWithKey(data, legacyKey)
+		matchLegacy = subtle.ConstantTimeCompare([]byte(expectedLegacy), []byte(sig))
+	}
+
+	return matchDerived|matchLegacy != 0
+}
+
+func backupHMACWithKey(data, key []byte) string {
+	mac := hmac.New(sha256.New, key)
+	// #nosec G104 — hmac.Write never returns an error in practice.
 	mac.Write(data)
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
@@ -215,18 +264,7 @@ func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
 
 	// Verify HMAC signature if one is present.
 	if backup.Signature != "" {
-		var payload struct {
-			Version       string                    `json:"version"`
-			CreatedAt     time.Time                 `json:"created_at"`
-			Routes        []dto.RouteResponse       `json:"routes"`
-			OIDCProviders []safeOIDCProvider        `json:"oidc_providers,omitempty"`
-			WAFRules      []dto.WAFRuleResponse     `json:"waf_rules,omitempty"`
-			Certificates  []dto.CertificateResponse `json:"certificates,omitempty"`
-			Blacklists    []dto.BlacklistResponse   `json:"blacklists,omitempty"`
-			Whitelists    []dto.WhitelistResponse   `json:"whitelists,omitempty"`
-			RateLimits    []dto.RateLimitResponse   `json:"rate_limits,omitempty"`
-			Settings      map[string]string         `json:"settings,omitempty"`
-		}
+		var payload backupPayload
 		if err := json.Unmarshal(body, &payload); err != nil {
 			respondError(w, http.StatusBadRequest, "Invalid backup structure")
 			return
@@ -236,12 +274,11 @@ func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusInternalServerError, "Failed to verify backup signature")
 			return
 		}
-		expected := backupHMAC(unsigned)
-		if expected == "" {
+		if !crypto.IsEncryptionAvailable() {
 			respondError(w, http.StatusServiceUnavailable, "Backup signature required but no HMAC key available")
 			return
 		}
-		if !hmac.Equal([]byte(expected), []byte(backup.Signature)) {
+		if !verifyBackupHMAC(unsigned, backup.Signature) {
 			respondError(w, http.StatusForbidden, "Invalid backup signature")
 			return
 		}

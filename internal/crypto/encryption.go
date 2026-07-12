@@ -4,14 +4,18 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"golang.org/x/crypto/hkdf"
 )
 
 var (
@@ -21,6 +25,16 @@ var (
 	ErrNoKey          = errors.New("no encryption key configured")
 	errInvalidKey     = errors.New("invalid encryption key size")
 )
+
+var (
+	backupHMACKey     []byte
+	backupHMACKeyErr  error
+	backupHMACKeyOnce sync.Once
+)
+
+// backupHMACInfo is the HKDF context string used to derive the backup HMAC key.
+// It is fixed and versioned so the derived key is stable across restarts.
+const backupHMACInfo = "kroxy-backup-hmac-v1"
 
 // devKeyPath returns the path for the auto-generated development encryption key file.
 func devKeyPath() string {
@@ -108,6 +122,38 @@ func GetEncryptionKey() ([]byte, error) {
 		return nil, ErrNoKey
 	}
 	return encryptionKey, nil
+}
+
+// GetBackupHMACKey derives a dedicated HMAC key for backup signatures from
+// the encryption key using HKDF-SHA256. The same master key therefore produces
+// a different key for backup integrity than the one used for AES-GCM,
+// preventing key reuse between confidentiality and authentication.
+func GetBackupHMACKey() ([]byte, error) {
+	backupHMACKeyOnce.Do(func() {
+		key, err := GetEncryptionKey()
+		if err != nil {
+			backupHMACKeyErr = err
+			return
+		}
+		derived := make([]byte, sha256.Size)
+		if _, err := io.ReadFull(hkdf.New(sha256.New, key, nil, []byte(backupHMACInfo)), derived); err != nil {
+			backupHMACKeyErr = err
+			return
+		}
+		backupHMACKey = derived
+	})
+	if backupHMACKeyErr != nil {
+		return nil, backupHMACKeyErr
+	}
+	return backupHMACKey, nil
+}
+
+// ResetBackupHMACKeyForTest resets the backup HMAC key state for testing.
+// This is not thread-safe and should only be called in test code.
+func ResetBackupHMACKeyForTest() {
+	backupHMACKey = nil
+	backupHMACKeyErr = nil
+	backupHMACKeyOnce = sync.Once{}
 }
 
 // ResetEncryptionKeyForTest resets the encryption key state for testing.
