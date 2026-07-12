@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -1560,6 +1561,16 @@ func (a *API) createRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := a.validateRouteOIDC(req.OIDCEnabled, req.OIDCProviderID); err != nil {
+		if errors.Is(err, errOIDCProviderLookup) {
+			log.Printf("Failed to validate OIDC provider for route %s: %v", req.Domain, err)
+			respondError(w, http.StatusInternalServerError, "Failed to validate OIDC provider")
+			return
+		}
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	route := req.ToStore()
 	if err := a.store.CreateRoute(&route); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create route")
@@ -1647,6 +1658,16 @@ func (a *API) updateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Preserve existing OIDC provider ID when omitted in a partial update.
+	existing, err := a.getRouteByID(id)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		respondError(w, http.StatusInternalServerError, "Failed to load route")
+		return
+	}
+	if existing != nil && req.OIDCProviderID == 0 {
+		req.OIDCProviderID = existing.OIDCProviderID
+	}
+
 	// Validate domain
 	if req.Domain == "" {
 		respondError(w, http.StatusBadRequest, "Domain is required")
@@ -1666,6 +1687,16 @@ func (a *API) updateRoute(w http.ResponseWriter, r *http.Request) {
 	// Prevent proxy loops (backend pointing to admin API)
 	if err := validation.ValidateNoSelfReference(req.Backend, false); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid backend URL: "+err.Error())
+		return
+	}
+
+	if err := a.validateRouteOIDC(req.OIDCEnabled, req.OIDCProviderID); err != nil {
+		if errors.Is(err, errOIDCProviderLookup) {
+			log.Printf("Failed to validate OIDC provider for route %s: %v", req.Domain, err)
+			respondError(w, http.StatusInternalServerError, "Failed to validate OIDC provider")
+			return
+		}
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -1727,6 +1758,43 @@ func (a *API) deleteRoute(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+var (
+	errOIDCProviderRequired = fmt.Errorf("OIDC provider ID is required when OIDC is enabled")
+	errOIDCProviderNotFound = fmt.Errorf("OIDC provider not found")
+	errOIDCProviderLookup   = fmt.Errorf("failed to validate OIDC provider")
+)
+
+// validateRouteOIDC checks that an OIDC-enabled route references a real provider.
+func (a *API) validateRouteOIDC(enabled bool, providerID int) error {
+	if !enabled {
+		return nil
+	}
+	if providerID <= 0 {
+		return errOIDCProviderRequired
+	}
+	if _, err := a.store.GetOIDCProvider(providerID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errOIDCProviderNotFound
+		}
+		return fmt.Errorf("%w: %v", errOIDCProviderLookup, err)
+	}
+	return nil
+}
+
+// getRouteByID returns a route by ID, or sql.ErrNoRows if not found.
+func (a *API) getRouteByID(id int) (*store.Route, error) {
+	routes, err := a.store.GetRoutes()
+	if err != nil {
+		return nil, err
+	}
+	for i := range routes {
+		if routes[i].ID == id {
+			return &routes[i], nil
+		}
+	}
+	return nil, sql.ErrNoRows
 }
 
 // OIDC handlers (with state validation)

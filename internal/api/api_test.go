@@ -1,12 +1,18 @@
 package api
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/store"
 )
 
@@ -336,5 +342,302 @@ func TestAdminIPAllowlistMiddleware_BlockedIP(t *testing.T) {
 	}
 	if called {
 		t.Fatal("expected handler NOT to be called")
+	}
+}
+
+func newAdminRouteContext(t *testing.T, id int) context.Context {
+	t.Helper()
+	adminSession := &auth.Session{
+		UserID: 1,
+		Email:  "admin@kroxy.local",
+		Name:   "Admin",
+		Role:   "admin",
+	}
+	ctx := context.WithValue(context.Background(), "session", adminSession)
+	if id > 0 {
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", strconv.Itoa(id))
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	}
+	return ctx
+}
+
+func createTestOIDCProvider(t *testing.T, s *store.Store) int {
+	t.Helper()
+	p := &store.OIDCProvider{
+		Name:         "Test Provider",
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		DiscoveryURL: "https://example.com/.well-known/openid-configuration",
+		RedirectURL:  "https://kroxy.local/api/oidc/callback",
+	}
+	if err := s.CreateOIDCProvider(p); err != nil {
+		t.Fatalf("create OIDC provider: %v", err)
+	}
+	return p.ID
+}
+
+func TestCreateRoute_OIDCRequiresProviderID(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	body := map[string]interface{}{
+		"domain":       "oidc.example.com",
+		"backend":      "http://1.1.1.1:8080",
+		"waf_mode":     "detect",
+		"oidc_enabled": true,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/routes", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createRoute(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateRoute_OIDCPreservesProviderID(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+	providerID := createTestOIDCProvider(t, s)
+
+	body := map[string]interface{}{
+		"domain":           "oidc.example.com",
+		"backend":          "http://1.1.1.1:8080",
+		"waf_mode":         "detect",
+		"oidc_enabled":     true,
+		"oidc_provider_id": providerID,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/routes", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createRoute(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		OIDCEnabled    bool `json:"oidc_enabled"`
+		OIDCProviderID int  `json:"oidc_provider_id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !resp.OIDCEnabled || resp.OIDCProviderID != providerID {
+		t.Fatalf("response oidc_enabled=%v provider_id=%d, want true/%d", resp.OIDCEnabled, resp.OIDCProviderID, providerID)
+	}
+
+	routes, err := s.GetRoutes()
+	if err != nil {
+		t.Fatalf("get routes: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if routes[0].OIDCProviderID != providerID {
+		t.Fatalf("stored OIDCProviderID = %d, want %d", routes[0].OIDCProviderID, providerID)
+	}
+}
+
+func TestUpdateRoute_OIDCRejectsMissingProvider(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+	route := &store.Route{
+		Domain:  "example.com",
+		Backend: "http://1.1.1.1:8080",
+		WAFMode: "detect",
+	}
+	if err := s.CreateRoute(route); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	body := map[string]interface{}{
+		"domain":       "example.com",
+		"backend":      "http://1.1.1.1:8080",
+		"waf_mode":     "detect",
+		"oidc_enabled": true,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, "/api/routes/"+strconv.Itoa(route.ID), bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, route.ID))
+
+	rec := httptest.NewRecorder()
+	a.updateRoute(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateRoute_OIDCPreservesProviderID(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+	providerID := createTestOIDCProvider(t, s)
+	route := &store.Route{
+		Domain:  "example.com",
+		Backend: "http://1.1.1.1:8080",
+		WAFMode: "detect",
+	}
+	if err := s.CreateRoute(route); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	body := map[string]interface{}{
+		"domain":           "example.com",
+		"backend":          "http://1.1.1.1:8080",
+		"waf_mode":         "detect",
+		"oidc_enabled":     true,
+		"oidc_provider_id": providerID,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, "/api/routes/"+strconv.Itoa(route.ID), bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, route.ID))
+
+	rec := httptest.NewRecorder()
+	a.updateRoute(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	routes, err := s.GetRoutes()
+	if err != nil {
+		t.Fatalf("get routes: %v", err)
+	}
+	var updated *store.Route
+	for i := range routes {
+		if routes[i].ID == route.ID {
+			updated = &routes[i]
+			break
+		}
+	}
+	if updated == nil {
+		t.Fatal("updated route not found")
+	}
+	if !updated.OIDCEnabled || updated.OIDCProviderID != providerID {
+		t.Fatalf("stored oidc_enabled=%v provider_id=%d, want true/%d", updated.OIDCEnabled, updated.OIDCProviderID, providerID)
+	}
+}
+
+func TestCreateRoute_OIDCRejectsNonExistentProvider(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	body := map[string]interface{}{
+		"domain":           "oidc.example.com",
+		"backend":          "http://1.1.1.1:8080",
+		"waf_mode":         "detect",
+		"oidc_enabled":     true,
+		"oidc_provider_id": 99999,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/routes", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createRoute(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateRoute_OIDCPreservesProviderIDWhenOmitted(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+	providerID := createTestOIDCProvider(t, s)
+	route := &store.Route{
+		Domain:         "example.com",
+		Backend:        "http://1.1.1.1:8080",
+		WAFMode:        "detect",
+		OIDCEnabled:    true,
+		OIDCProviderID: providerID,
+	}
+	if err := s.CreateRoute(route); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	// Update other fields while omitting oidc_provider_id.
+	body := map[string]interface{}{
+		"domain":       "example.com",
+		"backend":      "http://1.1.1.1:8080",
+		"waf_mode":     "detect",
+		"oidc_enabled": true,
+		"rate_limit":   100,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, "/api/routes/"+strconv.Itoa(route.ID), bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, route.ID))
+
+	rec := httptest.NewRecorder()
+	a.updateRoute(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	routes, err := s.GetRoutes()
+	if err != nil {
+		t.Fatalf("get routes: %v", err)
+	}
+	var updated *store.Route
+	for i := range routes {
+		if routes[i].ID == route.ID {
+			updated = &routes[i]
+			break
+		}
+	}
+	if updated == nil {
+		t.Fatal("updated route not found")
+	}
+	if updated.OIDCProviderID != providerID {
+		t.Fatalf("stored OIDCProviderID = %d, want %d (preserved)", updated.OIDCProviderID, providerID)
+	}
+	if updated.RateLimit != 100 {
+		t.Fatalf("stored RateLimit = %d, want 100", updated.RateLimit)
+	}
+}
+
+func TestUpdateRoute_OIDCRejectsNonExistentProvider(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+	route := &store.Route{
+		Domain:  "example.com",
+		Backend: "http://1.1.1.1:8080",
+		WAFMode: "detect",
+	}
+	if err := s.CreateRoute(route); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	body := map[string]interface{}{
+		"domain":           "example.com",
+		"backend":          "http://1.1.1.1:8080",
+		"waf_mode":         "detect",
+		"oidc_enabled":     true,
+		"oidc_provider_id": 99999,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, "/api/routes/"+strconv.Itoa(route.ID), bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, route.ID))
+
+	rec := httptest.NewRecorder()
+	a.updateRoute(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

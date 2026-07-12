@@ -1,6 +1,11 @@
 package dto
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/kroxy/kroxy/internal/store"
+)
 
 func TestMaskIP(t *testing.T) {
 	tests := []struct {
@@ -23,5 +28,39 @@ func TestMaskIP(t *testing.T) {
 				t.Fatalf("MaskIP(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestRouteRequest_ToStore_PreservesOIDCProviderID(t *testing.T) {
+	req := RouteRequest{
+		Domain:           "example.com",
+		Backend:          "http://localhost:8080",
+		Enabled:          true,
+		OIDCEnabled:      true,
+		OIDCProviderID:   7,
+		WAFParanoiaLevel: 2,
+	}
+	got := req.ToStore()
+	if got.OIDCProviderID != 7 {
+		t.Fatalf("ToStore OIDCProviderID = %d, want 7", got.OIDCProviderID)
+	}
+	if got.IsAdminRoute {
+		t.Fatalf("ToStore must force IsAdminRoute=false")
+	}
+}
+
+func TestRouteFromStore_IncludesOIDCProviderID(t *testing.T) {
+	now := time.Now()
+	r := store.Route{
+		ID:             3,
+		Domain:         "example.com",
+		OIDCEnabled:    true,
+		OIDCProviderID: 7,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	got := RouteFromStore(r)
+	if got.OIDCProviderID != 7 {
+		t.Fatalf("RouteFromStore OIDCProviderID = %d, want 7", got.OIDCProviderID)
 	}
 }
