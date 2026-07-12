@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -320,6 +321,40 @@ func TestValidateAPIKey_InvalidSecret(t *testing.T) {
 	}
 	if err.Error() != "invalid API key secret" {
 		t.Fatalf("expected generic error, got: %v", err)
+	}
+}
+
+func TestRequireAuth_APIKey_SetsUserContext(t *testing.T) {
+	a, s, cleanup := newTestAuth(t)
+	defer cleanup()
+
+	u := seedUser(t, s, "admin@example.com", "Password123!", "admin", true)
+	keyID, keySecret, err := a.GenerateAPIKey(u.ID, "admin-key", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/routes", nil)
+	req.Header.Set("Authorization", "ApiKey "+keyID+":"+keySecret)
+
+	var got *User
+	handler := a.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = GetUserFromContext(r.Context())
+	}))
+
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if got == nil {
+		t.Fatal("GetUserFromContext returned nil for API-key auth")
+	}
+	if got.ID != u.ID {
+		t.Errorf("expected user ID %d, got %d", u.ID, got.ID)
+	}
+	if got.Role != "admin" {
+		t.Errorf("expected admin role, got %s", got.Role)
+	}
+	if got.Email != u.Email {
+		t.Errorf("expected email %s, got %s", u.Email, got.Email)
 	}
 }
 

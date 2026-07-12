@@ -503,7 +503,16 @@ func (a *Auth) RequireAuth(next http.Handler) http.Handler {
 		// Try API key authentication
 		apiKey, err := a.validateAPIKey(r)
 		if err == nil {
+			// Provide a user identity for handlers and audit logs. API keys are
+			// tied to a user, but the key itself does not carry the user's
+			// email/name, so look them up when available.
+			apiUser := &User{ID: apiKey.UserID, Role: apiKey.Role}
+			if dbUser, dbErr := a.store.GetUserByID(apiKey.UserID); dbErr == nil {
+				apiUser.Email = dbUser.Email
+				apiUser.Name = dbUser.Name
+			}
 			ctx := context.WithValue(r.Context(), "api_key", apiKey)
+			ctx = context.WithValue(ctx, "user", apiUser)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -1791,8 +1800,13 @@ func (a *Auth) banIPFor2FA(ip string) {
 	log.Printf("SECURITY ALERT: IP %s banned due to repeated 2FA lockouts", ip)
 }
 
-// GetUserFromContext extracts user from request context
+// GetUserFromContext extracts user from request context.
+// It checks the explicit "user" key first (set for both session and API-key
+// auth) and falls back to the "session" key for backwards compatibility.
 func GetUserFromContext(ctx context.Context) *User {
+	if user, ok := ctx.Value("user").(*User); ok {
+		return user
+	}
 	if session, ok := ctx.Value("session").(*Session); ok {
 		return &User{
 			ID:    session.UserID,
