@@ -78,17 +78,25 @@ func Load() (*Config, error) {
 	// This prevents accidental exposure of the admin API to the network.
 	adminAddr := getEnv("KROXY_ADMIN", "127.0.0.1:8081")
 
+	proxyAddr := getEnv("KROXY_PROXY", ":80")
+
 	// In production, enforce that admin either uses TLS or binds to localhost/loopback.
 	if productionMode {
 		if !tlsEnabled && !isLocalhost(adminAddr) {
 			return nil, fmt.Errorf("in production mode, admin API must use TLS or bind to localhost (got: %s)", adminAddr)
+		}
+		// In production, the public proxy listener must be TLS-enabled either via
+		// manual certificates or automatic HTTPS. Plain HTTP on a public interface
+		// is not allowed.
+		if !tlsEnabled && !tlsAutoHTTPS && !isLocalhost(proxyAddr) {
+			return nil, fmt.Errorf("in production mode, public proxy listener must use TLS (KROXY_TLS_ENABLED or KROXY_AUTO_HTTPS) (got: %s)", proxyAddr)
 		}
 	}
 
 	cfg := &Config{
 		AdminAddr:            adminAddr,
 		DatabasePath:         databasePath,
-		ProxyAddr:            getEnv("KROXY_PROXY", ":80"),
+		ProxyAddr:            proxyAddr,
 		HTTPSAddr:            getEnv("KROXY_HTTPS_ADDR", ":443"),
 		ProductionMode:       productionMode,
 		MaxRequestSize:       getEnvInt64("KROXY_MAX_REQUEST_SIZE", DefaultMaxRequestSize),

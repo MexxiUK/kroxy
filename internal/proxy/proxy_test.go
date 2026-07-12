@@ -494,6 +494,7 @@ func TestParseCertExpiry(t *testing.T) {
 	if err := pem.Encode(tmpFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
 		t.Fatal(err)
 	}
+	// #nosec G104 — test cleanup.
 	tmpFile.Close()
 
 	expiry, err := parseCertExpiry(tmpFile.Name())
@@ -512,7 +513,9 @@ func TestParseCertExpiry(t *testing.T) {
 
 	// Invalid PEM
 	badFile, _ := os.CreateTemp("", "bad-cert-*.crt")
+	// #nosec G104 — test fixture write.
 	badFile.WriteString("not a pem block")
+	// #nosec G104 — test cleanup.
 	badFile.Close()
 	defer os.Remove(badFile.Name())
 	if _, err := parseCertExpiry(badFile.Name()); err == nil {

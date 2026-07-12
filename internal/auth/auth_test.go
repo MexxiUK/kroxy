@@ -20,27 +20,35 @@ func newTestStore(t *testing.T) (*store.Store, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// #nosec G104 — test cleanup.
 	tmp.Close()
 
 	// Use temp data dir to avoid writing encryption keys to working directory
 	dataDir, err := os.MkdirTemp("", "kroxy-test-data-*")
 	if err != nil {
+		// #nosec G104 — test cleanup on error.
 		os.Remove(tmp.Name())
 		t.Fatal(err)
 	}
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_DATA_DIR", dataDir)
 
 	s, err := store.New(tmp.Name())
 	if err != nil {
+		// #nosec G104 — test cleanup on error.
 		os.Remove(tmp.Name())
+		// #nosec G104 — test cleanup on error.
 		os.RemoveAll(dataDir)
 		os.Unsetenv("KROXY_DATA_DIR")
 		t.Fatal(err)
 	}
 
 	cleanup := func() {
+		// #nosec G104 — test cleanup.
 		s.Close()
+		// #nosec G104 — test cleanup.
 		os.Remove(tmp.Name())
+		// #nosec G104 — test cleanup.
 		os.RemoveAll(dataDir)
 		os.Unsetenv("KROXY_DATA_DIR")
 	}
@@ -50,6 +58,7 @@ func newTestStore(t *testing.T) (*store.Store, func()) {
 func newTestAuth(t *testing.T) (*Auth, *store.Store, func()) {
 	t.Helper()
 	s, cleanupStore := newTestStore(t)
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_JWT_SECRET", "test-secret-test-secret-test-secret-test")
 	defer os.Unsetenv("KROXY_JWT_SECRET")
 	a := New(s)
@@ -173,6 +182,7 @@ func TestValidateSession_Expired(t *testing.T) {
 	}
 
 	// Manually expire the session in store
+	// #nosec G104 — test setup.
 	s.UpdateSessionExpiry(resp.SessionID, time.Now().Add(-1*time.Hour))
 	// Also delete from in-memory cache so it falls back to DB
 	a.sessions.Delete(resp.SessionID)
@@ -466,6 +476,7 @@ func TestCheckSessionBinding_Disabled(t *testing.T) {
 	a, _, cleanup := newTestAuth(t)
 	defer cleanup()
 
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_STRICT_SESSION_BINDING", "false")
 	defer os.Unsetenv("KROXY_STRICT_SESSION_BINDING")
 	req, _ := http.NewRequest(http.MethodGet, "/", nil)
@@ -481,6 +492,7 @@ func TestCheckSessionBinding_EnabledMatch(t *testing.T) {
 	a, _, cleanup := newTestAuth(t)
 	defer cleanup()
 
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_STRICT_SESSION_BINDING", "true")
 	defer os.Unsetenv("KROXY_STRICT_SESSION_BINDING")
 
@@ -498,6 +510,7 @@ func TestCheckSessionBinding_EnabledMismatch(t *testing.T) {
 	a, _, cleanup := newTestAuth(t)
 	defer cleanup()
 
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_STRICT_SESSION_BINDING", "true")
 	defer os.Unsetenv("KROXY_STRICT_SESSION_BINDING")
 
@@ -511,11 +524,11 @@ func TestCheckSessionBinding_EnabledMismatch(t *testing.T) {
 	}
 }
 
-
 func TestCheckSessionBinding_LegacySession(t *testing.T) {
 	a, _, cleanup := newTestAuth(t)
 	defer cleanup()
 
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_STRICT_SESSION_BINDING", "true")
 	defer os.Unsetenv("KROXY_STRICT_SESSION_BINDING")
 

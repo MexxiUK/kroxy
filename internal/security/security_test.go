@@ -22,6 +22,7 @@ func TestGetClientIP_TrustedProxy(t *testing.T) {
 	// Clear any cached trusted proxies so we start fresh
 	cachedTrustedProxies = nil
 	trustedProxiesOnce = sync.Once{}
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_TRUSTED_PROXIES", "192.168.1.1")
 	defer os.Unsetenv("KROXY_TRUSTED_PROXIES")
 

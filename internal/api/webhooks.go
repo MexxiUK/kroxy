@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -112,6 +113,20 @@ func (a *API) updateWebhook(w http.ResponseWriter, r *http.Request) {
 	if err := validation.ValidateBackendURL(wh.URL); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid webhook URL: "+err.Error())
 		return
+	}
+
+	// Preserve existing secret if not provided in update (prevents secret wipe).
+	if wh.Secret == "" {
+		existing, err := a.store.GetWebhook(id)
+		if err != nil {
+			// A failed read must not be allowed to mutate the stored secret.
+			log.Printf("Error: failed to retrieve existing webhook %d for secret preservation: %v", id, err)
+			respondError(w, http.StatusInternalServerError, "Failed to read existing webhook")
+			return
+		}
+		if existing != nil {
+			wh.Secret = existing.Secret
+		}
 	}
 
 	if err := a.store.UpdateWebhook(&wh); err != nil {

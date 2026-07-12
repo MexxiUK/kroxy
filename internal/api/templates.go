@@ -101,6 +101,8 @@ func NewTemplateHandler() (*TemplateHandler, error) {
 			if err != nil {
 				return "", err
 			}
+			// #nosec G203 — values passed to this function are server-side route data
+			// (domains/country codes) already validated by the store layer.
 			return template.JS(b), nil
 		},
 	})

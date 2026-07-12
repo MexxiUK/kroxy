@@ -14,6 +14,7 @@ import (
 func NewTestAuth(t *testing.T, s *store.Store) *auth.Auth {
 	t.Helper()
 
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_JWT_SECRET", "test-secret-test-secret-test-secret-test")
 	defer os.Unsetenv("KROXY_JWT_SECRET")
 

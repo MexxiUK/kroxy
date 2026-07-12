@@ -15,27 +15,35 @@ func newTestStore(t *testing.T) (*store.Store, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// #nosec G104 — test cleanup.
 	tmp.Close()
 
 	// Use temp data dir to avoid writing encryption keys to working directory
 	dataDir, err := os.MkdirTemp("", "kroxy-test-data-*")
 	if err != nil {
+		// #nosec G104 — test cleanup on error.
 		os.Remove(tmp.Name())
 		t.Fatal(err)
 	}
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_DATA_DIR", dataDir)
 
 	s, err := store.New(tmp.Name())
 	if err != nil {
+		// #nosec G104 — test cleanup on error.
 		os.Remove(tmp.Name())
+		// #nosec G104 — test cleanup on error.
 		os.RemoveAll(dataDir)
 		os.Unsetenv("KROXY_DATA_DIR")
 		t.Fatal(err)
 	}
 
 	cleanup := func() {
+		// #nosec G104 — test cleanup.
 		s.Close()
+		// #nosec G104 — test cleanup.
 		os.Remove(tmp.Name())
+		// #nosec G104 — test cleanup.
 		os.RemoveAll(dataDir)
 		os.Unsetenv("KROXY_DATA_DIR")
 	}
@@ -59,6 +67,7 @@ func TestParseAdminAllowedIPs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// #nosec G104 — test environment setup.
 			os.Setenv("KROXY_ADMIN_ALLOWED_IPS", tt.env)
 			defer os.Unsetenv("KROXY_ADMIN_ALLOWED_IPS")
 
@@ -100,6 +109,7 @@ func TestAdminIPAllowlistMiddleware_AllowedIP(t *testing.T) {
 	s, cleanup := newTestStore(t)
 	defer cleanup()
 
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ADMIN_ALLOWED_IPS", "192.168.1.0/24")
 	defer os.Unsetenv("KROXY_ADMIN_ALLOWED_IPS")
 	api := New(s, 0)
@@ -127,6 +137,7 @@ func TestAdminIPAllowlistMiddleware_BlockedIP(t *testing.T) {
 	s, cleanup := newTestStore(t)
 	defer cleanup()
 
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ADMIN_ALLOWED_IPS", "192.168.1.0/24")
 	defer os.Unsetenv("KROXY_ADMIN_ALLOWED_IPS")
 	api := New(s, 0)

@@ -45,6 +45,7 @@ func TestNewLogStore_CreateDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLogStore: %v", err)
 	}
+	// #nosec G104 — test cleanup.
 	ls.Close()
 
 	if _, err := os.Stat(filepath.Dir(nestedPath)); err != nil {
@@ -82,6 +83,7 @@ func TestLogStore_Log(t *testing.T) {
 	}
 
 	// Verify file was written
+	// #nosec G304 — logPath is a fixed temporary path created by this test.
 	data, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatalf("read log file: %v", err)

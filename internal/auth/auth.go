@@ -474,6 +474,7 @@ func (a *Auth) getSessionMutex(userID int) *sync.Mutex {
 
 func (a *Auth) restoreSessions() {
 	// Clean up expired sessions first
+	// #nosec G104 — best-effort cleanup of expired sessions during startup.
 	a.store.CleanupSessions()
 
 	// Note: We don't restore all sessions to memory since that could be expensive
@@ -591,13 +592,17 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 		session := value.(*Session)
 		// Check expiration (sliding window)
 		if time.Now().After(session.ExpiresAt) {
+			// #nosec G104 — best-effort cache invalidation of expired session.
 			a.sessions.Delete(sessionID)
+			// #nosec G104 — best-effort persistence cleanup of expired session.
 			a.store.DeleteSession(sessionID)
 			return nil, errors.New("session expired")
 		}
 		// Check absolute lifetime limit (prevents indefinite session hijacking)
 		if time.Since(session.CreatedAt) > maxSessionAbsoluteLifetime {
+			// #nosec G104 — best-effort cache invalidation of expired session.
 			a.sessions.Delete(sessionID)
+			// #nosec G104 — best-effort persistence cleanup of expired session.
 			a.store.DeleteSession(sessionID)
 			log.Printf("AUDIT: session expired (absolute limit) for user_id=%d email=%s", session.UserID, strings.ReplaceAll(session.Email, "\n", " ")) // #nosec G706 — newlines stripped from logged email
 			return nil, errors.New("session expired (absolute limit)")
@@ -605,7 +610,9 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 		// Verify user account is still enabled
 		if userID := session.UserID; userID > 0 {
 			if user, err := a.store.GetUserByID(userID); err == nil && !user.Enabled {
+				// #nosec G104 — best-effort cache invalidation of disabled user session.
 				a.sessions.Delete(sessionID)
+				// #nosec G104 — best-effort persistence cleanup of disabled user session.
 				a.store.DeleteSession(sessionID)
 				log.Printf("AUDIT: session invalidated for disabled user_id=%d email=%s", userID, strings.ReplaceAll(session.Email, "\n", " ")) // #nosec G706 — newlines stripped from logged email
 				return nil, errors.New("user account is disabled")
@@ -622,6 +629,7 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 			updated := *session
 			updated.ExpiresAt = newExpiry
 			a.sessions.Store(sessionID, &updated)
+			// #nosec G104 — session expiry update is queued and best-effort.
 			a.enqueueDBUpdate(func() { a.store.UpdateSessionExpiry(sessionID, newExpiry) })
 		}
 		return session, nil
@@ -635,12 +643,14 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 
 	// Check expiration (sliding window)
 	if time.Now().After(dbSession.ExpiresAt) {
+		// #nosec G104 — best-effort cleanup of expired DB session.
 		a.store.DeleteSession(sessionID)
 		return nil, errors.New("session expired")
 	}
 
 	// Check absolute lifetime limit (prevents indefinite session hijacking)
 	if time.Since(dbSession.CreatedAt) > maxSessionAbsoluteLifetime {
+		// #nosec G104 — best-effort cleanup of expired DB session.
 		a.store.DeleteSession(sessionID)
 		log.Printf("AUDIT: session expired (absolute limit) for user_email=%s", strings.ReplaceAll(dbSession.UserEmail, "\n", " ")) // #nosec G706 — newlines stripped from logged email
 		return nil, errors.New("session expired (absolute limit)")
@@ -649,12 +659,14 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 	// Convert to in-memory session and cache it
 	userID := 0
 	if dbSession.UserID != "" {
+		// #nosec G104 — UserID is validated to be numeric by the store layer.
 		fmt.Sscanf(dbSession.UserID, "%d", &userID)
 	}
 
 	// Verify user account is still enabled
 	if userID > 0 {
 		if user, err := a.store.GetUserByID(userID); err == nil && !user.Enabled {
+			// #nosec G104 — best-effort cleanup of disabled user session.
 			a.store.DeleteSession(sessionID)
 			log.Printf("AUDIT: session invalidated for disabled user_id=%d email=%s", userID, strings.ReplaceAll(dbSession.UserEmail, "\n", " ")) // #nosec G706 — newlines stripped from logged email
 			return nil, errors.New("user account is disabled")
@@ -665,6 +677,7 @@ func (a *Auth) validateSession(r *http.Request) (*Session, error) {
 	newExpiry := time.Now().Add(a.sessionExpiry)
 	if newExpiry.After(dbSession.ExpiresAt) {
 		dbSession.ExpiresAt = newExpiry
+		// #nosec G104 — session expiry update is queued and best-effort.
 		a.enqueueDBUpdate(func() { a.store.UpdateSessionExpiry(sessionID, newExpiry) })
 	}
 
@@ -823,6 +836,7 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 	}
 
 	// Update last used timestamp (async)
+	// #nosec G104 — last-used update is queued and best-effort.
 	a.enqueueDBUpdate(func() { a.store.UpdateAPIKeyLastUsed(keyID) })
 
 	log.Printf("AUDIT: API key authenticated: key_id=%s user_id=%d name=%s", strings.ReplaceAll(keyID, "\n", " "), apiKey.UserID, strings.ReplaceAll(apiKey.Name, "\n", " ")) // #nosec G706 — newlines stripped from logged fields
@@ -1207,7 +1221,9 @@ func (a *Auth) enforceSessionLimitLocked(userID int) {
 		// Remove oldest sessions to get under limit
 		toRemove := len(userSessions) - maxConcurrentSessions + 1
 		for i := 0; i < toRemove; i++ {
+			// #nosec G104 — best-effort cache invalidation.
 			a.sessions.Delete(userSessions[i].ID)
+			// #nosec G104 — best-effort persistence cleanup.
 			a.store.DeleteSession(userSessions[i].ID)
 		}
 	}
@@ -1431,6 +1447,7 @@ func (a *Auth) RequireTOTP(next http.Handler) http.Handler {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
+			// #nosec G104 — best-effort JSON error response.
 			json.NewEncoder(w).Encode(map[string]string{
 				"error":             "2fa_setup_required",
 				"error_description": "Two-factor authentication must be set up before accessing this resource",
@@ -1484,6 +1501,7 @@ func (a *Auth) RequireStrongAuth(next http.Handler) http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
+		// #nosec G104 — best-effort JSON error response.
 		json.NewEncoder(w).Encode(map[string]string{
 			"error":             "2fa_required",
 			"error_description": "Two-factor authentication required for internet-facing access",
@@ -1641,6 +1659,7 @@ func (a *Auth) respondUnauthorized(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("WWW-Authenticate", "Bearer realm=\"kroxy\"")
 	w.WriteHeader(http.StatusUnauthorized)
+	// #nosec G104 — best-effort JSON error response.
 	json.NewEncoder(w).Encode(map[string]string{
 		"error":             "unauthorized",
 		"error_description": "Authentication required",

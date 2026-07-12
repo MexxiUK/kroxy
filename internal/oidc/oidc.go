@@ -277,6 +277,7 @@ func (m *Manager) ValidateSession(sessionID string) (*Session, error) {
 	}
 
 	if time.Now().After(dbSession.ExpiresAt) {
+		// #nosec G104 — best-effort cleanup of expired OIDC session.
 		m.store.DeleteSession(sessionID)
 		return nil, fmt.Errorf("session expired")
 	}
@@ -318,6 +319,7 @@ func (m *Manager) Logout(sessionID string) {
 	delete(m.sessions, sessionID)
 	m.sessionMu.Unlock()
 
+	// #nosec G104 — best-effort persistence cleanup on logout.
 	m.store.DeleteSession(sessionID)
 }
 

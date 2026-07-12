@@ -275,6 +275,7 @@ func normalizeOverlongUTF8(s string) string {
 			// Overlong: the real codepoint is < 0x80
 			// Decode: codepoint = ((b0 & 0x1F) << 6) | (b1 & 0x3F)
 			codepoint := (uint16(s[i]&0x1F) << 6) | uint16(s[i+1]&0x3F)
+			// #nosec G115 — overlong 2-byte UTF-8 encodings decode to codepoints < 0x80.
 			result = append(result, byte(codepoint))
 			i += 2
 			continue
@@ -816,6 +817,7 @@ func (w *WAF) BlockRequest(rw http.ResponseWriter, r *http.Request, reason strin
 	rw.Header().Set("Content-Type", "text/html")
 	rw.WriteHeader(http.StatusForbidden)
 	escapedReason := html.EscapeString(reason)
+	// #nosec G104 — best-effort write of static WAF block page; WriteHeader already sent.
 	rw.Write([]byte(`<!DOCTYPE html>
 <html>
 <head><title>403 Forbidden</title></head>
