@@ -1870,9 +1870,7 @@ func (a *API) oauthLogout(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
-	}
-	if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
-		c.Secure = true
+		Secure:   a.secureCookieFlag(),
 	}
 	http.SetCookie(w, c)
 

@@ -242,9 +242,7 @@ func (a *API) renderTemplate(w http.ResponseWriter, r *http.Request, name string
 			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
 			MaxAge:   3600,
-		}
-		if os.Getenv("KROXY_INSECURE_COOKIES") != "true" {
-			c.Secure = true
+			Secure:   a.secureCookieFlag(),
 		}
 		http.SetCookie(w, c)
 	}
@@ -354,10 +352,12 @@ func (a *API) serveLogin(w http.ResponseWriter, r *http.Request) {
 
 	csrfToken := generateCSRFToken()
 	data := &TemplateData{
-		Title:           "Login",
-		CSRFToken:       csrfToken,
-		OIDCProviders:   a.getOIDCProviders(),
-		InsecureCookies: os.Getenv("KROXY_INSECURE_COOKIES") == "true",
+		Title:         "Login",
+		CSRFToken:     csrfToken,
+		OIDCProviders: a.getOIDCProviders(),
+		// The HTTP warning only makes sense in non-production mode; in production
+		// the Secure flag is always set regardless of KROXY_INSECURE_COOKIES.
+		InsecureCookies: !a.productionMode && os.Getenv("KROXY_INSECURE_COOKIES") == "true",
 	}
 	a.renderTemplate(w, r, "login", data)
 }
