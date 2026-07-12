@@ -44,8 +44,9 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Set admin addr for self-reference detection (prevent proxy loops)
+	// Set self-reference addresses for proxy-loop prevention (admin + public listeners)
 	validation.SetAdminAddr(cfg.AdminAddr)
+	validation.SetProxyAddrs(cfg.ProxyAddr, cfg.HTTPSAddr)
 	// Wire AllowPrivateBackends config into validation package
 	validation.SetAllowPrivateBackends(cfg.AllowPrivateBackends)
 

@@ -230,3 +230,43 @@ func TestIsPrivateIP(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateNoSelfReference(t *testing.T) {
+	// Save and restore global state
+	oldAddrs := selfReferenceAddrs
+	defer func() { selfReferenceAddrs = oldAddrs }()
+	selfReferenceAddrs = nil
+
+	SetAdminAddr("127.0.0.1:8081")
+	SetProxyAddrs(":80", ":443")
+
+	tests := []struct {
+		name         string
+		backend      string
+		isAdminRoute bool
+		wantErr      bool
+	}{
+		{"external backend", "http://example.com:8080/foo", false, false},
+		{"admin route to self exempt", "http://127.0.0.1:8081/admin", true, false},
+		{"admin port loopback", "http://127.0.0.1:8081/api", false, true},
+		{"admin port localhost", "http://localhost:8081/api", false, true},
+		{"proxy port loopback", "http://127.0.0.1:80/api", false, true},
+		{"proxy port 0.0.0.0", "http://0.0.0.0:80/api", false, true},
+		{"proxy port bare", "http://:80/api", false, true},
+		{"different port on same host", "http://127.0.0.1:8080/api", false, false},
+		{"https proxy port", "https://127.0.0.1:443/api", false, true},
+		{"encoded loopback", "http://0x7f000001:80/api", false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateNoSelfReference(tt.backend, tt.isAdminRoute)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateNoSelfReference(%q) expected error, got nil", tt.backend)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateNoSelfReference(%q) unexpected error: %v", tt.backend, err)
+			}
+		})
+	}
+}

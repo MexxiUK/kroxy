@@ -442,44 +442,77 @@ func ValidatePassword(password string) error {
 
 // Helper functions
 
-// adminListenAddr is the address the Kroxy admin API listens on.
-// Set via SetAdminAddr at startup. Used to prevent proxy-loop routes.
-var adminListenAddr string
+// selfReferenceAddrs holds the addresses Kroxy itself listens on.
+// Set at startup via SetAdminAddr/SetProxyAddrs. Used to prevent proxy-loop routes.
+var selfReferenceAddrs []string
 
-// SetAdminAddr sets the admin API listen address for self-reference checks.
+// SetAdminAddr registers the admin API listen address for self-reference checks.
 func SetAdminAddr(addr string) {
-	adminListenAddr = addr
+	if addr != "" {
+		selfReferenceAddrs = append(selfReferenceAddrs, addr)
+	}
+}
+
+// SetProxyAddrs registers the public proxy listen addresses for self-reference checks.
+func SetProxyAddrs(addrs ...string) {
+	for _, addr := range addrs {
+		if addr != "" {
+			selfReferenceAddrs = append(selfReferenceAddrs, addr)
+		}
+	}
 }
 
 // ValidateNoSelfReference checks that a backend URL does not point to
-// the Kroxy admin API itself, which would create a proxy loop.
+// one of Kroxy's own listen addresses, which would create a proxy loop.
 // Admin routes (isAdminRoute=true) are exempt since they intentionally proxy to self.
 func ValidateNoSelfReference(backend string, isAdminRoute bool) error {
 	if isAdminRoute {
 		return nil
 	}
-	if adminListenAddr == "" {
+	if len(selfReferenceAddrs) == 0 {
 		return nil
 	}
 	u, err := url.Parse(backend)
 	if err != nil {
 		return nil
 	}
-	// Parse admin addr (e.g. ":8080" or "0.0.0.0:8080")
+
 	host := u.Hostname()
 	port := u.Port()
-	_, adminPort, _ := net.SplitHostPort(adminListenAddr)
-	if adminPort == "" {
-		adminPort = "8080"
+	if port == "" {
+		return nil
 	}
-	// Check if backend port matches admin port AND host is local
-	if port == adminPort {
-		if host == "" || host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" {
+
+	localIPs, _ := net.InterfaceAddrs()
+	for _, selfAddr := range selfReferenceAddrs {
+		selfHost, selfPort, err := net.SplitHostPort(selfAddr)
+		if err != nil {
+			// Bare port like ":80"
+			selfPort = selfAddr
+			if strings.HasPrefix(selfPort, ":") {
+				selfPort = strings.TrimPrefix(selfPort, ":")
+			}
+		}
+		if selfPort == "" {
+			continue
+		}
+		if port != selfPort {
+			continue
+		}
+
+		// Port matches a Kroxy listen port; now decide if the backend host is "us".
+		if host == "" || host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" || host == selfHost {
 			return ErrSelfReference
 		}
-		// Also check if the hostname resolves to a loopback address
-		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-			return ErrSelfReference
+		if ip := net.ParseIP(host); ip != nil {
+			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+				return ErrSelfReference
+			}
+			for _, local := range localIPs {
+				if localIP, ok := local.(*net.IPNet); ok && localIP.IP.Equal(ip) {
+					return ErrSelfReference
+				}
+			}
 		}
 		if encodedIP := decodeEncodedIP(host); encodedIP != nil && encodedIP.IsLoopback() {
 			return ErrSelfReference
