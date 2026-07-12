@@ -45,8 +45,10 @@ func New(path string) (*Store, error) {
 		}
 	}
 
-	// Warn if encryption is not configured in production mode
-	crypto.RequireEncryptionInProduction()
+	// Require encryption key in production mode
+	if err := crypto.RequireEncryptionInProduction(); err != nil {
+		return nil, err
+	}
 
 	// Limit connections: SQLite with WAL supports multiple readers but only one writer.
 	// SetMaxOpenConns(1) serializes all access through one connection, eliminating lock contention.
@@ -678,6 +680,12 @@ func (s *Store) CreateAPIKey(key *APIKey) error {
 
 func (s *Store) DeleteAPIKey(keyID string) error {
 	_, err := s.db.Exec("DELETE FROM api_keys WHERE key_id = ?", keyID)
+	return err
+}
+
+// DeleteAPIKeysByUser deletes every API key belonging to a user.
+func (s *Store) DeleteAPIKeysByUser(userID int) error {
+	_, err := s.db.Exec("DELETE FROM api_keys WHERE user_id = ?", userID)
 	return err
 }
 

@@ -9,9 +9,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kroxy/kroxy/internal/validation"
 )
 
 // Manager handles webhook alerts for Kroxy events.
@@ -96,6 +99,12 @@ func (m *Manager) Send(event Event) {
 }
 
 func (m *Manager) sendWebhook(wh Webhook, event Event) {
+	// SSRF protection: reject webhooks pointing to private/reserved/loopback addresses.
+	if err := validation.ValidateBackendURL(wh.URL); err != nil {
+		log.Printf("Alert: dropping webhook to %s: unsafe URL: %v", wh.URL, err)
+		return
+	}
+
 	payload, err := json.Marshal(event)
 	if err != nil {
 		log.Printf("Alert: failed to marshal event: %v", err)
@@ -111,8 +120,10 @@ func (m *Manager) sendWebhook(wh Webhook, event Event) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Kroxy-Alert/1.0")
 	if wh.Secret != "" {
-		// Simple signature
-		req.Header.Set("X-Kroxy-Signature", m.sign(payload, wh.Secret))
+		// Timestamp + HMAC provides replay resistance: receivers can reject old signatures.
+		timestamp := time.Now().UTC().Unix()
+		req.Header.Set("X-Kroxy-Timestamp", strconv.FormatInt(timestamp, 10))
+		req.Header.Set("X-Kroxy-Signature", m.sign(payload, wh.Secret, timestamp))
 	}
 
 	resp, err := m.client.Do(req)
@@ -154,8 +165,9 @@ func (m *Manager) setCooldown(key string) {
 	m.cooldowns[key] = time.Now()
 }
 
-func (m *Manager) sign(payload []byte, secret string) string {
+func (m *Manager) sign(payload []byte, secret string, timestamp int64) string {
 	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(fmt.Sprintf("%d|", timestamp)))
 	mac.Write(payload)
 	return hex.EncodeToString(mac.Sum(nil))
 }

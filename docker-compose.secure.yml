@@ -41,7 +41,6 @@ services:
       - KROXY_HTTPS_ADDR=:443      # HTTPS listener
       - KROXY_ADMIN=127.0.0.1:8080 # Admin API bound to localhost inside container
       - KROXY_DB=/data/kroxy.db
-      - KROXY_ADMIN_TOKEN_FILE=/data/admin_token
       - KROXY_PRODUCTION=true
       # Generate persistent secrets with: openssl rand -base64 32
       - KROXY_ENCRYPTION_KEY=${KROXY_ENCRYPTION_KEY:?KROXY_ENCRYPTION_KEY is required}

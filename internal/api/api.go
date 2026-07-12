@@ -1122,6 +1122,13 @@ func (a *API) enable2FA(w http.ResponseWriter, r *http.Request) {
 	// Invalidate all sessions to force re-login with 2FA
 	a.auth.InvalidateUserSessions(dbUser.ID)
 
+	// Revoke all API keys: existing keys were created under the old password-only policy
+	// and do not satisfy the new 2FA requirement.
+	if err := a.store.DeleteAPIKeysByUser(dbUser.ID); err != nil {
+		log.Printf("Warning: failed to revoke API keys for user %d after 2FA enablement: %v", dbUser.ID, err)
+	}
+	a.auth.InvalidateUserAPIKeys(dbUser.ID)
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"message":      "2FA enabled successfully",
 		"totp_enabled": true,

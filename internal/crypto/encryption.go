@@ -116,15 +116,15 @@ func IsEncryptionAvailable() bool {
 	return err == nil
 }
 
-// RequireEncryptionInProduction logs a warning if encryption is not configured in production
-func RequireEncryptionInProduction() {
+// RequireEncryptionInProduction returns an error if encryption is not configured in production.
+// Production deployments must set KROXY_ENCRYPTION_KEY; it does not fall back to a generated dev key.
+func RequireEncryptionInProduction() error {
 	if os.Getenv("KROXY_PRODUCTION") == "true" {
 		if !IsEncryptionAvailable() {
-			log.Println("WARNING: KROXY_ENCRYPTION_KEY not set in production mode. Secrets will be stored in plaintext.")
-			log.Println("WARNING: Set KROXY_ENCRYPTION_KEY for secure storage of OIDC client secrets.")
-			log.Println("WARNING: Generate a key with: openssl rand -base64 32")
+			return errors.New("KROXY_ENCRYPTION_KEY is required in production mode; generate one with: openssl rand -base64 32")
 		}
 	}
+	return nil
 }
 
 // Encrypt encrypts plaintext using AES-GCM

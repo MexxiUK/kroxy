@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kroxy/kroxy/internal/audit"
 	"github.com/kroxy/kroxy/internal/crypto"
 	"github.com/kroxy/kroxy/internal/security"
 	"github.com/kroxy/kroxy/internal/store"
@@ -75,13 +74,6 @@ type roleCacheEntry struct {
 	cachedAt time.Time
 }
 
-// adminTokenAttempt tracks failed admin token attempts per IP
-type adminTokenAttempt struct {
-	mu        sync.Mutex
-	count     int
-	firstFail time.Time
-}
-
 // apiKeyAttempt tracks API key validation failures per IP to prevent bcrypt DoS (CRIT-004)
 type apiKeyAttempt struct {
 	mu        sync.Mutex
@@ -135,11 +127,9 @@ type Auth struct {
 	sessions           sync.Map                  // sessionID -> *Session
 	apiKeys            sync.Map                  // keyID -> *APIKey
 	stateStore         sync.Map                  // state -> *StateInfo
-	adminTokens        sync.Map                  // token -> *adminTokenInfo
 	failedAttempts     sync.Map                  // email -> *failedAttempt
 	roleCache          sync.Map                  // userID (int) -> *roleCacheEntry
 	sessionMu          sync.Map                  // userID (int) -> *sync.Mutex (for atomic session operations)
-	adminTokenAttempts sync.Map                  // IP -> *adminTokenAttempt // Track failed admin token attempts
 	apiKeyAttempts     sync.Map                  // IP -> *apiKeyAttempt     // Track failed API key attempts (bcrypt DoS protection)
 	distributedAttack  *distributedAttackTracker // Credential stuffing detection
 	pending2FA         sync.Map                  // pendingID -> *pending2FASession
@@ -198,12 +188,6 @@ type StateInfo struct {
 	SessionBinding string // Hash of session cookie to prevent state token theft
 	CreatedAt      time.Time
 	ExpiresAt      time.Time
-}
-
-// adminTokenInfo stores admin token with expiration
-type adminTokenInfo struct {
-	CreatedAt time.Time
-	ExpiresAt time.Time
 }
 
 // LoginRequest represents a login request
@@ -329,16 +313,6 @@ func (a *Auth) cleanupExpired() {
 		return true
 	})
 
-	// Cleanup expired admin tokens (24-hour expiry)
-	a.adminTokens.Range(func(key, value interface{}) bool {
-		if tokenInfo, ok := value.(*adminTokenInfo); ok {
-			if now.After(tokenInfo.ExpiresAt) {
-				a.adminTokens.Delete(key)
-			}
-		}
-		return true
-	})
-
 	// Cleanup expired pending 2FA sessions (5-minute expiry)
 	a.pending2FA.Range(func(key, value interface{}) bool {
 		if pending, ok := value.(*pending2FASession); ok {
@@ -394,16 +368,6 @@ func (a *Auth) cleanupExpired() {
 		})
 		if !hasSession {
 			a.sessionMu.Delete(userID)
-		}
-		return true
-	})
-
-	// Cleanup old admin token rate limit entries (1h retention)
-	a.adminTokenAttempts.Range(func(key, value interface{}) bool {
-		if attempt, ok := value.(*adminTokenAttempt); ok {
-			if now.Sub(attempt.firstFail) > time.Hour {
-				a.adminTokenAttempts.Delete(key)
-			}
 		}
 		return true
 	})
@@ -523,27 +487,6 @@ func (a *Auth) RequireAuth(next http.Handler) http.Handler {
 			ctx := context.WithValue(r.Context(), "api_key", apiKey)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
-		}
-
-		// Try admin token (for initial setup)
-		if token := r.Header.Get("X-Admin-Token"); token != "" {
-			// Get client IP for rate limiting
-			ip := getIPFromRequest(r)
-
-			// Check rate limit
-			if !a.checkAdminTokenRateLimit(ip) {
-				log.Printf("Admin token rate limit exceeded for IP: %s", strings.ReplaceAll(ip, "\n", " "))
-				a.respondUnauthorized(w, r)
-				return
-			}
-
-			if a.validateAdminToken(token) {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Record failed attempt
-			a.recordAdminTokenFailure(ip)
 		}
 
 		// Authentication failed
@@ -770,9 +713,9 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 	}
 
 	// Rate-limit API key validation attempts to prevent bcrypt DoS (CRIT-004)
-	ip := getIPFromRequest(r)
+	ip := security.GetClientIP(r)
 	if !a.checkAPIKeyRateLimit(ip) {
-		log.Printf("AUDIT: API key validation rate limit exceeded for IP=%s", ip) // #nosec G706 — IP is from server-side request metadata (RemoteAddr/X-Forwarded-For)
+		log.Printf("AUDIT: API key validation rate limit exceeded for IP=%s", strings.ReplaceAll(ip, "\n", " ")) // #nosec G706 — IP is from security.GetClientIP
 		return nil, errors.New("rate limit exceeded")
 	}
 
@@ -850,89 +793,6 @@ func (a *Auth) validateAPIKey(r *http.Request) (*APIKey, error) {
 	return apiKey, nil
 }
 
-// validateAdminToken validates a one-time admin token with expiration
-// First checks memory cache, then falls back to database
-// Uses atomic LoadAndDelete to prevent race conditions where token could be used twice
-func (a *Auth) validateAdminToken(token string) bool {
-	// Hash the token for comparison
-	tokenHash := sha256Sum(token)
-
-	// Check memory cache first (for performance)
-	// Use LoadAndDelete for atomic operation to prevent race condition
-	value, loaded := a.adminTokens.LoadAndDelete(tokenHash)
-	if loaded {
-		info, ok := value.(*adminTokenInfo)
-		if !ok {
-			return false
-		}
-
-		// Check expiration
-		if time.Now().After(info.ExpiresAt) {
-			return false
-		}
-
-		return true
-	}
-
-	// Check database (for persistence across restarts)
-	_, err := a.store.ValidateAdminToken(tokenHash)
-	return err == nil
-}
-
-// checkAdminTokenRateLimit enforces rate limiting for admin token attempts
-// Returns false if rate limit exceeded
-func (a *Auth) checkAdminTokenRateLimit(ip string) bool {
-	const maxAttempts = 5
-	const window = time.Minute
-
-	value, ok := a.adminTokenAttempts.Load(ip)
-	if !ok {
-		a.adminTokenAttempts.Store(ip, &adminTokenAttempt{
-			count:     0,
-			firstFail: time.Now(),
-		})
-		return true
-	}
-
-	attempt := value.(*adminTokenAttempt)
-	attempt.mu.Lock()
-	defer attempt.mu.Unlock()
-
-	// Reset if window expired
-	if time.Since(attempt.firstFail) > window {
-		attempt.count = 0
-		attempt.firstFail = time.Now()
-		return true
-	}
-
-	// Check if limit exceeded
-	if attempt.count >= maxAttempts {
-		return false
-	}
-
-	return true
-}
-
-// recordAdminTokenFailure records a failed admin token attempt
-func (a *Auth) recordAdminTokenFailure(ip string) {
-	value, _ := a.adminTokenAttempts.LoadOrStore(ip, &adminTokenAttempt{
-		count:     0,
-		firstFail: time.Now(),
-	})
-
-	attempt := value.(*adminTokenAttempt)
-	attempt.mu.Lock()
-	defer attempt.mu.Unlock()
-
-	// Reset if window expired
-	if time.Since(attempt.firstFail) > time.Minute {
-		attempt.count = 0
-		attempt.firstFail = time.Now()
-	}
-
-	attempt.count++
-}
-
 // checkAPIKeyRateLimit enforces rate limiting for API key validation attempts (CRIT-004)
 // Returns false if rate limit exceeded, preventing bcrypt DoS.
 func (a *Auth) checkAPIKeyRateLimit(ip string) bool {
@@ -985,18 +845,6 @@ func (a *Auth) recordAPIKeyFailure(ip string) {
 	}
 
 	attempt.count++
-}
-
-// getIPFromRequest extracts IP from request
-func getIPFromRequest(r *http.Request) string {
-	ip := r.RemoteAddr
-	// Use net.SplitHostPort to properly handle IPv6 bracketed addresses (e.g. [::1]:8080)
-	host, _, err := net.SplitHostPort(ip)
-	if err == nil {
-		return host
-	}
-	// Fallback: strip brackets if present (for IPv6 addresses without port)
-	return strings.Trim(ip, "[]")
 }
 
 // checkSessionBinding validates that the current request matches the session's
@@ -1634,36 +1482,6 @@ func (a *Auth) GenerateAPIKey(userID int, name string, expiresAt *time.Time) (ke
 	a.apiKeys.Store(keyID, cachedKey)
 
 	return keyID, keySecret, nil
-}
-
-// CreateAdminToken creates a one-time admin token for initial setup
-// Returns the token string. The token hash is stored in database for persistence.
-func (a *Auth) CreateAdminToken() string {
-	token := generateSecret(32)
-	tokenHash := sha256Sum(token)
-	expiresAt := time.Now().Add(24 * time.Hour)
-
-	// Store in database for persistence across restarts
-	if err := a.store.CreateAdminToken(tokenHash, 0, expiresAt); err != nil {
-		// Log error but continue - memory-only fallback
-		log.Printf("Warning: failed to persist admin token to database: %v", err)
-	}
-
-	// Cache the HASH in memory for faster validation (not the raw token)
-	a.adminTokens.Store(tokenHash, &adminTokenInfo{
-		CreatedAt: time.Now(),
-		ExpiresAt: expiresAt,
-	})
-
-	// Audit log admin token creation via structured audit logger
-	audit.GetLogger().Log(audit.Event{
-		Type:    audit.EventTypeAdminAction,
-		Action:  "admin_token_created",
-		Success: true,
-		Details: map[string]interface{}{"expires_at": expiresAt.Format(time.RFC3339)},
-	})
-
-	return token
 }
 
 // sha256Sum returns SHA256 hash of input as base64 string

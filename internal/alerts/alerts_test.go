@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const fixedTimestamp = int64(1234567890)
+
 func TestSign_HMACSHA256(t *testing.T) {
 	m := &Manager{}
 
@@ -44,7 +46,7 @@ func TestSign_HMACSHA256(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := m.sign(tt.payload, tt.secret)
+			got := m.sign(tt.payload, tt.secret, fixedTimestamp)
 			if len(got) != tt.wantLen {
 				t.Errorf("sign() length = %d, want %d", len(got), tt.wantLen)
 			}
@@ -54,8 +56,9 @@ func TestSign_HMACSHA256(t *testing.T) {
 				t.Errorf("sign() returned invalid hex: %v", err)
 			}
 
-			// Verify against standard library HMAC
+			// Verify against standard library HMAC with timestamp prefix
 			mac := hmac.New(sha256.New, []byte(tt.secret))
+			mac.Write([]byte("1234567890|"))
 			mac.Write(tt.payload)
 			want := hex.EncodeToString(mac.Sum(nil))
 			if got != want {
@@ -70,8 +73,8 @@ func TestSign_Deterministic(t *testing.T) {
 	secret := "my-webhook-secret"
 	payload := []byte(`{"type":"backend_down","severity":"critical"}`)
 
-	sig1 := m.sign(payload, secret)
-	sig2 := m.sign(payload, secret)
+	sig1 := m.sign(payload, secret, fixedTimestamp)
+	sig2 := m.sign(payload, secret, fixedTimestamp)
 
 	if sig1 != sig2 {
 		t.Errorf("sign() not deterministic: %q != %q", sig1, sig2)
@@ -82,8 +85,8 @@ func TestSign_DifferentSecretsProduceDifferentSignatures(t *testing.T) {
 	m := &Manager{}
 	payload := []byte(`{"type":"test"}`)
 
-	sigA := m.sign(payload, "secret-a")
-	sigB := m.sign(payload, "secret-b")
+	sigA := m.sign(payload, "secret-a", fixedTimestamp)
+	sigB := m.sign(payload, "secret-b", fixedTimestamp)
 
 	if sigA == sigB {
 		t.Error("sign() produced identical signatures for different secrets")
@@ -94,8 +97,8 @@ func TestSign_DifferentPayloadsProduceDifferentSignatures(t *testing.T) {
 	m := &Manager{}
 	secret := "shared-secret"
 
-	sigA := m.sign([]byte(`{"type":"a"}`), secret)
-	sigB := m.sign([]byte(`{"type":"b"}`), secret)
+	sigA := m.sign([]byte(`{"type":"a"}`), secret, fixedTimestamp)
+	sigB := m.sign([]byte(`{"type":"b"}`), secret, fixedTimestamp)
 
 	if sigA == sigB {
 		t.Error("sign() produced identical signatures for different payloads")
@@ -113,8 +116,8 @@ func TestSign_VulnerableToLengthExtension(t *testing.T) {
 	payload1 := []byte(`{"type":"event1"}`)
 	payload2 := append(payload1, []byte(`extra`)...)
 
-	sig1 := m.sign(payload1, secret)
-	sig2 := m.sign(payload2, secret)
+	sig1 := m.sign(payload1, secret, fixedTimestamp)
+	sig2 := m.sign(payload2, secret, fixedTimestamp)
 
 	// If we were using raw SHA256(secret||payload), appending data and continuing
 	// the hash state would yield a valid signature. HMAC prevents this.
