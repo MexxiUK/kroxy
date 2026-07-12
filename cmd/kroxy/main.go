@@ -35,13 +35,22 @@ func isLocalhostAddr(addr string) bool {
 	if err != nil {
 		host = addr
 	}
-	return host == "127.0.0.1" || host == "::1" || host == "localhost" || host == ""
+	// Require an explicit loopback host; an empty host (e.g., ":8080") binds all interfaces.
+	return host == "127.0.0.1" || host == "::1" || host == "localhost"
 }
 
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Print setup token guidance when no users exist yet and no token is configured.
+	// This prevents the first-admin endpoint from being open to anyone who can reach the admin port.
+	if os.Getenv("KROXY_SETUP_TOKEN") == "" {
+		log.Println("SECURITY: No KROXY_SETUP_TOKEN configured. The /api/setup endpoint is disabled until a token is set.")
+	} else {
+		log.Println("INFO: /api/setup endpoint protected by KROXY_SETUP_TOKEN.")
 	}
 
 	// Set self-reference addresses for proxy-loop prevention (admin + public listeners)

@@ -119,7 +119,8 @@ func isLocalhost(addr string) bool {
 		// No port - treat entire string as host
 		host = addr
 	}
-	return host == "127.0.0.1" || host == "::1" || host == "localhost" || host == ""
+	// Require an explicit loopback host; an empty host (e.g., ":8080") binds all interfaces.
+	return host == "127.0.0.1" || host == "::1" || host == "localhost"
 }
 
 func getEnv(key, defaultVal string) string {

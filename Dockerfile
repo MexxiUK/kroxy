@@ -80,7 +80,7 @@ USER kroxy
 
 # Set environment variables
 ENV KROXY_PROXY=:80 \
-    KROXY_ADMIN=:8080 \
+    KROXY_ADMIN=127.0.0.1:8080 \
     KROXY_DB=/data/kroxy.db \
     GOMAXPROCS=1 \
     GOMEMLIMIT=256MiB

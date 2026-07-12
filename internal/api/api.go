@@ -760,6 +760,15 @@ func generateCSRFToken() string {
 	return base64.URLEncoding.EncodeToString(b)
 }
 
+// setupToken validates the KROXY_SETUP_TOKEN supplied in the request.
+func setupToken() (string, bool) {
+	token := os.Getenv("KROXY_SETUP_TOKEN")
+	if token == "" {
+		return "", false
+	}
+	return token, true
+}
+
 // setup handles initial admin account creation (only when no users exist)
 func (a *API) setup(w http.ResponseWriter, r *http.Request) {
 	// Strict rate limiting: setup should only ever be called once per installation.
@@ -767,6 +776,20 @@ func (a *API) setup(w http.ResponseWriter, r *http.Request) {
 	if !a.rateLimiter.Allow(ip, 3) {
 		respondError(w, http.StatusTooManyRequests, "Rate limit exceeded")
 		return
+	}
+
+	// Require a setup token to prevent unauthorized first-admin creation.
+	expectedToken, configured := setupToken()
+	if configured {
+		suppliedToken := r.Header.Get("X-Setup-Token")
+		if suppliedToken == "" {
+			respondError(w, http.StatusUnauthorized, "Setup token required")
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(suppliedToken), []byte(expectedToken)) != 1 {
+			respondError(w, http.StatusUnauthorized, "Invalid setup token")
+			return
+		}
 	}
 
 	// Prevent race condition where two concurrent requests both see zero users
