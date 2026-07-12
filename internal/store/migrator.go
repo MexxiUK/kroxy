@@ -171,6 +171,7 @@ func (m *Migrator) Up() error {
 
 		// Apply migration
 		if _, err := tx.Exec(mig.UpSQL); err != nil {
+			// #nosec G104 — rollback is best-effort after a fatal migration error.
 			tx.Rollback()
 			return fmt.Errorf("migration %d (%s) failed: %w", mig.Version, mig.Name, err)
 		}
@@ -181,6 +182,7 @@ func (m *Migrator) Up() error {
 			"INSERT OR REPLACE INTO schema_version (version, name) VALUES (?, ?)",
 			mig.Version, mig.Name,
 		); err != nil {
+			// #nosec G104 — rollback is best-effort after a fatal migration error.
 			tx.Rollback()
 			return fmt.Errorf("failed to record migration %d: %w", mig.Version, err)
 		}

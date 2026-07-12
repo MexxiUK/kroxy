@@ -539,6 +539,7 @@ func decodeEncodedIP(hostname string) net.IP {
 	if strings.HasPrefix(hostname, "0x") || strings.HasPrefix(hostname, "0X") {
 		val, err := strconv.ParseUint(hostname[2:], 16, 32)
 		if err == nil {
+			// #nosec G115 — val is parsed with bitSize 32 and net.IPv4 accepts bytes.
 			return net.IPv4(byte(val>>24), byte(val>>16), byte(val>>8), byte(val))
 		}
 	}
@@ -547,6 +548,7 @@ func decodeEncodedIP(hostname string) net.IP {
 	if matched, _ := regexp.MatchString(`^[0-9]+$`, hostname); matched {
 		val, err := strconv.ParseUint(hostname, 10, 32)
 		if err == nil && val > 0xFFFFFF {
+			// #nosec G115 — val is parsed with bitSize 32 and net.IPv4 accepts bytes.
 			return net.IPv4(byte(val>>24), byte(val>>16), byte(val>>8), byte(val))
 		}
 	}
@@ -573,6 +575,7 @@ func decodeEncodedIP(hostname string) net.IP {
 			octets[i] = val
 		}
 		if valid {
+			// #nosec G115 — each octet is validated to be <= 255 above.
 			return net.IPv4(byte(octets[0]), byte(octets[1]), byte(octets[2]), byte(octets[3]))
 		}
 	}
@@ -581,6 +584,7 @@ func decodeEncodedIP(hostname string) net.IP {
 	if len(hostname) > 2 && hostname[0] == '0' && hostname[1] != '.' {
 		val, err := strconv.ParseUint(hostname, 8, 32)
 		if err == nil {
+			// #nosec G115 — val is parsed with bitSize 32 and net.IPv4 accepts bytes.
 			return net.IPv4(byte(val>>24), byte(val>>16), byte(val>>8), byte(val))
 		}
 	}

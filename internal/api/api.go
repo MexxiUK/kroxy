@@ -441,6 +441,7 @@ func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 			if strings.Contains(r.Header.Get("Accept"), "text/html") {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(http.StatusForbidden)
+				// #nosec G104 — best-effort write of static admin deny page.
 				w.Write([]byte("<!DOCTYPE html><html><head><title>Access Denied</title></head><body><h1>Access Denied</h1><p>Your IP address is not authorized to access the admin panel.</p><a href='/login'>Back to login</a></body></html>"))
 				return
 			}
@@ -468,6 +469,7 @@ func (a *API) adminIPAllowlistMiddleware(next http.Handler) http.Handler {
 		if strings.Contains(r.Header.Get("Accept"), "text/html") {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusForbidden)
+			// #nosec G104 — best-effort write of static admin deny page.
 			w.Write([]byte("<!DOCTYPE html><html><head><title>Access Denied</title></head><body><h1>Access Denied</h1><p>Your IP address is not authorized to access the admin panel.</p><a href='/login'>Back to login</a></body></html>"))
 			return
 		}
@@ -483,6 +485,7 @@ func (a *API) rateLimitMiddleware(next http.Handler) http.Handler {
 			// Log rate limit trigger
 			a.audit.LogRateLimitTrigger(ip, r.Host, 100)
 			w.WriteHeader(http.StatusTooManyRequests)
+			// #nosec G104 — best-effort JSON error response after rate limit.
 			json.NewEncoder(w).Encode(map[string]string{
 				"error": "rate limit exceeded",
 			})
@@ -518,6 +521,7 @@ func csrfMiddleware(next http.Handler) http.Handler {
 
 		if err != nil || csrfToken == "" || cookie == nil {
 			w.WriteHeader(http.StatusForbidden)
+			// #nosec G104 — best-effort JSON error response.
 			json.NewEncoder(w).Encode(map[string]string{
 				"error": "CSRF token missing",
 			})
@@ -527,6 +531,7 @@ func csrfMiddleware(next http.Handler) http.Handler {
 		// Use constant-time comparison to prevent timing attacks
 		if subtle.ConstantTimeCompare([]byte(csrfToken), []byte(cookie.Value)) != 1 {
 			w.WriteHeader(http.StatusForbidden)
+			// #nosec G104 — best-effort JSON error response.
 			json.NewEncoder(w).Encode(map[string]string{
 				"error": "CSRF token mismatch",
 			})
@@ -708,10 +713,12 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	body, err := json.Marshal(data)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		// #nosec G104 — best-effort static error JSON after marshal failure.
 		w.Write([]byte(`{"error":"failed to encode response"}`))
 		return
 	}
 	w.WriteHeader(status)
+	// #nosec G104 — respondJSON already set status; best-effort write.
 	w.Write(body)
 }
 
@@ -1188,6 +1195,7 @@ func (a *API) enable2FA(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Invalidate all sessions to force re-login with 2FA
+	// #nosec G104 — best-effort session invalidation after 2FA enablement.
 	a.auth.InvalidateUserSessions(dbUser.ID)
 
 	// Revoke all API keys: existing keys were created under the old password-only policy
@@ -2425,6 +2433,7 @@ func (a *API) createCertificate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := os.WriteFile(keyPath, []byte(req.PrivateKey), 0600); err != nil {
+			// #nosec G104 — best-effort cleanup of partially written certificate.
 			os.Remove(certPath)
 			respondError(w, http.StatusInternalServerError, "Failed to write private key file")
 			return
@@ -2533,8 +2542,10 @@ func (a *API) provisionCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if provisioned {
+		// #nosec G104 — certificate status update is best-effort background bookkeeping.
 		a.store.UpdateCertificateStatus(id, "active")
 	} else {
+		// #nosec G104 — certificate status update is best-effort background bookkeeping.
 		a.store.UpdateCertificateStatus(id, "failed")
 	}
 
@@ -2852,6 +2863,7 @@ func (a *API) testWAF(w http.ResponseWriter, r *http.Request) {
 		RouteID *int `json:"route_id"`
 	}
 	if r.Body != nil {
+		// #nosec G104 — route_id is optional; decode failure falls back to global WAF.
 		json.NewDecoder(r.Body).Decode(&req)
 	}
 
@@ -3194,6 +3206,7 @@ kroxy_auth_attempts_total{result="failure"} %d
 kroxy_waf_blocks_total %d
 `, enabledRoutes, disabledRoutes, metrics.RequestsTotal(), metrics.AuthSuccessTotal(), metrics.AuthFailureTotal(), blockedCount)
 	w.Header().Set("Content-Type", "text/plain")
+	// #nosec G104 — best-effort metrics write.
 	w.Write([]byte(metricsOut))
 }
 

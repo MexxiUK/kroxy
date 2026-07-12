@@ -12,27 +12,35 @@ func newTestStore(t *testing.T) (*Store, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// #nosec G104 — test cleanup.
 	tmp.Close()
 
 	// Use temp data dir to avoid writing encryption keys to working directory
 	dataDir, err := os.MkdirTemp("", "kroxy-test-data-*")
 	if err != nil {
+		// #nosec G104 — test cleanup on error.
 		os.Remove(tmp.Name())
 		t.Fatal(err)
 	}
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_DATA_DIR", dataDir)
 
 	s, err := New(tmp.Name())
 	if err != nil {
+		// #nosec G104 — test cleanup on error.
 		os.Remove(tmp.Name())
+		// #nosec G104 — test cleanup on error.
 		os.RemoveAll(dataDir)
 		os.Unsetenv("KROXY_DATA_DIR")
 		t.Fatal(err)
 	}
 
 	cleanup := func() {
+		// #nosec G104 — test cleanup.
 		s.Close()
+		// #nosec G104 — test cleanup.
 		os.Remove(tmp.Name())
+		// #nosec G104 — test cleanup.
 		os.RemoveAll(dataDir)
 		os.Unsetenv("KROXY_DATA_DIR")
 	}
@@ -208,6 +216,7 @@ func TestStore_SessionCRUD(t *testing.T) {
 	}
 
 	// Expire and cleanup
+	// #nosec G104 — test setup.
 	s.UpdateSessionExpiry(sess.ID, time.Now().Add(-1*time.Hour))
 	if err := s.CleanupSessions(); err != nil {
 		t.Fatalf("CleanupSessions failed: %v", err)
@@ -218,6 +227,7 @@ func TestStore_SessionCRUD(t *testing.T) {
 	}
 
 	// Delete session
+	// #nosec G104 — test setup.
 	s.CreateSession(sess)
 	if err := s.DeleteSession(sess.ID); err != nil {
 		t.Fatalf("DeleteSession failed: %v", err)
@@ -269,6 +279,7 @@ func TestStore_APIKeyCRUD(t *testing.T) {
 	}
 
 	// Create again for DeleteAPIKeyByUser test
+	// #nosec G104 — test setup.
 	s.CreateAPIKey(key)
 	deleted, err := s.DeleteAPIKeyByUser("key_123", 1)
 	if err != nil {

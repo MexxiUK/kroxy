@@ -231,6 +231,7 @@ func main() {
 	// Stop proxy with a bounded timeout so it can't block shutdown indefinitely.
 	pxStopDone := make(chan struct{})
 	go func() {
+		// #nosec G104 — shutdown path; best-effort stop.
 		px.Stop()
 		close(pxStopDone)
 	}()
@@ -247,6 +248,7 @@ func main() {
 		log.Printf("ERROR: graceful shutdown failed: %v", err)
 	}
 	if logStore != nil {
+		// #nosec G104 — shutdown path; best-effort store close.
 		logStore.Close()
 	}
 }

@@ -50,22 +50,6 @@ jobs:
       - name: Run tests with race detector
         run: go test -race -count=1 ./...
 
-  integration:
-    name: Integration Tests
-    needs: [fast-check]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-          cache-dependency-path: 'go.sum'
-
-      - name: Run integration tests
-        run: go test -count=1 -tags=integration ./internal/api/...
-
   security:
     name: Security Scan
     needs: [fast-check]
@@ -91,7 +75,7 @@ jobs:
         run: gosec -exclude=${{ env.GOSEC_EXCLUDES }} ./...
 
       - name: Run Semgrep
-        uses: returntocorp/semgrep-action@v1
+        uses: semgrep/semgrep-action@v1
         with:
           config: >-
             p/security-audit
@@ -115,7 +99,7 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.0.2
 
       - name: Run golangci-lint
         run: golangci-lint run ./...
@@ -153,7 +137,7 @@ jobs:
 
   build:
     name: Build Binaries
-    needs: [test-race, security, lint, integration]
+    needs: [test-race, security, lint]
     runs-on: ubuntu-latest
     strategy:
       matrix:

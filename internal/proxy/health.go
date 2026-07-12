@@ -50,7 +50,10 @@ func NewHealthChecker(s *store.Store) *HealthChecker {
 		client: &http.Client{
 			Timeout: healthCheckTimeout,
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+				TLSClientConfig: &tls.Config{
+					MinVersion:         tls.VersionTLS12,
+					InsecureSkipVerify: false,
+				},
 			},
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse

@@ -30,12 +30,14 @@ func TestSign_HMACSHA256(t *testing.T) {
 			payload: []byte(`{"event":"test"}`),
 			wantLen: 64,
 		},
+		// #nosec G101 — test fixtures, not real credentials.
 		{
 			name:    "long secret",
 			secret:  "a-very-long-secret-that-exceeds-block-size-of-sha256-and-requires-hashing-before-use-in-hmac",
 			payload: []byte(`{"event":"test"}`),
 			wantLen: 64,
 		},
+		// #nosec G101 — test fixture, not a real credential.
 		{
 			name:    "unicode payload",
 			secret:  "secret",
@@ -70,6 +72,7 @@ func TestSign_HMACSHA256(t *testing.T) {
 
 func TestSign_Deterministic(t *testing.T) {
 	m := &Manager{}
+	// #nosec G101 — test fixture, not a real credential.
 	secret := "my-webhook-secret"
 	payload := []byte(`{"type":"backend_down","severity":"critical"}`)
 

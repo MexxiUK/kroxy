@@ -101,7 +101,9 @@ func (ls *LogStore) rotate() {
 	if ls.logFile == nil || ls.logPath == "" {
 		return
 	}
+	// #nosec G104 — best-effort close/remove during access log rotation.
 	ls.logFile.Close()
+	// #nosec G104 — best-effort removal of rotated access log.
 	os.Remove(ls.logPath) // discard old access log; no backups needed
 
 	f, err := os.OpenFile(ls.logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600) // #nosec G304 — logPath is from server-side configuration

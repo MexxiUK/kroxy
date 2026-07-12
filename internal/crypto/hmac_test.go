@@ -14,7 +14,9 @@ const testBodyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b78
 
 func TestSignAndVerifyWAFHeader(t *testing.T) {
 	// Set a known signing key for predictable results
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "")
 	// Reset the once for testing
 	ResetSigningKeyForTest()
@@ -31,7 +33,9 @@ func TestSignAndVerifyWAFHeader(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_WrongHost(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -44,7 +48,9 @@ func TestVerifyWAFHeader_WrongHost(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_WrongMethod(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -57,7 +63,9 @@ func TestVerifyWAFHeader_WrongMethod(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_WrongRouteID(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -70,7 +78,9 @@ func TestVerifyWAFHeader_WrongRouteID(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_WrongBodyHash(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -83,7 +93,9 @@ func TestVerifyWAFHeader_WrongBodyHash(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_ExpiredTimestamp(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -103,7 +115,9 @@ func TestVerifyWAFHeader_ExpiredTimestamp(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_TamperedHMAC(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -118,7 +132,9 @@ func TestVerifyWAFHeader_TamperedHMAC(t *testing.T) {
 }
 
 func TestVerifyWAFHeader_InvalidFormat(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMzItY2hhcmFjdGVycy1sb25n")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "")
 	ResetSigningKeyForTest()
 
@@ -159,6 +175,7 @@ func TestGetWAFSigningKey_DevMode(t *testing.T) {
 
 func TestGetWAFSigningKey_ProductionRequired(t *testing.T) {
 	os.Unsetenv("KROXY_WAF_SIGNING_KEY")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "true")
 	ResetSigningKeyForTest()
 	defer os.Unsetenv("KROXY_PRODUCTION")
@@ -170,7 +187,9 @@ func TestGetWAFSigningKey_ProductionRequired(t *testing.T) {
 }
 
 func TestGetWAFSigningKey_ProductionWithKey(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dGhpcy1pcy1hLXZlcnktbG9uZy1wcm9kdWN0aW9uLWtleS10aGF0LWlzLWF0LWxlYXN0LTMyLWNoYXJz")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "true")
 	ResetSigningKeyForTest()
 	defer os.Unsetenv("KROXY_WAF_SIGNING_KEY")
@@ -186,7 +205,9 @@ func TestGetWAFSigningKey_ProductionWithKey(t *testing.T) {
 }
 
 func TestGetWAFSigningKey_InvalidBase64(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "not-valid-base64!!!")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "true")
 	ResetSigningKeyForTest()
 	defer os.Unsetenv("KROXY_WAF_SIGNING_KEY")
@@ -199,7 +220,9 @@ func TestGetWAFSigningKey_InvalidBase64(t *testing.T) {
 }
 
 func TestGetWAFSigningKey_TooShort(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_WAF_SIGNING_KEY", "dG9vLXNob3J0") // base64 of "too-short"
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "true")
 	ResetSigningKeyForTest()
 	defer os.Unsetenv("KROXY_WAF_SIGNING_KEY")

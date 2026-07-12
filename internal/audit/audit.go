@@ -291,6 +291,7 @@ func (l *Logger) forwardToWebhook(data []byte) {
 		log.Printf("audit: webhook forwarding failed: %v", err)
 		return
 	}
+	// #nosec G104 — best-effort close of webhook response body.
 	resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		log.Printf("audit: webhook returned status %d", resp.StatusCode)
@@ -437,6 +438,7 @@ func (l *Logger) rotate() error {
 
 	// Remove oldest backup if over limit
 	oldest := fmt.Sprintf("%s.%d", l.logPath, l.maxBackups+1)
+	// #nosec G104 — best-effort cleanup of rotated audit log backup.
 	os.Remove(oldest)
 
 	// Open new log file

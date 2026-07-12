@@ -33,6 +33,7 @@ func AdminClient(t *testing.T, baseURL string) (*http.Client, string, string) {
 	if err != nil {
 		t.Fatalf("setup request: %v", err)
 	}
+	// #nosec G104 — test helper; body already consumed if needed below.
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("setup unexpected status: %d", resp.StatusCode)
@@ -48,9 +49,11 @@ func AdminClient(t *testing.T, baseURL string) (*http.Client, string, string) {
 			Token string `json:"csrf_token"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&csrfResp); err != nil {
+			// #nosec G104 — test helper cleanup on decode error.
 			resp.Body.Close()
 			t.Fatalf("decode csrf response: %v", err)
 		}
+		// #nosec G104 — test helper cleanup after decoding.
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("csrf unexpected status: %d", resp.StatusCode)
@@ -75,9 +78,11 @@ func AdminClient(t *testing.T, baseURL string) (*http.Client, string, string) {
 			Setup2FARequired bool   `json:"setup_2fa_required"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
+			// #nosec G104 — test helper cleanup on decode error.
 			resp.Body.Close()
 			t.Fatalf("decode login response: %v", err)
 		}
+		// #nosec G104 — test helper cleanup after decoding.
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("login unexpected status: %d", resp.StatusCode)
@@ -99,9 +104,11 @@ func AdminClient(t *testing.T, baseURL string) (*http.Client, string, string) {
 				Secret string `json:"secret"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&setupResp); err != nil {
+				// #nosec G104 — test helper cleanup on decode error.
 				resp.Body.Close()
 				t.Fatalf("decode 2fa setup response: %v", err)
 			}
+			// #nosec G104 — test helper cleanup after decoding.
 			resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("2fa setup unexpected status: %d", resp.StatusCode)
@@ -120,6 +127,7 @@ func AdminClient(t *testing.T, baseURL string) (*http.Client, string, string) {
 			if err != nil {
 				t.Fatalf("2fa enable request: %v", err)
 			}
+			// #nosec G104 — test helper cleanup.
 			resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("2fa enable unexpected status: %d", resp.StatusCode)
@@ -146,9 +154,11 @@ func AdminClient(t *testing.T, baseURL string) (*http.Client, string, string) {
 			PendingID   string `json:"pending_id"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
+			// #nosec G104 — test helper cleanup on decode error.
 			resp.Body.Close()
 			t.Fatalf("decode re-login response: %v", err)
 		}
+		// #nosec G104 — test helper cleanup after decoding.
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("re-login unexpected status: %d", resp.StatusCode)
@@ -169,6 +179,7 @@ func AdminClient(t *testing.T, baseURL string) (*http.Client, string, string) {
 		if err != nil {
 			t.Fatalf("2fa verify request: %v", err)
 		}
+		// #nosec G104 — test helper cleanup.
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("2fa verify unexpected status: %d", resp.StatusCode)

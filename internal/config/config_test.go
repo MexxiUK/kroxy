@@ -30,6 +30,7 @@ func saveConfigEnv() func() {
 	return func() {
 		for _, k := range configEnvKeys {
 			if v, ok := saved[k]; ok {
+				// #nosec G104 — restoring test environment variables.
 				os.Setenv(k, v)
 			} else {
 				os.Unsetenv(k)
@@ -42,11 +43,15 @@ func TestLoad_ProductionRequiresTLSOnPublicProxy(t *testing.T) {
 	defer saveConfigEnv()()
 
 	// Set a valid production DB path so that the database-path check passes.
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_DB", "/data/kroxy.db")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ADMIN", "127.0.0.1:8081")
 	os.Unsetenv("KROXY_ALLOW_PRIVATE_BACKENDS")
 	// Provide a dummy cert/key pair so the existing TLS path validation passes.
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_TLS_CERT", "/data/cert.pem")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_TLS_KEY", "/data/key.pem")
 
 	cases := []struct {
@@ -88,9 +93,13 @@ func TestLoad_ProductionRequiresTLSOnPublicProxy(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			// #nosec G104 — test environment setup.
 			os.Setenv("KROXY_PRODUCTION", "true")
+			// #nosec G104 — test environment setup.
 			os.Setenv("KROXY_PROXY", tc.proxy)
+			// #nosec G104 — test environment setup.
 			os.Setenv("KROXY_TLS_ENABLED", tc.tls)
+			// #nosec G104 — test environment setup.
 			os.Setenv("KROXY_AUTO_HTTPS", tc.autoHTTPS)
 
 			_, err := Load()
@@ -107,11 +116,17 @@ func TestLoad_ProductionRequiresTLSOnPublicProxy(t *testing.T) {
 func TestLoad_NonProductionAllowsHTTPPublicProxy(t *testing.T) {
 	defer saveConfigEnv()()
 
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "false")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_TLS_ENABLED", "false")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_AUTO_HTTPS", "false")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PROXY", ":80")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_DB", "./kroxy.db")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ADMIN", "127.0.0.1:8081")
 	os.Unsetenv("KROXY_ALLOW_PRIVATE_BACKENDS")
 	os.Unsetenv("KROXY_TLS_CERT")

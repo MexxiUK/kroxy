@@ -7,6 +7,7 @@ import (
 )
 
 func TestEncryptDecrypt_RoundTrip(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	os.Unsetenv("KROXY_PRODUCTION")
 	ResetEncryptionKeyForTest()
@@ -34,6 +35,7 @@ func TestEncryptDecrypt_RoundTrip(t *testing.T) {
 }
 
 func TestEncryptDecrypt_EmptyString(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	os.Unsetenv("KROXY_PRODUCTION")
 	ResetEncryptionKeyForTest()
@@ -59,6 +61,7 @@ func TestEncryptDecrypt_EmptyString(t *testing.T) {
 }
 
 func TestDecrypt_TamperedCiphertext(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	os.Unsetenv("KROXY_PRODUCTION")
 	ResetEncryptionKeyForTest()
@@ -67,8 +70,13 @@ func TestDecrypt_TamperedCiphertext(t *testing.T) {
 	plaintext := "tamper-test"
 	ciphertext, _ := Encrypt(plaintext)
 
-	// Tamper with the last byte
-	tampered := ciphertext[:len(ciphertext)-1] + "X"
+	// Tamper with the last byte, flipping it to a character different from the original.
+	last := ciphertext[len(ciphertext)-1]
+	tamperedChar := byte('X')
+	if last == 'X' {
+		tamperedChar = 'Y'
+	}
+	tampered := ciphertext[:len(ciphertext)-1] + string(tamperedChar)
 	_, err := Decrypt(tampered)
 	if err == nil {
 		t.Fatal("Expected Decrypt to fail on tampered ciphertext")
@@ -76,6 +84,7 @@ func TestDecrypt_TamperedCiphertext(t *testing.T) {
 }
 
 func TestDecrypt_InvalidBase64(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	os.Unsetenv("KROXY_PRODUCTION")
 	ResetEncryptionKeyForTest()
@@ -88,6 +97,7 @@ func TestDecrypt_InvalidBase64(t *testing.T) {
 }
 
 func TestDecrypt_CiphertextTooShort(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	os.Unsetenv("KROXY_PRODUCTION")
 	ResetEncryptionKeyForTest()
@@ -102,6 +112,7 @@ func TestDecrypt_CiphertextTooShort(t *testing.T) {
 
 func TestGetEncryptionKey_ValidKey(t *testing.T) {
 	validKey := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ENCRYPTION_KEY", validKey)
 	os.Unsetenv("KROXY_PRODUCTION")
 	ResetEncryptionKeyForTest()
@@ -118,6 +129,7 @@ func TestGetEncryptionKey_ValidKey(t *testing.T) {
 
 func TestGetEncryptionKey_InvalidKeySize(t *testing.T) {
 	// 20 bytes is not valid for AES (must be 16, 24, or 32)
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 20)))
 	os.Unsetenv("KROXY_PRODUCTION")
 	ResetEncryptionKeyForTest()
@@ -131,6 +143,7 @@ func TestGetEncryptionKey_InvalidKeySize(t *testing.T) {
 
 func TestGetEncryptionKey_ProductionRequired(t *testing.T) {
 	os.Unsetenv("KROXY_ENCRYPTION_KEY")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "true")
 	ResetEncryptionKeyForTest()
 	defer os.Unsetenv("KROXY_PRODUCTION")
@@ -145,6 +158,7 @@ func TestGetEncryptionKey_ProductionRequired(t *testing.T) {
 }
 
 func TestIsEncryptionAvailable(t *testing.T) {
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	os.Unsetenv("KROXY_PRODUCTION")
 	ResetEncryptionKeyForTest()
@@ -157,6 +171,7 @@ func TestIsEncryptionAvailable(t *testing.T) {
 
 func TestIsEncryptionAvailable_NotAvailable(t *testing.T) {
 	os.Unsetenv("KROXY_ENCRYPTION_KEY")
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_PRODUCTION", "true")
 	ResetEncryptionKeyForTest()
 	defer os.Unsetenv("KROXY_PRODUCTION")
@@ -173,6 +188,7 @@ func TestLoadOrGenerateDevKey(t *testing.T) {
 
 	// Use a temp directory so we don't pollute the repo
 	tmpDir := t.TempDir()
+	// #nosec G104 — test environment setup.
 	os.Setenv("KROXY_DATA_DIR", tmpDir)
 	defer os.Unsetenv("KROXY_DATA_DIR")
 

@@ -172,6 +172,7 @@ func (a *API) exportBackup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", "attachment; filename=kroxy-backup-"+time.Now().Format("20060102-150405")+".json")
 	w.WriteHeader(http.StatusOK)
+	// #nosec G104 — best-effort backup download write.
 	w.Write(signed)
 
 	a.audit.Log(audit.Event{

@@ -20,16 +20,20 @@ func NewTestStore(t *testing.T) (*store.Store, func()) {
 	if err != nil {
 		t.Fatalf("create temp db: %v", err)
 	}
+	// #nosec G104 — test cleanup.
 	tmp.Close()
 
 	s, err := store.New(tmp.Name())
 	if err != nil {
+		// #nosec G104 — test cleanup on error.
 		os.Remove(tmp.Name())
 		t.Fatalf("open store: %v", err)
 	}
 
 	cleanup := func() {
+		// #nosec G104 — test cleanup.
 		s.Close()
+		// #nosec G104 — test cleanup.
 		os.Remove(tmp.Name())
 	}
 
