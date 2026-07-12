@@ -385,7 +385,7 @@ func TestCreateRoute_OIDCRequiresProviderID(t *testing.T) {
 	body := map[string]interface{}{
 		"domain":       "oidc.example.com",
 		"backend":      "http://1.1.1.1:8080",
-		"waf_mode":     "detect",
+		"waf_mode":     "block",
 		"oidc_enabled": true,
 	}
 	b, _ := json.Marshal(body)
@@ -409,7 +409,7 @@ func TestCreateRoute_OIDCPreservesProviderID(t *testing.T) {
 	body := map[string]interface{}{
 		"domain":           "oidc.example.com",
 		"backend":          "http://1.1.1.1:8080",
-		"waf_mode":         "detect",
+		"waf_mode":         "block",
 		"oidc_enabled":     true,
 		"oidc_provider_id": providerID,
 	}
@@ -454,7 +454,7 @@ func TestUpdateRoute_OIDCRejectsMissingProvider(t *testing.T) {
 	route := &store.Route{
 		Domain:  "example.com",
 		Backend: "http://1.1.1.1:8080",
-		WAFMode: "detect",
+		WAFMode: "block",
 	}
 	if err := s.CreateRoute(route); err != nil {
 		t.Fatalf("create route: %v", err)
@@ -463,7 +463,7 @@ func TestUpdateRoute_OIDCRejectsMissingProvider(t *testing.T) {
 	body := map[string]interface{}{
 		"domain":       "example.com",
 		"backend":      "http://1.1.1.1:8080",
-		"waf_mode":     "detect",
+		"waf_mode":     "block",
 		"oidc_enabled": true,
 	}
 	b, _ := json.Marshal(body)
@@ -486,7 +486,7 @@ func TestUpdateRoute_OIDCPreservesProviderID(t *testing.T) {
 	route := &store.Route{
 		Domain:  "example.com",
 		Backend: "http://1.1.1.1:8080",
-		WAFMode: "detect",
+		WAFMode: "block",
 	}
 	if err := s.CreateRoute(route); err != nil {
 		t.Fatalf("create route: %v", err)
@@ -495,7 +495,7 @@ func TestUpdateRoute_OIDCPreservesProviderID(t *testing.T) {
 	body := map[string]interface{}{
 		"domain":           "example.com",
 		"backend":          "http://1.1.1.1:8080",
-		"waf_mode":         "detect",
+		"waf_mode":         "block",
 		"oidc_enabled":     true,
 		"oidc_provider_id": providerID,
 	}
@@ -537,7 +537,7 @@ func TestCreateRoute_OIDCRejectsNonExistentProvider(t *testing.T) {
 	body := map[string]interface{}{
 		"domain":           "oidc.example.com",
 		"backend":          "http://1.1.1.1:8080",
-		"waf_mode":         "detect",
+		"waf_mode":         "block",
 		"oidc_enabled":     true,
 		"oidc_provider_id": 99999,
 	}
@@ -561,7 +561,7 @@ func TestUpdateRoute_OIDCPreservesProviderIDWhenOmitted(t *testing.T) {
 	route := &store.Route{
 		Domain:         "example.com",
 		Backend:        "http://1.1.1.1:8080",
-		WAFMode:        "detect",
+		WAFMode:        "block",
 		OIDCEnabled:    true,
 		OIDCProviderID: providerID,
 	}
@@ -573,7 +573,7 @@ func TestUpdateRoute_OIDCPreservesProviderIDWhenOmitted(t *testing.T) {
 	body := map[string]interface{}{
 		"domain":       "example.com",
 		"backend":      "http://1.1.1.1:8080",
-		"waf_mode":     "detect",
+		"waf_mode":     "block",
 		"oidc_enabled": true,
 		"rate_limit":   100,
 	}
@@ -617,7 +617,7 @@ func TestUpdateRoute_OIDCRejectsNonExistentProvider(t *testing.T) {
 	route := &store.Route{
 		Domain:  "example.com",
 		Backend: "http://1.1.1.1:8080",
-		WAFMode: "detect",
+		WAFMode: "block",
 	}
 	if err := s.CreateRoute(route); err != nil {
 		t.Fatalf("create route: %v", err)
@@ -626,9 +626,90 @@ func TestUpdateRoute_OIDCRejectsNonExistentProvider(t *testing.T) {
 	body := map[string]interface{}{
 		"domain":           "example.com",
 		"backend":          "http://1.1.1.1:8080",
-		"waf_mode":         "detect",
+		"waf_mode":         "block",
 		"oidc_enabled":     true,
 		"oidc_provider_id": 99999,
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, "/api/routes/"+strconv.Itoa(route.ID), bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, route.ID))
+
+	rec := httptest.NewRecorder()
+	a.updateRoute(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateRoute_InvalidSecurityFields(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	base := map[string]interface{}{
+		"domain":   "example.com",
+		"backend":  "http://1.1.1.1:8080",
+		"waf_mode": "block",
+	}
+
+	cases := []struct {
+		name string
+		key  string
+		val  interface{}
+	}{
+		{"waf_mode", "waf_mode", "detect"},
+		{"waf_paranoia_level", "waf_paranoia_level", 5},
+		{"rate_limit negative", "rate_limit", -1},
+		{"rate_limit too high", "rate_limit", 100001},
+		{"bot_protection", "bot_protection", "captcha"},
+		{"block_countries", "block_countries", "USA"},
+		{"allow_countries", "allow_countries", "xx,xxx"},
+		{"custom_headers not JSON", "custom_headers", "not-json"},
+		{"custom_headers CRLF", "custom_headers", `{"X-Header":"bad\r\nvalue"}`},
+		{"custom_headers empty name", "custom_headers", `{"":"value"}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := make(map[string]interface{})
+			for k, v := range base {
+				body[k] = v
+			}
+			body[tc.key] = tc.val
+			b, _ := json.Marshal(body)
+			req := httptest.NewRequest(http.MethodPost, "/api/routes", bytes.NewReader(b))
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(newAdminRouteContext(t, 0))
+
+			rec := httptest.NewRecorder()
+			a.createRoute(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for invalid %s, got %d: %s", tc.key, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestUpdateRoute_InvalidSecurityFields(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+	route := &store.Route{
+		Domain:  "example.com",
+		Backend: "http://1.1.1.1:8080",
+		WAFMode: "block",
+	}
+	if err := s.CreateRoute(route); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	body := map[string]interface{}{
+		"domain":         "example.com",
+		"backend":        "http://1.1.1.1:8080",
+		"waf_mode":       "block",
+		"rate_limit":     -10,
+		"bot_protection": "captcha",
 	}
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPut, "/api/routes/"+strconv.Itoa(route.ID), bytes.NewReader(b))

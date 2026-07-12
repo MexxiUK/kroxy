@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -970,6 +971,90 @@ func ValidateWAFExclusions(exclusions string) error {
 			if c < '0' || c > '9' {
 				return errors.New("exclusions must be comma-separated numeric rule IDs")
 			}
+		}
+	}
+	return nil
+}
+
+// ValidateWAFMode validates the WAF operating mode for a route.
+func ValidateWAFMode(mode string) error {
+	switch mode {
+	case "", "block", "log_only":
+		return nil
+	default:
+		return fmt.Errorf("invalid waf_mode %q: must be empty, 'block' or 'log_only'", mode)
+	}
+}
+
+// ValidateWAFParanoiaLevel validates the OWASP CRS paranoia level.
+// 0 means "use the global default"; values above 4 are rejected.
+func ValidateWAFParanoiaLevel(level int) error {
+	if level < 0 || level > 4 {
+		return fmt.Errorf("invalid waf_paranoia_level %d: must be between 0 and 4", level)
+	}
+	return nil
+}
+
+// ValidateRouteRateLimit validates a per-route rate limit value.
+// 0 means disabled; otherwise the value must be positive and bounded.
+func ValidateRouteRateLimit(limit int) error {
+	if limit < 0 || limit > 100000 {
+		return fmt.Errorf("invalid rate_limit %d: must be between 0 and 100000", limit)
+	}
+	return nil
+}
+
+// ValidateBotProtection validates the bot-protection mode for a route.
+func ValidateBotProtection(mode string) error {
+	switch mode {
+	case "", "off", "passive", "challenge":
+		return nil
+	default:
+		return fmt.Errorf("invalid bot_protection %q: must be empty, 'off', 'passive' or 'challenge'", mode)
+	}
+}
+
+// ValidateCountries validates a comma-separated list of two-letter ISO country codes.
+func ValidateCountries(value string) error {
+	if value == "" {
+		return nil
+	}
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if len(part) != 2 {
+			return fmt.Errorf("invalid country code %q: must be two letters", part)
+		}
+		for _, c := range part {
+			if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
+				return fmt.Errorf("invalid country code %q: must contain only letters", part)
+			}
+		}
+	}
+	return nil
+}
+
+// ValidateCustomHeaders validates a JSON-encoded map of custom response headers.
+func ValidateCustomHeaders(headersJSON string) error {
+	if headersJSON == "" || headersJSON == "{}" {
+		return nil
+	}
+	var headers map[string]string
+	if err := json.Unmarshal([]byte(headersJSON), &headers); err != nil {
+		return fmt.Errorf("invalid custom_headers JSON: %w", err)
+	}
+	for name, value := range headers {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			return errors.New("custom_headers contains an empty header name")
+		}
+		if name != trimmed {
+			return fmt.Errorf("custom_headers header name %q has surrounding whitespace", name)
+		}
+		if strings.ContainsAny(name, "\r\n") || strings.ContainsAny(value, "\r\n") {
+			return errors.New("custom_headers header names/values must not contain CRLF")
 		}
 	}
 	return nil
