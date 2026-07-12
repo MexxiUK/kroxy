@@ -50,7 +50,7 @@ Kroxy consolidates multiple infrastructure components into a single deployment:
 
 ### 🐳 Deployment Options
 - **Docker** - Hardened container with non-root user, read-only filesystem
-- **Kubernetes-ready** - Lightweight, stateless design
+- **Docker Compose** - One-command production-ready stack
 
 ---
 
