@@ -1432,11 +1432,13 @@ func (a *Auth) RequireTOTP(next http.Handler) http.Handler {
 			return
 		}
 
-		// Password-only session — check if user has TOTP enabled
+		// Password-only session — if the user has TOTP enabled they must have
+		// completed the second factor (ProviderName == "local_totp"). A plain
+		// "local" session must never be accepted for a TOTP-enabled user.
 		if session.ProviderName == "local" {
 			user, err := a.store.GetUserByID(session.UserID)
 			if err == nil && user.TOTPEnabled {
-				next.ServeHTTP(w, r)
+				http.Error(w, "Two-factor authentication required", http.StatusForbidden)
 				return
 			}
 
