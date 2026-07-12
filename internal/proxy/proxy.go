@@ -227,6 +227,12 @@ func (p *Proxy) buildConfig() ([]byte, error) {
 
 		var handlers []map[string]interface{}
 
+		// Strip internal X-Kroxy-* headers from incoming client requests before
+		// any other handler can act on spoofed internal state.
+		handlers = append(handlers, map[string]interface{}{
+			"handler": "strip_internal_headers",
+		})
+
 		// Access log handler: logs all requests with timing and status
 		handlers = append(handlers, map[string]interface{}{
 			"handler": "kroxy_access_log",
