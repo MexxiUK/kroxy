@@ -321,8 +321,6 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		// Prevent MIME sniffing
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		// XSS protection
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		// HSTS: only send when connection is actually HTTPS (or behind a trusted TLS-terminating proxy)
 		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
@@ -470,6 +468,17 @@ func (a *API) rateLimitMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// noStoreCacheControl prevents authenticated responses from being cached
+// by browsers or intermediary proxies.
+func (a *API) noStoreCacheControl(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, private")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // csrfMiddleware validates CSRF tokens for state-changing operations
 func csrfMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -549,6 +558,7 @@ func (a *API) registerRoutes() {
 		r.Use(a.auth.RequireAuth)
 		r.Use(a.auth.RequireTOTP)
 		r.Use(a.auth.RequireStrongAuth)
+		r.Use(a.noStoreCacheControl)
 		r.Use(csrfMiddleware)
 
 		// User management (available to all authenticated users)

@@ -96,6 +96,13 @@ func NewTemplateHandler() (*TemplateHandler, error) {
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
 		"nonce": func() template.HTMLAttr { return "" }, // Placeholder, actual nonce set per-request
+		"json": func(v interface{}) (template.JS, error) {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return "", err
+			}
+			return template.JS(b), nil
+		},
 	})
 
 	// Parse base layout
@@ -174,7 +181,7 @@ func NewTemplateHandler() (*TemplateHandler, error) {
 // renderTemplate renders a template with data
 func (a *API) renderTemplate(w http.ResponseWriter, r *http.Request, name string, data *TemplateData) {
 	// Prevent browser caching of admin pages so template updates are visible immediately
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, private")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 

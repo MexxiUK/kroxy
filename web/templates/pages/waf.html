@@ -614,7 +614,7 @@ var detailTargetId = null;
 
 var routeMap = {};
 {{ range .Routes }}
-routeMap[{{ .ID }}] = '{{ .Domain }}';
+routeMap[{{ .ID }}] = {{ .Domain | json }};
 {{ end }}
 
 var presets = {{ .WAFPresetJS }};

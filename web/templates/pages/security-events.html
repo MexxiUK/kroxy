@@ -107,7 +107,7 @@ var limit = 50;
 
 var routeMap = {};
 {{ range .Routes }}
-routeMap[{{ .ID }}] = '{{ .Domain }}';
+routeMap[{{ .ID }}] = {{ .Domain | json }};
 {{ end }}
 
 function getCsrfToken() {

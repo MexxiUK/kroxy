@@ -25,7 +25,7 @@ RUN go mod tidy && \
     -o kroxy ./cmd/kroxy
 
 # Final stage - minimal image
-FROM alpine:3.19
+FROM alpine:3.24.1
 
 # Build arguments
 ARG VERSION=dev
