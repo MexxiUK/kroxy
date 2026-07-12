@@ -22,6 +22,7 @@ import (
 	"github.com/kroxy/kroxy/internal/crypto"
 	"github.com/kroxy/kroxy/internal/security"
 	"github.com/kroxy/kroxy/internal/store"
+	"github.com/kroxy/kroxy/internal/validation"
 )
 
 // MaxRequestBodySize limits the maximum request body size to prevent memory exhaustion
@@ -530,6 +531,10 @@ func createWAFEngine(cfg Config, s *store.Store, routeID *int) (coraza.WAF, erro
 
 	// 5. Custom rules from config (rarely used)
 	for _, rule := range cfg.CustomRules {
+		if err := validation.ValidateWAFRule(rule); err != nil {
+			log.Printf("Warning: skipping invalid custom WAF rule: %v", err)
+			continue
+		}
 		directives.WriteString(rule)
 		directives.WriteString("\n")
 	}
@@ -564,6 +569,10 @@ func createWAFEngine(cfg Config, s *store.Store, routeID *int) (coraza.WAF, erro
 					}
 				}
 				if rule.Enabled {
+					if err := validation.ValidateWAFRule(rule.Rule); err != nil {
+						log.Printf("Warning: skipping invalid WAF rule %q: %v", rule.Name, err)
+						continue
+					}
 					ruleText := rule.Rule
 					if rule.Mode == "log_only" {
 						ruleText = convertRuleToLogOnly(ruleText)

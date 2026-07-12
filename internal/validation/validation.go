@@ -48,6 +48,7 @@ var (
 		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*nolog\b`),
 		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*noauditlog\b`),
 		regexp.MustCompile(`(?i)secaction.*(?:pass|nolog|noauditlog)\b`),
+		regexp.MustCompile(`(?i)\bctl\s*:`), // runtime control actions (e.g. ctl:ruleEngine=Off)
 	}
 )
 
@@ -877,6 +878,7 @@ func ValidateWAFRule(rule string) error {
 		"secruleupdatetargetbyid", // Modifies rule targets
 		"secruleupdateactionbyid", // Modifies rule actions
 		"secruleupdatebyid",       // Modifies rules by ID
+		"ctl:",                    // Runtime control actions (e.g. ctl:ruleEngine=Off)
 	}
 
 	for _, directive := range dangerousDirectives {

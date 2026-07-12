@@ -121,8 +121,10 @@ func TestProxy_New_WAFInitFails(t *testing.T) {
 	// Proxy.New must fail closed and return an error rather than starting
 	// without WAF protection.
 	badRule := &store.WAFRule{
-		Name:    "invalid-syntax",
-		Rule:    "SecRule ARGS", // missing operator and action
+		Name: "invalid-regex",
+		// Syntactically valid for our pre-processor but contains an invalid
+		// PCRE expression, which makes Coraza engine creation fail.
+		Rule:    `SecRule ARGS "@rx [" "id:999998,phase:2,deny,status:403"`,
 		Enabled: true,
 		Mode:    "block",
 	}

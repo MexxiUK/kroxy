@@ -275,3 +275,34 @@ func TestValidateNoSelfReference(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateWAFRule(t *testing.T) {
+	tests := []struct {
+		name    string
+		rule    string
+		wantErr bool
+	}{
+		{"valid SecRule", `SecRule ARGS "@rx foo" "id:1,phase:2,deny,status:403"`, false},
+		{"empty rule", "", true},
+		{"null byte", "SecRule ARGS \x00", true},
+		{"newline", "SecRule ARGS\n", true},
+		{"engine off directive", "SecRuleEngine Off", true},
+		{"ctl disable", `SecRule ARGS "@rx foo" "id:1,phase:2,ctl:ruleEngine=Off"`, true},
+		{"ctl disable with space before colon", `SecRule ARGS "@rx foo" "id:1,phase:2,ctl :ruleEngine=Off"`, true},
+		{"ctl disable uppercase", `SecRule ARGS "@rx foo" "id:1,phase:2,CTL:ruleEngine=Off"`, true},
+		{"secdefaultaction pass", `SecDefaultAction "phase:1,pass,nolog"`, true},
+		{"secaction pass nolog", `SecAction "id:2,phase:1,pass,nolog"`, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateWAFRule(tt.rule)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateWAFRule(%q) expected error, got nil", tt.rule)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateWAFRule(%q) unexpected error: %v", tt.rule, err)
+			}
+		})
+	}
+}
