@@ -119,9 +119,12 @@ func (a *API) updateWebhook(w http.ResponseWriter, r *http.Request) {
 	if wh.Secret == "" {
 		existing, err := a.store.GetWebhook(id)
 		if err != nil {
-			// If we can't retrieve the existing secret, still allow updating other fields.
-			log.Printf("Warning: failed to retrieve existing webhook %d for secret preservation: %v", id, err)
-		} else if existing != nil {
+			// A failed read must not be allowed to mutate the stored secret.
+			log.Printf("Error: failed to retrieve existing webhook %d for secret preservation: %v", id, err)
+			respondError(w, http.StatusInternalServerError, "Failed to read existing webhook")
+			return
+		}
+		if existing != nil {
 			wh.Secret = existing.Secret
 		}
 	}
