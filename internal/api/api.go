@@ -2253,22 +2253,23 @@ func (a *API) listBlacklists(w http.ResponseWriter, r *http.Request) {
 func (a *API) createBlacklist(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUserFromContext(r.Context())
 
-	var b store.Blacklist
-	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+	var req dto.BlacklistRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	// Validate blacklist type and value
-	if err := validation.ValidateBlacklistType(b.Type); err != nil {
+	if err := validation.ValidateBlacklistType(req.Type); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := validation.ValidateBlacklistValue(b.Type, b.Value); err != nil {
+	if err := validation.ValidateBlacklistValue(req.Type, req.Value); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	b := req.ToStore()
 	if err := a.store.CreateBlacklist(&b); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create blacklist")
 		return
@@ -2326,18 +2327,19 @@ func (a *API) listWhitelists(w http.ResponseWriter, r *http.Request) {
 func (a *API) createWhitelist(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUserFromContext(r.Context())
 
-	var wl store.Whitelist
-	if err := json.NewDecoder(r.Body).Decode(&wl); err != nil {
+	var req dto.WhitelistRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	// Validate whitelist entry
-	if err := validation.ValidateWhitelist(wl.Type, wl.Value); err != nil {
+	if err := validation.ValidateWhitelist(req.Type, req.Value); err != nil {
 		respondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid whitelist: %v", err))
 		return
 	}
 
+	wl := req.ToStore()
 	if err := a.store.CreateWhitelist(&wl); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create whitelist")
 		return
@@ -2395,18 +2397,19 @@ func (a *API) listRateLimits(w http.ResponseWriter, r *http.Request) {
 func (a *API) createRateLimit(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUserFromContext(r.Context())
 
-	var rl store.RateLimit
-	if err := json.NewDecoder(r.Body).Decode(&rl); err != nil {
+	var req dto.RateLimitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	// Validate rate limit configuration
-	if err := validation.ValidateRateLimit(rl.Domain, rl.RequestsPerMinute, rl.Burst); err != nil {
+	if err := validation.ValidateRateLimit(req.Domain, req.RequestsPerMinute, req.Burst); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid rate limit: "+err.Error())
 		return
 	}
 
+	rl := req.ToStore()
 	if err := a.store.CreateRateLimit(&rl); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create rate limit")
 		return
@@ -2432,17 +2435,19 @@ func (a *API) updateRateLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rl store.RateLimit
-	if err := json.NewDecoder(r.Body).Decode(&rl); err != nil {
+	var req dto.RateLimitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	rl.ID = id
 
-	if err := validation.ValidateRateLimit(rl.Domain, rl.RequestsPerMinute, rl.Burst); err != nil {
+	if err := validation.ValidateRateLimit(req.Domain, req.RequestsPerMinute, req.Burst); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid rate limit: "+err.Error())
 		return
 	}
+
+	rl := req.ToStore()
+	rl.ID = id
 
 	if err := a.store.UpdateRateLimit(&rl); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update rate limit")
@@ -2805,40 +2810,33 @@ func (a *API) listWAFRules(w http.ResponseWriter, r *http.Request) {
 func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUserFromContext(r.Context())
 
-	var rule store.WAFRule
-	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+	var req dto.WAFRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	// Validate WAF rule name
-	if err := validation.ValidateWAFRuleName(rule.Name); err != nil {
-		log.Printf("WAF rule name validation failed for %q: %v", rule.Name, err)
+	if err := validation.ValidateWAFRuleName(req.Name); err != nil {
+		log.Printf("WAF rule name validation failed for %q: %v", req.Name, err)
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	// Validate WAF rule syntax
-	if err := validation.ValidateWAFRule(rule.Rule); err != nil {
-		log.Printf("WAF rule validation failed for %q (rule: %.100s): %v", rule.Name, rule.Rule, err)
+	if err := validation.ValidateWAFRule(req.Rule); err != nil {
+		log.Printf("WAF rule validation failed for %q (rule: %.100s): %v", req.Name, req.Rule, err)
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	// Validate WAF exclusions (comma-separated numeric rule IDs only)
-	if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
-		log.Printf("WAF exclusions validation failed for %q: %v", rule.Name, err)
-		respondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	// Validate WAF exclusions (comma-separated numeric rule IDs only)
-	if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
-		log.Printf("WAF exclusions validation failed for %q: %v", rule.Name, err)
+	if err := validation.ValidateWAFExclusions(req.Exclusions); err != nil {
+		log.Printf("WAF exclusions validation failed for %q: %v", req.Name, err)
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// Validate route_id if specified
-	if rule.RouteID != nil {
+	if req.RouteID != nil {
 		routes, err := a.store.GetRoutes()
 		if err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to validate route")
@@ -2846,7 +2844,7 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 		}
 		found := false
 		for _, rt := range routes {
-			if rt.ID == *rule.RouteID {
+			if rt.ID == *req.RouteID {
 				found = true
 				break
 			}
@@ -2857,6 +2855,7 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	rule := req.ToStore()
 	if err := a.store.CreateWAFRule(&rule); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create WAF rule")
 		return
@@ -2934,28 +2933,27 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rule store.WAFRule
-	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+	var req dto.WAFRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	rule.ID = id
 
 	// Require and validate name/rule on update, just like on creation.
-	if err := validation.ValidateWAFRuleName(rule.Name); err != nil {
+	if err := validation.ValidateWAFRuleName(req.Name); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := validation.ValidateWAFRule(rule.Rule); err != nil {
+	if err := validation.ValidateWAFRule(req.Rule); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := validation.ValidateWAFExclusions(rule.Exclusions); err != nil {
+	if err := validation.ValidateWAFExclusions(req.Exclusions); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if rule.RouteID != nil {
+	if req.RouteID != nil {
 		routes, err := a.store.GetRoutes()
 		if err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to validate route")
@@ -2963,7 +2961,7 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 		}
 		found := false
 		for _, rt := range routes {
-			if rt.ID == *rule.RouteID {
+			if rt.ID == *req.RouteID {
 				found = true
 				break
 			}
@@ -2973,6 +2971,9 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	rule := req.ToStore()
+	rule.ID = id
 
 	if err := a.store.UpdateWAFRule(&rule); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update WAF rule")

@@ -1114,3 +1114,243 @@ func TestCreateCertificate_SanitizesFileName(t *testing.T) {
 		t.Fatalf("expected sanitized file name sub.example.com.crt, got %q", base)
 	}
 }
+
+// TestMassAssignment_DTOsIgnoreServerManagedFields verifies that create/update
+// handlers decode into request DTOs rather than store models, so clients cannot
+// mass-assign server-managed fields such as ID or CreatedAt.
+func TestMassAssignment_DTOsIgnoreServerManagedFields(t *testing.T) {
+	injectedID := 99999
+	injectedCreatedAt := "2020-01-01T00:00:00Z"
+
+	createTests := []struct {
+		name         string
+		path         string
+		body         map[string]interface{}
+		create       func(*API, *http.Request)
+		getStoredID  func(*store.Store) int
+		getCreatedAt func(*store.Store) time.Time
+	}{
+		{
+			name: "blacklist",
+			path: "/api/blacklists",
+			body: map[string]interface{}{
+				"type":       "ip",
+				"value":      "10.0.0.1",
+				"enabled":    true,
+				"id":         injectedID,
+				"created_at": injectedCreatedAt,
+			},
+			create: func(a *API, r *http.Request) { a.createBlacklist(httptest.NewRecorder(), r) },
+			getStoredID: func(s *store.Store) int {
+				list, _ := s.GetBlacklists()
+				if len(list) != 1 {
+					t.Fatalf("expected 1 blacklist, got %d", len(list))
+				}
+				return list[0].ID
+			},
+			getCreatedAt: func(s *store.Store) time.Time {
+				list, _ := s.GetBlacklists()
+				return list[0].CreatedAt
+			},
+		},
+		{
+			name: "whitelist",
+			path: "/api/whitelists",
+			body: map[string]interface{}{
+				"type":       "ip",
+				"value":      "10.0.0.2",
+				"enabled":    true,
+				"id":         injectedID,
+				"created_at": injectedCreatedAt,
+			},
+			create: func(a *API, r *http.Request) { a.createWhitelist(httptest.NewRecorder(), r) },
+			getStoredID: func(s *store.Store) int {
+				list, _ := s.GetWhitelists()
+				if len(list) != 1 {
+					t.Fatalf("expected 1 whitelist, got %d", len(list))
+				}
+				return list[0].ID
+			},
+			getCreatedAt: func(s *store.Store) time.Time {
+				list, _ := s.GetWhitelists()
+				return list[0].CreatedAt
+			},
+		},
+		{
+			name: "rate limit",
+			path: "/api/ratelimits",
+			body: map[string]interface{}{
+				"domain":              "rl.example.com",
+				"requests_per_minute": 10,
+				"burst":               5,
+				"enabled":             true,
+				"id":                  injectedID,
+			},
+			create: func(a *API, r *http.Request) { a.createRateLimit(httptest.NewRecorder(), r) },
+			getStoredID: func(s *store.Store) int {
+				list, _ := s.GetRateLimits()
+				if len(list) != 1 {
+					t.Fatalf("expected 1 rate limit, got %d", len(list))
+				}
+				return list[0].ID
+			},
+			getCreatedAt: nil, // RateLimit has no CreatedAt
+		},
+		{
+			name: "waf rule",
+			path: "/api/waf/rules",
+			body: map[string]interface{}{
+				"name":    "test-rule",
+				"rule":    `SecRule REQUEST_URI "@streq /test" "id:1000,phase:1,block,status:403"`,
+				"enabled": true,
+				"mode":    "block",
+				"id":      injectedID,
+			},
+			create: func(a *API, r *http.Request) { a.createWAFRule(httptest.NewRecorder(), r) },
+			getStoredID: func(s *store.Store) int {
+				list, _ := s.GetWAFRules()
+				if len(list) != 1 {
+					t.Fatalf("expected 1 waf rule, got %d", len(list))
+				}
+				return list[0].ID
+			},
+			getCreatedAt: nil, // WAFRule has no CreatedAt
+		},
+	}
+
+	for _, tc := range createTests {
+		t.Run("create "+tc.name, func(t *testing.T) {
+			s, cleanup := newTestStore(t)
+			defer cleanup()
+			a := New(s, 0)
+
+			b, _ := json.Marshal(tc.body)
+			req := httptest.NewRequest(http.MethodPost, tc.path, bytes.NewReader(b))
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(newAdminRouteContext(t, 0))
+			tc.create(a, req)
+
+			storedID := tc.getStoredID(s)
+			if storedID == injectedID {
+				t.Fatalf("stored %s ID must not equal injected mass-assignment ID %d", tc.name, injectedID)
+			}
+			if tc.getCreatedAt != nil {
+				createdAt := tc.getCreatedAt(s)
+				if createdAt.Format(time.RFC3339) == injectedCreatedAt {
+					t.Fatalf("stored %s CreatedAt must not equal injected mass-assignment value %q", tc.name, injectedCreatedAt)
+				}
+			}
+		})
+	}
+
+	t.Run("update rate limit ignores body id", func(t *testing.T) {
+		s, cleanup := newTestStore(t)
+		defer cleanup()
+		a := New(s, 0)
+
+		aRecord := &store.RateLimit{Domain: "a.example.com", RequestsPerMinute: 10, Burst: 5, Enabled: true}
+		bRecord := &store.RateLimit{Domain: "b.example.com", RequestsPerMinute: 20, Burst: 10, Enabled: true}
+		if err := s.CreateRateLimit(aRecord); err != nil {
+			t.Fatalf("create rate limit a: %v", err)
+		}
+		if err := s.CreateRateLimit(bRecord); err != nil {
+			t.Fatalf("create rate limit b: %v", err)
+		}
+
+		body := map[string]interface{}{
+			"domain":              "updated.example.com",
+			"requests_per_minute": 30,
+			"burst":               15,
+			"enabled":             false,
+			"id":                  bRecord.ID,
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPut, "/api/ratelimits/"+strconv.Itoa(aRecord.ID), bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(newAdminRouteContext(t, aRecord.ID))
+
+		rec := httptest.NewRecorder()
+		a.updateRateLimit(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		limits, err := s.GetRateLimits()
+		if err != nil {
+			t.Fatalf("get rate limits: %v", err)
+		}
+
+		var updatedA, otherB *store.RateLimit
+		for i := range limits {
+			if limits[i].ID == aRecord.ID {
+				updatedA = &limits[i]
+			}
+			if limits[i].ID == bRecord.ID {
+				otherB = &limits[i]
+			}
+		}
+		if updatedA == nil {
+			t.Fatal("updated rate limit a not found")
+		}
+		if updatedA.Domain != "updated.example.com" || updatedA.RequestsPerMinute != 30 || updatedA.Burst != 15 || updatedA.Enabled {
+			t.Fatalf("rate limit a not updated as expected: %+v", updatedA)
+		}
+		if otherB == nil || otherB.Domain != "b.example.com" {
+			t.Fatalf("rate limit b was incorrectly affected by mass-assigned id: %+v", otherB)
+		}
+	})
+
+	t.Run("update waf rule ignores body id", func(t *testing.T) {
+		s, cleanup := newTestStore(t)
+		defer cleanup()
+		a := New(s, 0)
+
+		aRule := &store.WAFRule{Name: "rule-a", Rule: `SecRule REQUEST_URI "@streq /a" "id:1001,phase:1,block,status:403"`, Enabled: true, Mode: "block"}
+		bRule := &store.WAFRule{Name: "rule-b", Rule: `SecRule REQUEST_URI "@streq /b" "id:1002,phase:1,block,status:403"`, Enabled: true, Mode: "block"}
+		if err := s.CreateWAFRule(aRule); err != nil {
+			t.Fatalf("create waf rule a: %v", err)
+		}
+		if err := s.CreateWAFRule(bRule); err != nil {
+			t.Fatalf("create waf rule b: %v", err)
+		}
+
+		body := map[string]interface{}{
+			"name":    "rule-a-updated",
+			"rule":    `SecRule REQUEST_URI "@streq /updated" "id:1003,phase:1,block,status:403"`,
+			"enabled": false,
+			"mode":    "log_only",
+			"id":      bRule.ID,
+		}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPut, "/api/waf/rules/"+strconv.Itoa(aRule.ID), bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(newAdminRouteContext(t, aRule.ID))
+
+		rec := httptest.NewRecorder()
+		a.updateWAFRule(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		rules, err := s.GetWAFRules()
+		if err != nil {
+			t.Fatalf("get waf rules: %v", err)
+		}
+
+		var updatedA, otherB *store.WAFRule
+		for i := range rules {
+			if rules[i].ID == aRule.ID {
+				updatedA = &rules[i]
+			}
+			if rules[i].ID == bRule.ID {
+				otherB = &rules[i]
+			}
+		}
+		if updatedA == nil || updatedA.Name != "rule-a-updated" {
+			t.Fatalf("waf rule a not updated as expected: %+v", updatedA)
+		}
+		if otherB == nil || otherB.Name != "rule-b" {
+			t.Fatalf("waf rule b was incorrectly affected by mass-assigned id: %+v", otherB)
+		}
+	})
+}
