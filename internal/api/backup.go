@@ -247,6 +247,20 @@ func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Reject partial backups: if the backup contains any category other than
+	// routes, importing only routes would silently drop security-critical
+	// configuration. Fail closed until full restore is implemented.
+	if len(backup.OIDCProviders) > 0 ||
+		len(backup.WAFRules) > 0 ||
+		len(backup.Certificates) > 0 ||
+		len(backup.Blacklists) > 0 ||
+		len(backup.Whitelists) > 0 ||
+		len(backup.RateLimits) > 0 ||
+		len(backup.Settings) > 0 {
+		respondError(w, http.StatusBadRequest, "Backup contains unsupported categories; only route-only backups may be imported")
+		return
+	}
+
 	// Import routes
 	for _, route := range backup.Routes {
 		if route.IsAdminRoute {
