@@ -382,7 +382,8 @@ func TestWAF_CustomRule_ctlDisableSkipped(t *testing.T) {
 	engine, err := createWAFEngine(Config{
 		Mode: "block",
 		CustomRules: []string{
-			`SecRule ARGS "@rx foo" "id:999990,phase:2,ctl:ruleEngine=Off"`,
+			// Use the whitespace variant to confirm the validator catches it too.
+			`SecRule ARGS "@rx foo" "id:999990,phase:2,ctl :ruleEngine=Off"`,
 		},
 	}, nil, nil)
 	if err != nil {
