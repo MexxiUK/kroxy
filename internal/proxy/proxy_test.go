@@ -115,17 +115,16 @@ func TestProxy_New(t *testing.T) {
 	}
 }
 
-func TestProxy_New_WAFInitFails(t *testing.T) {
+func TestProxy_New_SkipsInvalidWAFRule(t *testing.T) {
 	s, cleanup := testutil.NewTestStore(t)
 	defer cleanup()
 
-	// Seed an invalid global WAF rule so that global WAF engine creation fails.
-	// Proxy.New must fail closed and return an error rather than starting
-	// without WAF protection.
+	// Seed an invalid global WAF rule: syntactically valid for our pre-processor
+	// but contains an unclosed PCRE character class. This rule must be skipped
+	// at WAF engine build time rather than causing the whole proxy startup to
+	// fail (SEC-039).
 	badRule := &store.WAFRule{
-		Name: "invalid-regex",
-		// Syntactically valid for our pre-processor but contains an invalid
-		// PCRE expression, which makes Coraza engine creation fail.
+		Name:    "invalid-regex",
 		Rule:    `SecRule ARGS "@rx [" "id:999998,phase:2,deny,status:403"`,
 		Enabled: true,
 		Mode:    "block",
@@ -134,9 +133,12 @@ func TestProxy_New_WAFInitFails(t *testing.T) {
 		t.Fatalf("create WAF rule: %v", err)
 	}
 
-	_, err := New(s, &config.Config{ProxyAddr: ":8080"})
-	if err == nil {
-		t.Fatal("expected error when global WAF initialization fails")
+	p, err := New(s, &config.Config{ProxyAddr: ":8080"})
+	if err != nil {
+		t.Fatalf("expected proxy startup to succeed with bad rule skipped, got: %v", err)
+	}
+	if p.waf == nil || !p.waf.IsEnabled() {
+		t.Fatal("expected WAF to remain enabled after skipping invalid rule")
 	}
 }
 

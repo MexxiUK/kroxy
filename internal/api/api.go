@@ -2821,6 +2821,13 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Validate that the rule compiles with Coraza so a malformed PCRE regex
+	// cannot be stored and later brick proxy startup (SEC-039).
+	if err := waf.ValidateWAFRuleCompiles(req.Rule); err != nil {
+		log.Printf("WAF rule compile failed for %q (rule: %.100s): %v", req.Name, req.Rule, err)
+		respondError(w, http.StatusBadRequest, "WAF rule failed to compile")
+		return
+	}
 	// Validate WAF exclusions (comma-separated numeric rule IDs only)
 	if err := validation.ValidateWAFExclusions(req.Exclusions); err != nil {
 		log.Printf("WAF exclusions validation failed for %q: %v", req.Name, err)
@@ -2931,6 +2938,10 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := validation.ValidateWAFRule(req.Rule); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := waf.ValidateWAFRuleCompiles(req.Rule); err != nil {
+		respondError(w, http.StatusBadRequest, "WAF rule failed to compile")
 		return
 	}
 	if err := validation.ValidateWAFExclusions(req.Exclusions); err != nil {
