@@ -83,10 +83,16 @@ func (s *Store) Ping(ctx context.Context) error {
 
 const defaultListLimit = 1000
 
+// GetRoutes returns all routes. It deliberately does NOT apply a LIMIT: silently
+// truncating the route table would drop routes from the proxy config (no WAF /
+// no proxying), health checks, backup export/import, certificate issuance, and
+// the admin UI — a correctness and security bug (SEC-042). Route count is
+// admin-controlled and small by nature for a reverse proxy, so an uncapped
+// read is safe and correct here.
 func (s *Store) GetRoutes() ([]Route, error) {
 	rows, err := s.db.Query(`SELECT id, domain, backend, enabled, waf_enabled, waf_mode, waf_paranoia_level, oidc_enabled, oidc_provider_id,
 		rate_limit, enable_gzip, enable_brotli, enable_cache, custom_headers, block_countries, allow_countries, require_https,
-		is_admin_route, bot_protection, created_at, updated_at FROM routes LIMIT ?`, defaultListLimit)
+		is_admin_route, bot_protection, created_at, updated_at FROM routes`)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +112,24 @@ func (s *Store) GetRoutes() ([]Route, error) {
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return routes, nil
+}
+
+// GetRouteByID returns the route with the given ID, or sql.ErrNoRows if no such
+// route exists. This is an O(1) point lookup used by single-route operations so
+// they do not depend on GetRoutes() and cannot be missed by any future list
+// cap (SEC-040).
+func (s *Store) GetRouteByID(id int) (*Route, error) {
+	row := s.db.QueryRow(`SELECT id, domain, backend, enabled, waf_enabled, waf_mode, waf_paranoia_level, oidc_enabled, oidc_provider_id,
+		rate_limit, enable_gzip, enable_brotli, enable_cache, custom_headers, block_countries, allow_countries, require_https,
+		is_admin_route, bot_protection, created_at, updated_at FROM routes WHERE id = ?`, id)
+	var r Route
+	err := row.Scan(&r.ID, &r.Domain, &r.Backend, &r.Enabled, &r.WAFEnabled, &r.WAFMode, &r.WAFParanoiaLevel, &r.OIDCEnabled, &r.OIDCProviderID,
+		&r.RateLimit, &r.EnableGzip, &r.EnableBrotli, &r.EnableCache, &r.CustomHeaders, &r.BlockCountries, &r.AllowCountries, &r.RequireHTTPS,
+		&r.IsAdminRoute, &r.BotProtection, &r.CreatedAt, &r.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 func (s *Store) CreateRoute(r *Route) error {
