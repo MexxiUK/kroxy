@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -233,7 +234,11 @@ func (p *Proxy) buildConfig() ([]byte, error) {
 		// stale data. Skip any route whose backend fails SSRF/self-reference
 		// or private-IP checks so it never becomes an upstream.
 		if err := validation.ValidateBackendURL(route.Backend); err != nil {
-			log.Printf("Warning: skipping route %s (id=%d): backend %q failed SSRF validation: %v", route.Domain, route.ID, route.Backend, err)
+			if errors.Is(err, validation.ErrDNSResolutionFailed) {
+				log.Printf("Warning: skipping route %s (id=%d): backend %q DNS resolution failed: %v", route.Domain, route.ID, route.Backend, err)
+			} else {
+				log.Printf("Warning: skipping route %s (id=%d): backend %q failed SSRF validation: %v", route.Domain, route.ID, route.Backend, err)
+			}
 			continue
 		}
 		if err := validation.ValidateNoSelfReference(route.Backend, false); err != nil {

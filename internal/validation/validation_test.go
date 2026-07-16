@@ -1,11 +1,13 @@
 package validation
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net"
 	"strings"
@@ -80,6 +82,30 @@ func TestValidateBackendURL_DNSRebinding(t *testing.T) {
 	cache.mu.Lock()
 	delete(cache.entries, "evil-rebind.test")
 	cache.mu.Unlock()
+}
+
+func TestValidateBackendURL_DNSFailure(t *testing.T) {
+	// Temporarily replace the global resolver with one that always fails so we
+	// can exercise the DNS-resolution-failure path without depending on the
+	// network or on a specific real hostname being unresolvable.
+	original := net.DefaultResolver
+	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			return nil, errors.New("simulated DNS failure")
+		},
+	}
+	defer func() { net.DefaultResolver = original }()
+
+	// Purge any cached successful resolution for this hostname from previous tests.
+	cache := GetDNSCache()
+	cache.mu.Lock()
+	delete(cache.entries, "unresolvable.example.invalid")
+	cache.mu.Unlock()
+
+	if err := ValidateBackendURL("http://unresolvable.example.invalid"); !errors.Is(err, ErrDNSResolutionFailed) {
+		t.Fatalf("expected ErrDNSResolutionFailed for unresolvable host, got: %v", err)
+	}
 }
 
 func TestValidateDomain(t *testing.T) {
