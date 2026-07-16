@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 var (
@@ -879,17 +880,15 @@ func ValidateWAFRule(rule string) error {
 	// Custom rules are sandboxed to individual rule/marker directives only.
 	// All other Coraza directives configure the global engine, modify rule sets,
 	// or load external configuration, and must be rejected regardless of specific
-	// spelling. This is an allowlist rather than a denylist so we do not have to
-	// enumerate every engine-config directive Coraza supports (SEC-045).
-	allowedPrefixes := []string{"secrule", "secaction", "secmarker"}
-	allowed := false
-	for _, prefix := range allowedPrefixes {
-		if strings.HasPrefix(normalizedRule, prefix) {
-			allowed = true
-			break
-		}
+	// spelling. We match the first token exactly rather than using a prefix so
+	// that engine-config directives such as SecRuleEngine/SecRuleRemoveBy*/
+	// SecRuleUpdate* are not re-admitted by the allowlist (SEC-045, SEC-046).
+	allowedFirstTokens := map[string]bool{"secrule": true, "secaction": true, "secmarker": true}
+	firstToken := normalizedRule
+	if i := strings.IndexFunc(normalizedRule, unicode.IsSpace); i >= 0 {
+		firstToken = normalizedRule[:i]
 	}
-	if !allowed {
+	if !allowedFirstTokens[firstToken] {
 		return errors.New("rule must start with SecRule, SecAction, or SecMarker")
 	}
 

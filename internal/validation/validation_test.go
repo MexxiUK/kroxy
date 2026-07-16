@@ -334,6 +334,11 @@ func TestValidateWAFRule(t *testing.T) {
 		{"remote rules directive", `SecRemoteRules http://example.com/rules.conf`, true},
 		{"audit engine off", `SecAuditEngine Off`, true},
 		{"disallowed prefix", `FooRule ARGS "@rx bar" "id:1,phase:2,deny"`, true},
+		{"secrule remove by tag", `SecRuleRemoveByTag "OWASP_CRS"`, true},
+		{"secrule remove by id", `SecRuleRemoveById 942100`, true},
+		{"secrule update action by id", `SecRuleUpdateActionById 942100 "pass"`, true},
+		{"secrule engine off still blocked", `SecRuleEngine Off`, true},
+		{"secrule update target by id", `SecRuleUpdateTargetById 942100 "!ARGS"`, true},
 	}
 
 	for _, tt := range tests {
