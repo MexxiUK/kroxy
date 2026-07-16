@@ -325,9 +325,15 @@ func TestValidateWAFRule(t *testing.T) {
 		{"ctl disable uppercase", `SecRule ARGS "@rx foo" "id:1,phase:2,CTL:ruleEngine=Off"`, true},
 		{"secdefaultaction pass", `SecDefaultAction "phase:1,pass,nolog"`, true},
 		{"secaction pass nolog", `SecAction "id:2,phase:1,pass,nolog"`, true},
+		{"secmarker", `SecMarker "END-REQUEST-910"`, false},
 		{"include directive", `Include /etc/coraza.conf`, true},
 		{"include directive lowercase", `include /etc/coraza.conf`, true},
 		{"include directive in SecRule body", `SecRule ARGS "@rx test" "id:1,phase:2,include"`, true},
+		{"request body access off", `SecRequestBodyAccess Off`, true},
+		{"response body access off", `SecResponseBodyAccess Off`, true},
+		{"remote rules directive", `SecRemoteRules http://example.com/rules.conf`, true},
+		{"audit engine off", `SecAuditEngine Off`, true},
+		{"disallowed prefix", `FooRule ARGS "@rx bar" "id:1,phase:2,deny"`, true},
 	}
 
 	for _, tt := range tests {
