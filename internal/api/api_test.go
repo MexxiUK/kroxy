@@ -882,6 +882,40 @@ func TestAddRedirectDomain_ValidatesDomain(t *testing.T) {
 	}
 }
 
+// TestCreateWAFRule_RejectsInvalidPCRE guards SEC-039: a rule with a malformed
+// PCRE regex must be rejected at save time so it can never brick WAF engine
+// initialization on the next proxy startup.
+func TestCreateWAFRule_RejectsInvalidPCRE(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	body := map[string]interface{}{
+		"name":    "invalid-pcre",
+		"rule":    `SecRule ARGS "@rx [" "id:999998,phase:2,deny,status:403"`,
+		"enabled": true,
+		"mode":    "block",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/waf/rules", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createWAFRule(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid PCRE, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rules, err := s.GetWAFRules()
+	if err != nil {
+		t.Fatalf("get waf rules: %v", err)
+	}
+	if len(rules) != 0 {
+		t.Fatalf("expected no rules stored, got %d", len(rules))
+	}
+}
+
 func TestUpdateSecuritySettings_InvalidSessionDuration(t *testing.T) {
 	s, cleanup := newTestStore(t)
 	defer cleanup()

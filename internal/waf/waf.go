@@ -464,6 +464,17 @@ var crsFiles = []string{
 	"RESPONSE-980-CORRELATION.conf",
 }
 
+// ValidateWAFRuleCompiles checks whether a WAF rule can be parsed by Coraza.
+// It builds a minimal directives string containing only the rule so that
+// malformed PCRE (e.g. unclosed character classes in @rx operators) is caught
+// before the rule is persisted or before it can brick proxy startup.
+func ValidateWAFRuleCompiles(rule string) error {
+	directives := "SecRuleEngine On\n" + rule + "\n"
+	wafConfig := coraza.NewWAFConfig().WithDirectives(directives)
+	_, err := coraza.NewWAF(wafConfig)
+	return err
+}
+
 func createWAFEngine(cfg Config, s *store.Store, routeID *int) (coraza.WAF, error) {
 	wafConfig := coraza.NewWAFConfig()
 
@@ -535,6 +546,10 @@ func createWAFEngine(cfg Config, s *store.Store, routeID *int) (coraza.WAF, erro
 			log.Printf("Warning: skipping invalid custom WAF rule: %v", err)
 			continue
 		}
+		if err := ValidateWAFRuleCompiles(rule); err != nil {
+			log.Printf("Warning: skipping custom WAF rule that fails to compile: %v", err)
+			continue
+		}
 		directives.WriteString(rule)
 		directives.WriteString("\n")
 	}
@@ -571,6 +586,10 @@ func createWAFEngine(cfg Config, s *store.Store, routeID *int) (coraza.WAF, erro
 				if rule.Enabled {
 					if err := validation.ValidateWAFRule(rule.Rule); err != nil {
 						log.Printf("Warning: skipping invalid WAF rule %q: %v", rule.Name, err)
+						continue
+					}
+					if err := ValidateWAFRuleCompiles(rule.Rule); err != nil {
+						log.Printf("Warning: skipping WAF rule %q that fails to compile: %v", rule.Name, err)
 						continue
 					}
 					ruleText := rule.Rule
