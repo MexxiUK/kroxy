@@ -22,15 +22,16 @@ import (
 )
 
 var (
-	ErrInvalidURL       = errors.New("invalid URL format")
-	ErrInvalidScheme    = errors.New("only http and https schemes are allowed")
-	ErrInternalIP       = errors.New("internal IP addresses are not allowed")
-	ErrBlockedDomain    = errors.New("domain is blocked")
-	ErrInvalidDomain    = errors.New("invalid domain format")
-	ErrInvalidPort      = errors.New("invalid port")
-	ErrDangerousPattern = errors.New("URL contains dangerous pattern")
-	ErrDNSRebind        = errors.New("DNS rebinding attack detected")
-	ErrSelfReference    = errors.New("backend would create a proxy loop")
+	ErrInvalidURL          = errors.New("invalid URL format")
+	ErrInvalidScheme       = errors.New("only http and https schemes are allowed")
+	ErrInternalIP          = errors.New("internal IP addresses are not allowed")
+	ErrBlockedDomain       = errors.New("domain is blocked")
+	ErrInvalidDomain       = errors.New("invalid domain format")
+	ErrInvalidPort         = errors.New("invalid port")
+	ErrDangerousPattern    = errors.New("URL contains dangerous pattern")
+	ErrDNSRebind           = errors.New("DNS rebinding attack detected")
+	ErrDNSResolutionFailed = errors.New("DNS resolution failed")
+	ErrSelfReference       = errors.New("backend would create a proxy loop")
 )
 
 var allowPrivateBackends bool
@@ -252,8 +253,10 @@ func ValidateBackendURL(backend string) error {
 	cache := GetDNSCache()
 	ips, err := cache.Resolve(hostname)
 	if err != nil {
-		// DNS resolution failed - could be internal domain
-		return ErrInvalidDomain
+		// DNS resolution failed - could be internal domain or transient DNS issue.
+		// Return a distinct error so callers can distinguish it from an invalid
+		// domain format and decide how loudly to surface it.
+		return ErrDNSResolutionFailed
 	}
 
 	// Reject private IPs resolved from DNS unless explicitly allowed

@@ -8,7 +8,9 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -978,5 +980,38 @@ func TestProxy_buildConfig_KeepsValidBackend_PublicIP(t *testing.T) {
 	routes := unmarshalHTTPRoutes(t, data)
 	if len(routes) != 2 {
 		t.Errorf("expected valid route + default route for public-IP backend, got %d", len(routes))
+	}
+}
+
+func TestProxy_buildConfig_SkipInvalidBackend_DNSFailure(t *testing.T) {
+	// Force DNS resolution to fail for every hostname so the runtime SSRF check
+	// cannot resolve the backend and must skip the route. The hostname is unique
+	// to this test so no previous test will have cached a successful resolution.
+	original := net.DefaultResolver
+	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			return nil, errors.New("simulated DNS failure")
+		},
+	}
+	t.Cleanup(func() { net.DefaultResolver = original })
+
+	s, cleanup := testutil.NewTestStore(t)
+	defer cleanup()
+
+	r := &store.Route{Domain: "proxy-dns-fail-test.invalid", Backend: "http://proxy-dns-fail-test.invalid:8080/", Enabled: true, WAFMode: "block"}
+	if err := s.CreateRoute(r); err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	p := &Proxy{store: s, cfg: &config.Config{ProxyAddr: ":8080"}, waf: nil}
+	data, err := p.buildConfig()
+	if err != nil {
+		t.Fatalf("buildConfig: %v", err)
+	}
+
+	routes := unmarshalHTTPRoutes(t, data)
+	if len(routes) != 1 {
+		t.Errorf("expected only default route for DNS-failing backend, got %d", len(routes))
 	}
 }
