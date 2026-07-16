@@ -582,7 +582,6 @@ func (a *API) registerRoutes() {
 
 	// Public routes (no auth required)
 	a.router.Get("/api/status", a.getStatus)
-	a.router.Get("/api/version", a.getVersion)
 	a.router.Get("/health", a.health)                           // Liveness probe (public)
 	a.router.With(a.requireLoopback).Get("/ready", a.ready)     // Readiness probe (loopback only)
 	a.router.With(a.requireLoopback).Get("/healthz", a.healthz) // Comprehensive health (loopback only)
@@ -705,6 +704,9 @@ func (a *API) registerRoutes() {
 
 		// Dashboard stats (admin only)
 		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/dashboard/stats", a.getDashboardStats)
+
+		// Version (admin only) — exact version disclosure aids targeting known-vulnerable builds
+		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/version", a.getVersion)
 
 		// Users CRUD (admin only)
 		r.With(auth.RequireRole("admin"), a.adminIPAllowlistMiddleware).Get("/api/users", a.listUsers)

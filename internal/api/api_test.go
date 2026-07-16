@@ -22,6 +22,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kroxy/kroxy/internal/auth"
 	"github.com/kroxy/kroxy/internal/store"
+	"github.com/kroxy/kroxy/internal/version"
 )
 
 func newTestStore(t *testing.T) (*store.Store, func()) {
@@ -798,6 +799,30 @@ func TestHealthzEndpoint_RequiresLoopback(t *testing.T) {
 				t.Fatalf("expected %d, got %d", tt.want, rec.Code)
 			}
 		})
+	}
+}
+
+// TestVersionEndpoint_RequiresAuth guards SEC-036: /api/version must no longer
+// be public. An unauthenticated request must be rejected (401) rather than
+// disclosing the exact application version.
+func TestVersionEndpoint_RequiresAuth(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
+	req.Header.Set("Accept", "application/json") // avoid HTML login redirect
+	rec := httptest.NewRecorder()
+	a.router.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected /api/version to be auth-gated, got 200 (body: %s)", rec.Body.String())
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated /api/version, got %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), version.Version) {
+		t.Fatalf("version leaked to unauthenticated client: %s", rec.Body.String())
 	}
 }
 
