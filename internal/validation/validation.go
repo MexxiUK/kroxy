@@ -876,25 +876,33 @@ func ValidateWAFRule(rule string) error {
 	// Normalize rule for case-insensitive matching
 	normalizedRule := strings.ToLower(rule)
 
-	// Dangerous directives that could disable or bypass security
-	// These are rule-modifying/engine-configuring directives that should never be in custom rules
-	// Note: "secrule" is NOT blocked because legitimate rules start with SecRule
-	dangerousDirectives := []string{
-		"secruleengine",           // Controls WAF engine state
-		"secruleremovebyid",       // Removes rules by ID
-		"secruleremovebymsg",      // Removes rules by message
-		"secruleremovebytag",      // Removes rules by tag
-		"secdefaultaction",        // Sets default actions (can bypass)
-		"secruleupdatetargetbyid", // Modifies rule targets
-		"secruleupdateactionbyid", // Modifies rule actions
-		"secruleupdatebyid",       // Modifies rules by ID
-		"ctl:",                    // Runtime control actions (e.g. ctl:ruleEngine=Off)
-		"include",                 // Include directive can load arbitrary config/rules (SEC-044)
+	// Custom rules are sandboxed to individual rule/marker directives only.
+	// All other Coraza directives configure the global engine, modify rule sets,
+	// or load external configuration, and must be rejected regardless of specific
+	// spelling. This is an allowlist rather than a denylist so we do not have to
+	// enumerate every engine-config directive Coraza supports (SEC-045).
+	allowedPrefixes := []string{"secrule", "secaction", "secmarker"}
+	allowed := false
+	for _, prefix := range allowedPrefixes {
+		if strings.HasPrefix(normalizedRule, prefix) {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return errors.New("rule must start with SecRule, SecAction, or SecMarker")
 	}
 
-	for _, directive := range dangerousDirectives {
-		if strings.Contains(normalizedRule, directive) {
-			return fmt.Errorf("rule contains forbidden directive: %s", directive)
+	// Extra defense-in-depth: block runtime control actions and include
+	// directives that can appear inside rule action chains or as obfuscated
+	// substrings.
+	forbiddenSubstrings := []string{
+		"ctl:",    // Runtime control actions (e.g. ctl:ruleEngine=Off)
+		"include", // Include directive can load arbitrary config/rules (SEC-044)
+	}
+	for _, substr := range forbiddenSubstrings {
+		if strings.Contains(normalizedRule, substr) {
+			return fmt.Errorf("rule contains forbidden directive: %s", substr)
 		}
 	}
 
