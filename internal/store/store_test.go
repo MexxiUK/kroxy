@@ -114,13 +114,13 @@ func TestStore_GetRouteByID(t *testing.T) {
 	}
 
 	route := &Route{
-		Domain:          "point.example.com",
-		Backend:         "http://localhost:3000",
-		Enabled:         true,
-		WAFEnabled:      true,
-		WAFMode:         "block",
-		OIDCEnabled:     true,
-		OIDCProviderID:  7,
+		Domain:         "point.example.com",
+		Backend:        "http://localhost:3000",
+		Enabled:        true,
+		WAFEnabled:     true,
+		WAFMode:        "block",
+		OIDCEnabled:    true,
+		OIDCProviderID: 7,
 	}
 	if err := s.CreateRoute(route); err != nil {
 		t.Fatalf("CreateRoute failed: %v", err)
