@@ -3369,9 +3369,9 @@ func (a *API) addRedirectDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Basic domain validation
-	if strings.Contains(req.Domain, "/") || strings.Contains(req.Domain, ":") {
-		respondError(w, http.StatusBadRequest, "Domain should not include scheme or port")
+	// Validate domain format (rejects scheme, port, path, whitespace, etc.)
+	if err := validation.ValidateDomain(req.Domain); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid domain format")
 		return
 	}
 

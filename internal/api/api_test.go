@@ -826,6 +826,62 @@ func TestVersionEndpoint_RequiresAuth(t *testing.T) {
 	}
 }
 
+// TestAddRedirectDomain_ValidatesDomain guards SEC-037: addRedirectDomain must
+// reject domains that include scheme, port, path, whitespace, or other invalid
+// characters. Only valid domain names are persisted.
+func TestAddRedirectDomain_ValidatesDomain(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	cases := []struct {
+		name      string
+		domain    string
+		wantCode  int
+		persisted bool
+	}{
+		{"valid", "example.com", http.StatusCreated, true},
+		{"valid_subdomain", "sub.example.com", http.StatusCreated, true},
+		{"empty", "", http.StatusBadRequest, false},
+		{"scheme", "https://example.com", http.StatusBadRequest, false},
+		{"port", "example.com:8080", http.StatusBadRequest, false},
+		{"path", "example.com/path", http.StatusBadRequest, false},
+		{"whitespace", "example com", http.StatusBadRequest, false},
+		{"wildcard", "*.example.com", http.StatusBadRequest, false},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			body := map[string]interface{}{"domain": tt.domain}
+			b, _ := json.Marshal(body)
+			req := httptest.NewRequest(http.MethodPost, "/api/redirect-domains", bytes.NewReader(b))
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(newAdminRouteContext(t, 0))
+
+			rec := httptest.NewRecorder()
+			a.addRedirectDomain(rec, req)
+			if rec.Code != tt.wantCode {
+				t.Fatalf("expected %d for %q, got %d: %s", tt.wantCode, tt.domain, rec.Code, rec.Body.String())
+			}
+
+			domains, err := s.GetRedirectDomains()
+			if err != nil {
+				t.Fatalf("get redirect domains: %v", err)
+			}
+			found := false
+			for _, d := range domains {
+				if d == tt.domain {
+					found = true
+					break
+				}
+			}
+			if found != tt.persisted {
+				t.Fatalf("domain %q persisted=%v, want persisted=%v (domains=%v)", tt.domain, found, tt.persisted, domains)
+			}
+		})
+	}
+}
+
 func TestUpdateSecuritySettings_InvalidSessionDuration(t *testing.T) {
 	s, cleanup := newTestStore(t)
 	defer cleanup()
