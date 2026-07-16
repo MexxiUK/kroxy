@@ -1,7 +1,10 @@
 package store
 
 import (
+	"database/sql"
+	"errors"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -95,6 +98,75 @@ func TestStore_CRUD(t *testing.T) {
 	}
 	if len(routes) != 0 {
 		t.Fatalf("Expected 0 routes after delete, got %d", len(routes))
+	}
+}
+
+func TestStore_GetRouteByID(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+
+	// GetRouteByID on a missing route returns sql.ErrNoRows (not a generic error),
+	// so callers can distinguish "not found" from store failures.
+	if _, err := s.GetRouteByID(99999); err == nil {
+		t.Fatal("Expected error for missing route, got nil")
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("Expected sql.ErrNoRows for missing route, got %v", err)
+	}
+
+	route := &Route{
+		Domain:         "point.example.com",
+		Backend:        "http://localhost:3000",
+		Enabled:        true,
+		WAFEnabled:     true,
+		WAFMode:        "block",
+		OIDCEnabled:    true,
+		OIDCProviderID: 7,
+	}
+	if err := s.CreateRoute(route); err != nil {
+		t.Fatalf("CreateRoute failed: %v", err)
+	}
+
+	got, err := s.GetRouteByID(route.ID)
+	if err != nil {
+		t.Fatalf("GetRouteByID failed: %v", err)
+	}
+	if got.ID != route.ID {
+		t.Fatalf("Expected ID %d, got %d", route.ID, got.ID)
+	}
+	if got.Domain != "point.example.com" {
+		t.Fatalf("Expected domain point.example.com, got %s", got.Domain)
+	}
+	if !got.OIDCEnabled || got.OIDCProviderID != 7 {
+		t.Fatalf("Expected OIDC enabled with provider 7, got enabled=%v provider=%d", got.OIDCEnabled, got.OIDCProviderID)
+	}
+}
+
+// TestStore_GetRoutes_NoCap guards against re-introducing a silent LIMIT on
+// GetRoutes (SEC-042): routes beyond the former 1000-row cap must all be
+// returned, or they would be silently dropped from the proxy config, health
+// checks, backup export/import, and admin UI.
+func TestStore_GetRoutes_NoCap(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+
+	const total = defaultListLimit + 50 // 1050 — beyond the former hard cap
+	for i := 0; i < total; i++ {
+		if err := s.CreateRoute(&Route{
+			Domain:  "route-" + strconv.Itoa(i) + ".example.com",
+			Backend: "http://localhost:3000",
+			Enabled: true,
+			WAFMode: "detect",
+		}); err != nil {
+			t.Fatalf("CreateRoute %d failed: %v", i, err)
+		}
+	}
+
+	routes, err := s.GetRoutes()
+	if err != nil {
+		t.Fatalf("GetRoutes failed: %v", err)
+	}
+	if len(routes) != total {
+		t.Fatalf("Expected %d routes (no silent truncation), got %d", total, len(routes))
 	}
 }
 

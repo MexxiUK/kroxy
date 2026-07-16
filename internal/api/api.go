@@ -1670,20 +1670,17 @@ func (a *API) getRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	routes, err := a.store.GetRoutes()
+	route, err := a.store.GetRouteByID(id)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to get routes")
+		if errors.Is(err, sql.ErrNoRows) {
+			respondError(w, http.StatusNotFound, "Route not found")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "Failed to get route")
 		return
 	}
 
-	for _, route := range routes {
-		if route.ID == id {
-			respondJSON(w, http.StatusOK, dto.RouteFromStore(route))
-			return
-		}
-	}
-
-	respondError(w, http.StatusNotFound, "Route not found")
+	respondJSON(w, http.StatusOK, dto.RouteFromStore(*route))
 }
 
 func (a *API) updateRoute(w http.ResponseWriter, r *http.Request) {
@@ -1839,17 +1836,11 @@ func (a *API) validateRouteOIDC(enabled bool, providerID int) error {
 }
 
 // getRouteByID returns a route by ID, or sql.ErrNoRows if not found.
+// It uses an O(1) point lookup (store.GetRouteByID) so partial-update
+// preservation of fields like OIDCProviderID cannot be silently skipped for
+// routes beyond any list cap (SEC-040).
 func (a *API) getRouteByID(id int) (*store.Route, error) {
-	routes, err := a.store.GetRoutes()
-	if err != nil {
-		return nil, err
-	}
-	for i := range routes {
-		if routes[i].ID == id {
-			return &routes[i], nil
-		}
-	}
-	return nil, sql.ErrNoRows
+	return a.store.GetRouteByID(id)
 }
 
 // OIDC handlers (with state validation)
@@ -2837,20 +2828,12 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 
 	// Validate route_id if specified
 	if req.RouteID != nil {
-		routes, err := a.store.GetRoutes()
-		if err != nil {
-			respondError(w, http.StatusInternalServerError, "Failed to validate route")
-			return
-		}
-		found := false
-		for _, rt := range routes {
-			if rt.ID == *req.RouteID {
-				found = true
-				break
+		if _, err := a.store.GetRouteByID(*req.RouteID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				respondError(w, http.StatusBadRequest, "Route not found")
+				return
 			}
-		}
-		if !found {
-			respondError(w, http.StatusBadRequest, "Route not found")
+			respondError(w, http.StatusInternalServerError, "Failed to validate route")
 			return
 		}
 	}
@@ -2954,20 +2937,12 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.RouteID != nil {
-		routes, err := a.store.GetRoutes()
-		if err != nil {
-			respondError(w, http.StatusInternalServerError, "Failed to validate route")
-			return
-		}
-		found := false
-		for _, rt := range routes {
-			if rt.ID == *req.RouteID {
-				found = true
-				break
+		if _, err := a.store.GetRouteByID(*req.RouteID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				respondError(w, http.StatusBadRequest, "Route not found")
+				return
 			}
-		}
-		if !found {
-			respondError(w, http.StatusBadRequest, "Route not found")
+			respondError(w, http.StatusInternalServerError, "Failed to validate route")
 			return
 		}
 	}
