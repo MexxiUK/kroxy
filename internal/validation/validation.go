@@ -889,6 +889,7 @@ func ValidateWAFRule(rule string) error {
 		"secruleupdateactionbyid", // Modifies rule actions
 		"secruleupdatebyid",       // Modifies rules by ID
 		"ctl:",                    // Runtime control actions (e.g. ctl:ruleEngine=Off)
+		"include",                 // Include directive can load arbitrary config/rules (SEC-044)
 	}
 
 	for _, directive := range dangerousDirectives {
