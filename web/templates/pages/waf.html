@@ -11,7 +11,7 @@
         </button>
         <button type="button" class="btn btn-primary" id="add-rule-btn">
             <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Add Rule
+            Create Rule
         </button>
     </div>
 </div>
@@ -22,7 +22,7 @@
         <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
         <span><strong>OWASP Core Rule Set v4</strong> is active with battle-tested protection against SQLi, XSS, RCE, LFI, RFI, scanners, and more. Custom rules below supplement CRS coverage.</span>
     </div>
-    <button type="button" class="btn btn-sm" style="background: #f1f5f9; color: var(--text-primary); border: none;" id="crs-dismiss-btn">Dismiss</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="crs-dismiss-btn">Dismiss</button>
 </div>
 
 <!-- Quick Add Presets -->
@@ -191,6 +191,7 @@
         <form id="ruleForm">
             <input type="hidden" id="rule-id" value="">
             <div class="modal-body">
+                <div id="modal-error" class="modal-error" role="alert" aria-live="assertive" style="display: none;"></div>
                 <div class="form-group">
                     <label class="form-label" for="rule-name">Rule Name *</label>
                     <input type="text" id="rule-name" class="form-input" placeholder="e.g., SQL Injection Block" required>
@@ -316,6 +317,18 @@
 }
 .preset-btn:hover { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
 .preset-btn.added { border-color: var(--emerald); background: rgba(16,185,129,0.12); color: var(--emerald); cursor: default; pointer-events: none; }
+
+.modal-error {
+    display: none;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    background: #fef2f2;
+    color: #7f1d1d;
+    border: 1px solid #fecaca;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+}
+.modal-error.active { display: block; }
 
 .rule-name { font-weight: 500; cursor: pointer; }
 .rule-name:hover { color: var(--accent); }
@@ -573,15 +586,15 @@
     line-height: 1.5;
 }
 /* Color variants */
-.pl-option[data-level="1"] { border-left: 4px solid #10b981; }
-.pl-option[data-level="1"] .pl-badge { background: #10b981; }
-.pl-option[data-level="1"].selected { background: #ecfdf5; box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
-.pl-option[data-level="2"] { border-left: 4px solid #f59e0b; }
-.pl-option[data-level="2"] .pl-badge { background: #f59e0b; }
-.pl-option[data-level="2"].selected { background: #fffbeb; box-shadow: 0 0 0 3px rgba(245,158,11,0.2); }
-.pl-option[data-level="3"] { border-left: 4px solid #f43f5e; }
-.pl-option[data-level="3"] .pl-badge { background: #f43f5e; }
-.pl-option[data-level="3"].selected { background: #fff1f2; box-shadow: 0 0 0 3px rgba(244,63,94,0.2); }
+.pl-option[data-level="1"] { border-left: 4px solid var(--accent); }
+.pl-option[data-level="1"] .pl-badge { background: var(--accent); }
+.pl-option[data-level="1"].selected { background: var(--accent-dim); box-shadow: 0 0 0 3px var(--accent-glow); }
+.pl-option[data-level="2"] { border-left: 4px solid var(--amber); }
+.pl-option[data-level="2"] .pl-badge { background: var(--amber); }
+.pl-option[data-level="2"].selected { background: var(--amber-dim); box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2); }
+.pl-option[data-level="3"] { border-left: 4px solid var(--rose); }
+.pl-option[data-level="3"] .pl-badge { background: var(--rose); }
+.pl-option[data-level="3"].selected { background: var(--rose-dim); box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2); }
 .test-row-dot {
     width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
 }
@@ -730,8 +743,23 @@ function viewRule(id) {
     openModal('detail-modal');
 }
 
+function showModalError(message) {
+    var el = document.getElementById('modal-error');
+    el.textContent = message;
+    el.style.display = 'block';
+    el.classList.add('active');
+}
+
+function clearModalError() {
+    var el = document.getElementById('modal-error');
+    el.textContent = '';
+    el.style.display = 'none';
+    el.classList.remove('active');
+}
+
 function openAddModal() {
     editingId = null;
+    clearModalError();
     document.getElementById('modal-title').textContent = 'Add Firewall Rule';
     document.getElementById('rule-id').value = '';
     document.getElementById('rule-name').value = '';
@@ -749,6 +777,7 @@ function editRule(id) {
     if (!rule) return;
 
     editingId = id;
+    clearModalError();
     document.getElementById('modal-title').textContent = 'Edit Firewall Rule';
     document.getElementById('rule-id').value = id;
     document.getElementById('rule-name').value = rule.name;
@@ -763,22 +792,32 @@ function editRule(id) {
 
 async function handleSubmit(e) {
     e.preventDefault();
+    clearModalError();
 
     var btn = document.getElementById('submit-btn');
-    btn.disabled = true;
-    btn.textContent = 'Saving...';
-
-    var scopeValue = document.getElementById('rule-scope').value;
-    var routeId = scopeValue === 'global' ? null : parseInt(scopeValue);
-
     var data = {
         name: document.getElementById('rule-name').value.trim(),
         rule: document.getElementById('rule-pattern').value.trim(),
         enabled: document.getElementById('rule-enabled').checked,
         mode: document.getElementById('rule-mode').value,
         exclusions: document.getElementById('rule-exclusions').value.trim(),
-        route_id: routeId
+        route_id: document.getElementById('rule-scope').value === 'global' ? null : parseInt(document.getElementById('rule-scope').value)
     };
+
+    // Surface basic required-field errors inline before contacting the API so
+    // the user gets immediate feedback even when browser tooltips are hidden
+    // (e.g., clipped inside modals on mobile).
+    if (!data.name) {
+        showModalError('Rule name is required.');
+        return;
+    }
+    if (!data.rule) {
+        showModalError('Detection pattern is required.');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
 
     try {
         var url, method;
@@ -804,6 +843,7 @@ async function handleSubmit(e) {
         showToast(editingId ? 'Rule updated' : 'Rule created', 'success');
         loadRules();
     } catch (err) {
+        showModalError(err.message);
         showToast(err.message, 'error');
     } finally {
         btn.disabled = false;

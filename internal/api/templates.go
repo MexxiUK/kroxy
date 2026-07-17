@@ -165,6 +165,9 @@ func NewTemplateHandler() (*TemplateHandler, error) {
 		"settings",
 		"ssl",
 		"profile",
+		"logs",
+		"backup",
+		"health",
 	}
 	for _, page := range authPages {
 		content, err := web.TemplatesFS.ReadFile("templates/pages/" + page + ".html")
@@ -219,7 +222,8 @@ func (a *API) renderTemplate(w http.ResponseWriter, r *http.Request, name string
 		name == "waf" || name == "ip-lists" || name == "rate-limits" ||
 		name == "security-events" ||
 		name == "users" || name == "api-keys" || name == "oidc" ||
-		name == "settings" || name == "ssl" || name == "profile" {
+		name == "settings" || name == "ssl" || name == "profile" ||
+		name == "logs" || name == "backup" || name == "health" {
 		// Pre-render the page content template into data.Content
 		// This avoids using dynamic template names ({{ template .Page . }})
 		// which are not supported by Go's html/template package
@@ -304,7 +308,7 @@ func (a *API) RegisterPageRoutes() {
 	a.router.With(adminMW...).Get("/users/oidc", a.serveOIDC)
 	a.router.With(adminMW...).Get("/settings", a.serveSettings)
 	a.router.With(adminMW...).Get("/settings/ssl", a.serveSSLSettings)
-	a.router.With(adminMW...).Get("/health", a.serveHealth)
+	a.router.With(adminMW...).Get("/health-checks", a.serveHealth)
 	a.router.With(adminMW...).Get("/logs", a.serveLogs)
 	a.router.With(adminMW...).Get("/backup", a.serveBackup)
 }
@@ -695,7 +699,7 @@ func (a *API) getOIDCProviders() []OIDCProviderInfo {
 }
 
 func (a *API) getSettings() *AppSettings {
-	listenPort, _ := strconv.Atoi(a.store.GetSettingDefault("listen_port", "8080"))
+	listenPort, _ := strconv.Atoi(a.store.GetSettingDefault("listen_port", "80"))
 	maxConn, _ := strconv.Atoi(a.store.GetSettingDefault("max_connections", "1000"))
 	timeout, _ := strconv.Atoi(a.store.GetSettingDefault("request_timeout", "30"))
 

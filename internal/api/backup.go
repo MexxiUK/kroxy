@@ -165,6 +165,7 @@ func (a *API) exportBackup(w http.ResponseWriter, r *http.Request) {
 		UserID:    user.ID,
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
+		Success:   true,
 	})
 }
 
@@ -288,5 +289,6 @@ func (a *API) importBackup(w http.ResponseWriter, r *http.Request) {
 		UserID:    user.ID,
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
+		Success:   true,
 	})
 }

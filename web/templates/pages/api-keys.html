@@ -135,7 +135,7 @@ function renderKeys() {
 
     if (keys.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg></div><div class="empty-state-title">No API keys yet</div><div class="empty-state-text">API keys allow automated tools like CI/CD pipelines to manage Kroxy without signing in through the web browser.</div><div class="empty-state-action"><button type="button" class="btn btn-primary" id="empty-add-key-btn">Generate Your First Key</button></div></div></td></tr>';
-        document.getElementById('empty-add-key-btn').addEventListener('click', function() { openModal('add-modal'); });
+        document.getElementById('empty-add-key-btn').addEventListener('click', openAddModal);
         return;
     }
 
@@ -296,24 +296,19 @@ function copyKey() {
     });
 }
 
-// Reset add modal when opened
-var origOpenModal = openModal;
-openModal = function(id) {
-    if (id === 'add-modal') {
-        document.getElementById('key-name').value = '';
-        document.getElementById('key-expires-at').value = '';
-        document.getElementById('custom-expiry-group').style.display = 'none';
-        selectedExpiry = '';
-        document.querySelectorAll('.expiry-btn').forEach(function(b) { b.classList.remove('active'); b.style.background = ''; b.style.borderColor = ''; b.style.color = ''; });
-        var neverBtn = document.querySelector('.expiry-btn[data-hours=""]');
-        if (neverBtn) { neverBtn.classList.add('active'); neverBtn.style.background = 'var(--accent-dim)'; neverBtn.style.borderColor = 'var(--accent)'; neverBtn.style.color = 'var(--accent)'; }
-        selectedExpiry = '';
-    }
-    origOpenModal(id);
-};
+function openAddModal() {
+    document.getElementById('key-name').value = '';
+    document.getElementById('key-expires-at').value = '';
+    document.getElementById('custom-expiry-group').style.display = 'none';
+    selectedExpiry = '';
+    document.querySelectorAll('.expiry-btn').forEach(function(b) { b.classList.remove('active'); b.style.background = ''; b.style.borderColor = ''; b.style.color = ''; });
+    var neverBtn = document.querySelector('.expiry-btn[data-hours=""]');
+    if (neverBtn) { neverBtn.classList.add('active'); neverBtn.style.background = 'var(--accent-dim)'; neverBtn.style.borderColor = 'var(--accent)'; neverBtn.style.color = 'var(--accent)'; }
+    openModal('add-modal');
+}
 
 // Event listeners
-document.getElementById('generate-key-btn').addEventListener('click', function() { openModal('add-modal'); });
+document.getElementById('generate-key-btn').addEventListener('click', openAddModal);
 document.getElementById('add-modal-backdrop').addEventListener('click', function() { closeModal('add-modal'); });
 document.getElementById('add-modal-cancel').addEventListener('click', function() { closeModal('add-modal'); });
 document.getElementById('add-key-form').addEventListener('submit', generateKey);

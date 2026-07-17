@@ -286,18 +286,6 @@ document.getElementById('delete-modal-backdrop').addEventListener('click', funct
 document.getElementById('delete-modal-cancel').addEventListener('click', function() { closeModal('delete-modal'); });
 document.getElementById('delete-confirm-btn').addEventListener('click', confirmDeleteRule);
 
-// Window preset handler
-document.getElementById('rule-window-preset').addEventListener('change', function() {
-    var customInput = document.getElementById('rule-window');
-    if (this.value === 'custom') {
-        customInput.style.display = 'block';
-        customInput.value = '60';
-    } else {
-        customInput.style.display = 'none';
-        customInput.value = this.value;
-    }
-});
-
 loadRules();
 </script>
 {{ end }}

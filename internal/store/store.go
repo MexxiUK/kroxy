@@ -3,18 +3,44 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/kroxy/kroxy/internal/crypto"
-	_ "github.com/mattn/go-sqlite3"
+	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
 type Store struct {
 	db     *sql.DB
 	dbPath string
+}
+
+// Sentinel errors returned by store methods when a database constraint or
+// business rule is violated. Callers (e.g. API handlers) can use errors.Is to
+// translate these into actionable HTTP responses without parsing driver errors.
+var (
+	// ErrRouteDomainExists is returned by CreateRoute/UpdateRoute when the
+	// domain violates the UNIQUE constraint on routes.domain.
+	ErrRouteDomainExists = errors.New("route with this domain already exists")
+)
+
+// isUniqueConstraintError reports whether err is a SQLite UNIQUE constraint
+// violation for the given table.column. It hides driver-specific details from
+// the rest of the store package.
+func isUniqueConstraintError(err error, table, column string) bool {
+	var sqliteErr sqlite3.Error
+	if !errors.As(err, &sqliteErr) {
+		return false
+	}
+	if sqliteErr.ExtendedCode != sqlite3.ErrConstraintUnique && sqliteErr.Code != sqlite3.ErrConstraint {
+		return false
+	}
+	// SQLite messages are deterministic and do not contain user input:
+	// "UNIQUE constraint failed: <table>.<column>"
+	return sqliteErr.Error() == fmt.Sprintf("UNIQUE constraint failed: %s.%s", table, column)
 }
 
 func New(path string) (*Store, error) {
@@ -138,6 +164,9 @@ func (s *Store) CreateRoute(r *Route) error {
 		r.Domain, r.Backend, r.Enabled, r.WAFEnabled, r.WAFMode, r.WAFParanoiaLevel, r.OIDCEnabled, r.OIDCProviderID, r.RateLimit, r.EnableGzip, r.EnableBrotli, r.EnableCache, r.CustomHeaders, r.BlockCountries, r.AllowCountries, r.RequireHTTPS, r.IsAdminRoute, r.BotProtection,
 	)
 	if err != nil {
+		if isUniqueConstraintError(err, "routes", "domain") {
+			return ErrRouteDomainExists
+		}
 		return err
 	}
 	id, err := result.LastInsertId()
@@ -162,6 +191,9 @@ func (s *Store) UpdateRoute(r *Route) error {
 		r.Domain, r.Backend, r.Enabled, r.WAFEnabled, r.WAFMode, r.WAFParanoiaLevel, r.OIDCEnabled, r.OIDCProviderID, r.RateLimit, r.EnableGzip, r.EnableBrotli, r.EnableCache, r.CustomHeaders, r.BlockCountries, r.AllowCountries, r.RequireHTTPS, r.IsAdminRoute, r.BotProtection, r.ID,
 	)
 	if err != nil {
+		if isUniqueConstraintError(err, "routes", "domain") {
+			return ErrRouteDomainExists
+		}
 		return err
 	}
 	return requireRowsAffected(res, 1)

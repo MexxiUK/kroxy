@@ -49,6 +49,7 @@ func (a *API) getHealthStatus(w http.ResponseWriter, r *http.Request) {
 		UserID:    user.ID,
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
+		Success:   true,
 	})
 }
 
@@ -114,6 +115,7 @@ func (a *API) getAccessLogs(w http.ResponseWriter, r *http.Request) {
 		UserID:    user.ID,
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
+		Success:   true,
 	})
 }
 
@@ -146,5 +148,6 @@ func (a *API) getLogStats(w http.ResponseWriter, r *http.Request) {
 		UserID:    user.ID,
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
+		Success:   true,
 	})
 }

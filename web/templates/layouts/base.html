@@ -698,7 +698,7 @@
 </head>
 <body>
     <div class="toast-container" id="toasts"></div>
-    {{ template "content" . }}
+    {{ .Content }}
     <script nonce="{{ nonce }}">
         // Toast notifications
         function showToast(message, type) {

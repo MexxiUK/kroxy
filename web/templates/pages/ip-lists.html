@@ -85,6 +85,7 @@
         </div>
         <form id="whitelist-form">
             <div class="modal-body" style="padding: 1.5rem;">
+                <div id="whitelist-error" class="ip-modal-error" role="alert" aria-live="assertive" style="display: none;"></div>
                 <div class="form-group">
                     <label class="form-label" for="whitelist-ip">IP Address *</label>
                     <input type="text" id="whitelist-ip" class="form-input" placeholder="192.168.1.0/24" required>
@@ -118,6 +119,7 @@
         </div>
         <form id="blacklist-form">
             <div class="modal-body" style="padding: 1.5rem;">
+                <div id="blacklist-error" class="ip-modal-error" role="alert" aria-live="assertive" style="display: none;"></div>
                 <div class="form-group">
                     <label class="form-label" for="blacklist-ip">IP Address *</label>
                     <input type="text" id="blacklist-ip" class="form-input" placeholder="192.168.1.100" required>
@@ -209,6 +211,17 @@
     color: #64748b;
     margin-top: 0.125rem;
 }
+.ip-modal-error {
+    display: none;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    background: #fef2f2;
+    color: #7f1d1d;
+    border: 1px solid #fecaca;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+}
+.ip-modal-error.active { display: block; }
 </style>
 
 <script nonce="{{ nonce }}">
@@ -271,8 +284,46 @@ function renderIPList(tableId, items, type) {
     });
 }
 
+function showIPModalError(type, message) {
+    var el = document.getElementById(type + '-error');
+    el.textContent = message;
+    el.style.display = 'block';
+    el.classList.add('active');
+}
+
+function clearIPModalError(type) {
+    var el = document.getElementById(type + '-error');
+    el.textContent = '';
+    el.style.display = 'none';
+    el.classList.remove('active');
+}
+
+function openWhitelistModal() {
+    clearIPModalError('whitelist');
+    document.getElementById('whitelist-ip').value = '';
+    document.getElementById('whitelist-note').value = '';
+    document.getElementById('whitelist-btn').textContent = 'Add to Allowlist';
+    openModal('whitelist-modal');
+}
+
+function openBlacklistModal() {
+    clearIPModalError('blacklist');
+    document.getElementById('blacklist-ip').value = '';
+    document.getElementById('blacklist-note').value = '';
+    document.getElementById('blacklist-btn').textContent = 'Add to Blocklist';
+    openModal('blacklist-modal');
+}
+
 async function addWhitelist(e) {
     e.preventDefault();
+    clearIPModalError('whitelist');
+
+    var value = document.getElementById('whitelist-ip').value.trim();
+    if (!value) {
+        showIPModalError('whitelist', 'IP address is required.');
+        return;
+    }
+
     var btn = document.getElementById('whitelist-btn');
     btn.disabled = true;
     btn.textContent = 'Adding...';
@@ -299,10 +350,11 @@ async function addWhitelist(e) {
         showToast('IP added to allowlist', 'success');
         loadIPLists();
     } catch (err) {
+        showIPModalError('whitelist', err.message);
         showToast(err.message, 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Add';
+        btn.textContent = 'Add to Allowlist';
     }
 
     return false;
@@ -310,6 +362,14 @@ async function addWhitelist(e) {
 
 async function addBlacklist(e) {
     e.preventDefault();
+    clearIPModalError('blacklist');
+
+    var value = document.getElementById('blacklist-ip').value.trim();
+    if (!value) {
+        showIPModalError('blacklist', 'IP address is required.');
+        return;
+    }
+
     var btn = document.getElementById('blacklist-btn');
     btn.disabled = true;
     btn.textContent = 'Adding...';
@@ -336,10 +396,11 @@ async function addBlacklist(e) {
         showToast('IP added to blocklist', 'success');
         loadIPLists();
     } catch (err) {
+        showIPModalError('blacklist', err.message);
         showToast(err.message, 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Add';
+        btn.textContent = 'Add to Blocklist';
     }
 
     return false;
@@ -381,12 +442,12 @@ async function confirmDeleteIP() {
 }
 
 // Event listeners
-document.getElementById('add-whitelist-btn').addEventListener('click', function() { openModal('whitelist-modal'); });
+document.getElementById('add-whitelist-btn').addEventListener('click', openWhitelistModal);
 document.getElementById('whitelist-modal-backdrop').addEventListener('click', function() { closeModal('whitelist-modal'); });
 document.getElementById('whitelist-modal-cancel').addEventListener('click', function() { closeModal('whitelist-modal'); });
 document.getElementById('whitelist-form').addEventListener('submit', addWhitelist);
 
-document.getElementById('add-blacklist-btn').addEventListener('click', function() { openModal('blacklist-modal'); });
+document.getElementById('add-blacklist-btn').addEventListener('click', openBlacklistModal);
 document.getElementById('blacklist-modal-backdrop').addEventListener('click', function() { closeModal('blacklist-modal'); });
 document.getElementById('blacklist-modal-cancel').addEventListener('click', function() { closeModal('blacklist-modal'); });
 document.getElementById('blacklist-form').addEventListener('submit', addBlacklist);

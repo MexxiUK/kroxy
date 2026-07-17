@@ -56,7 +56,10 @@ var (
 		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*pass\b`),
 		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*nolog\b`),
 		regexp.MustCompile(`(?i)secdefaultaction\s+(?:"[^"]*"|\S*)\s*noauditlog\b`),
-		regexp.MustCompile(`(?i)secaction.*(?:pass|nolog|noauditlog)\b`),
+		// Note: SecAction rules containing pass/nolog/noauditlog are not inherently
+		// disabling. Malicious SecAction rules are caught by the first-token
+		// allowlist (SecRule/SecAction/SecMarker only), the ctl:/include
+		// substring blocks, and the SecDefaultAction patterns above.
 		regexp.MustCompile(`(?i)\bctl\s*:`), // runtime control actions (e.g. ctl:ruleEngine=Off)
 	}
 )
@@ -994,12 +997,15 @@ func ValidateWAFExclusions(exclusions string) error {
 }
 
 // ValidateWAFMode validates the WAF operating mode for a route.
+// The WAF engine recognises "block" and "detect" (log_only is for individual
+// WAF rules, not route-level mode), so the API must accept the same values
+// the UI sends and the engine consumes.
 func ValidateWAFMode(mode string) error {
 	switch mode {
-	case "", "block", "log_only":
+	case "", "block", "detect":
 		return nil
 	default:
-		return fmt.Errorf("invalid waf_mode %q: must be empty, 'block' or 'log_only'", mode)
+		return fmt.Errorf("invalid waf_mode %q: must be empty, 'block' or 'detect'", mode)
 	}
 }
 

@@ -81,6 +81,7 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"name": wh.Name, "url": wh.URL},
+		Success:   true,
 	})
 
 	// Return the secret only once during creation, similar to API keys.
@@ -146,6 +147,7 @@ func (a *API) updateWebhook(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"id": id, "name": wh.Name},
+		Success:   true,
 	})
 
 	// Never return the secret on update.
@@ -178,6 +180,7 @@ func (a *API) deleteWebhook(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"id": id},
+		Success:   true,
 	})
 
 	w.WriteHeader(http.StatusNoContent)

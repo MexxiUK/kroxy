@@ -88,7 +88,7 @@
                     <div class="form-group">
                         <label class="form-label" for="listen-port">Listen Port</label>
                         <input type="number" id="listen-port" class="form-input" style="max-width: 120px;" value="{{ .Settings.ListenPort }}" min="1" max="65535">
-                        <p class="form-hint">The port Kroxy listens on for incoming traffic (default: 8080)</p>
+                        <p class="form-hint">The port Kroxy listens on for incoming traffic (default: 80)</p>
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="max-connections">Max Connections</label>
@@ -223,7 +223,7 @@ async function saveNetwork(e) {
     btn.textContent = 'Saving...';
 
     var data = {
-        listen_port: parseInt(document.getElementById('listen-port').value) || 8080,
+        listen_port: parseInt(document.getElementById('listen-port').value) || 80,
         max_connections: parseInt(document.getElementById('max-connections').value) || 1000,
         timeout: parseInt(document.getElementById('timeout').value) || 30
     };

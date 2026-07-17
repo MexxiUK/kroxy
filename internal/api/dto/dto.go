@@ -56,10 +56,12 @@ func (req RouteRequest) ToStore() store.Route {
 }
 
 // RouteResponse is the safe API representation of a route.
-// Omits Backend (internal URL) and IsAdminRoute.
+// Omits IsAdminRoute. Backend is included because /api/routes is admin-only
+// and the admin UI already exposes the backend URL on the route edit page.
 type RouteResponse struct {
 	ID               int       `json:"id"`
 	Domain           string    `json:"domain"`
+	Backend          string    `json:"backend"`
 	Enabled          bool      `json:"enabled"`
 	WAFEnabled       bool      `json:"waf_enabled"`
 	WAFMode          string    `json:"waf_mode"`
@@ -84,6 +86,7 @@ func RouteFromStore(r store.Route) RouteResponse {
 	return RouteResponse{
 		ID:               r.ID,
 		Domain:           r.Domain,
+		Backend:          r.Backend,
 		Enabled:          r.Enabled,
 		WAFEnabled:       r.WAFEnabled,
 		WAFMode:          r.WAFMode,

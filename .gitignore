@@ -145,3 +145,14 @@ docs/LLM_E2E_TEST_PLAN.md
 # Internal UI check plan (not for repo)
 docs/UI_CHECK_PLAN.md
 
+# Local Kanban / task tracking
+.kanban/
+
+# Generated Playwright / MCP artifacts
+.playwright-mcp/
+
+# Generated E2E reports, screenshots, and snapshots
+e2e/snapshots/
+e2e/screenshots/
+e2e/ui-audit-*/
+

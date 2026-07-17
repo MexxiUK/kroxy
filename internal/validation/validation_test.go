@@ -324,7 +324,7 @@ func TestValidateWAFRule(t *testing.T) {
 		{"ctl disable with space before colon", `SecRule ARGS "@rx foo" "id:1,phase:2,ctl :ruleEngine=Off"`, true},
 		{"ctl disable uppercase", `SecRule ARGS "@rx foo" "id:1,phase:2,CTL:ruleEngine=Off"`, true},
 		{"secdefaultaction pass", `SecDefaultAction "phase:1,pass,nolog"`, true},
-		{"secaction pass nolog", `SecAction "id:2,phase:1,pass,nolog"`, true},
+		{"secaction pass nolog", `SecAction "id:2,phase:1,pass,nolog"`, false},
 		{"secmarker", `SecMarker "END-REQUEST-910"`, false},
 		{"include directive", `Include /etc/coraza.conf`, true},
 		{"include directive lowercase", `include /etc/coraza.conf`, true},

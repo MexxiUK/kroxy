@@ -386,6 +386,36 @@ func createTestOIDCProvider(t *testing.T, s *store.Store) int {
 	return p.ID
 }
 
+func TestCreateRoute_AcceptsDetectWAFMode(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	body := map[string]interface{}{
+		"domain":   "detect.example.com",
+		"backend":  "http://1.1.1.1:8080",
+		"waf_mode": "detect",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/routes", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createRoute(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for detect waf_mode, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	routes, err := s.GetRoutes()
+	if err != nil {
+		t.Fatalf("get routes: %v", err)
+	}
+	if len(routes) != 1 || routes[0].WAFMode != "detect" {
+		t.Fatalf("stored WAFMode = %q, want detect", routes[0].WAFMode)
+	}
+}
+
 func TestCreateRoute_OIDCRequiresProviderID(t *testing.T) {
 	s, cleanup := newTestStore(t)
 	defer cleanup()
@@ -667,7 +697,7 @@ func TestCreateRoute_InvalidSecurityFields(t *testing.T) {
 		key  string
 		val  interface{}
 	}{
-		{"waf_mode", "waf_mode", "detect"},
+		{"waf_mode", "waf_mode", "invalid-mode"},
 		{"waf_paranoia_level", "waf_paranoia_level", 5},
 		{"rate_limit negative", "rate_limit", -1},
 		{"rate_limit too high", "rate_limit", 100001},
@@ -697,6 +727,71 @@ func TestCreateRoute_InvalidSecurityFields(t *testing.T) {
 				t.Fatalf("expected 400 for invalid %s, got %d: %s", tc.key, rec.Code, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestCreateRoute_DuplicateDomainReturnsConflict(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	// Seed an existing route for the target domain.
+	if err := s.CreateRoute(&store.Route{Domain: "example.com", Backend: "http://1.1.1.1:8080", WAFMode: "block"}); err != nil {
+		t.Fatalf("create seed route: %v", err)
+	}
+
+	body := map[string]interface{}{
+		"domain":   "example.com",
+		"backend":  "http://2.2.2.2:9090",
+		"waf_mode": "block",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/routes", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createRoute(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for duplicate domain, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "already exists") {
+		t.Fatalf("expected actionable error message, got: %s", rec.Body.String())
+	}
+}
+
+func TestUpdateRoute_DuplicateDomainReturnsConflict(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	first := &store.Route{Domain: "first.example.com", Backend: "http://1.1.1.1:8080", WAFMode: "block"}
+	second := &store.Route{Domain: "second.example.com", Backend: "http://2.2.2.2:9090", WAFMode: "block"}
+	if err := s.CreateRoute(first); err != nil {
+		t.Fatalf("create first route: %v", err)
+	}
+	if err := s.CreateRoute(second); err != nil {
+		t.Fatalf("create second route: %v", err)
+	}
+
+	// Attempt to rename the second route to the first domain.
+	body := map[string]interface{}{
+		"domain":   "first.example.com",
+		"backend":  "http://2.2.2.2:9090",
+		"waf_mode": "block",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, "/api/routes/"+strconv.Itoa(second.ID), bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, second.ID))
+
+	rec := httptest.NewRecorder()
+	a.updateRoute(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for duplicate domain update, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "already exists") {
+		t.Fatalf("expected actionable error message, got: %s", rec.Body.String())
 	}
 }
 
@@ -913,6 +1008,95 @@ func TestCreateWAFRule_RejectsInvalidPCRE(t *testing.T) {
 	}
 	if len(rules) != 0 {
 		t.Fatalf("expected no rules stored, got %d", len(rules))
+	}
+
+	// The response must surface the compile failure details so the UI can show
+	// an actionable validation message (KR-012).
+	if !strings.Contains(rec.Body.String(), "WAF rule failed to compile") {
+		t.Fatalf("expected error body to mention compile failure, got: %s", rec.Body.String())
+	}
+}
+
+func TestCreateWAFRule_ReturnsValidationError(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	body := map[string]interface{}{
+		"name":    "bad-rule",
+		"rule":    "This is not a valid SecRule",
+		"enabled": true,
+		"mode":    "block",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/waf/rules", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createWAFRule(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid rule syntax, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "rule must start with SecRule, SecAction, or SecMarker") {
+		t.Fatalf("expected descriptive validation error, got: %s", rec.Body.String())
+	}
+}
+
+func TestCreateWAFRule_SuccessAuditFlag(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	body := map[string]interface{}{
+		"name":    "test-rule",
+		"rule":    `SecRule REQUEST_URI "@rx ^/test$" "id:900001,phase:1,deny,status:403,msg:'test'"`,
+		"enabled": true,
+		"mode":    "block",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/waf/rules", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createWAFRule(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if !strings.Contains(rec.Body.String(), "id") {
+		t.Fatalf("expected response body to contain rule id: %s", rec.Body.String())
+	}
+}
+
+func TestCreateUser_SuccessAuditFlag(t *testing.T) {
+	s, cleanup := newTestStore(t)
+	defer cleanup()
+	a := New(s, 0)
+
+	body := map[string]interface{}{
+		"email":    "newuser@example.com",
+		"password": "StrongP@ssw0rd123",
+		"name":     "New User",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(newAdminRouteContext(t, 0))
+
+	rec := httptest.NewRecorder()
+	a.createUser(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	users, err := s.GetUsers()
+	if err != nil {
+		t.Fatalf("get users: %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(users))
 	}
 }
 

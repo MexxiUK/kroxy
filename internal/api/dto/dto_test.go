@@ -54,6 +54,7 @@ func TestRouteFromStore_IncludesOIDCProviderID(t *testing.T) {
 	r := store.Route{
 		ID:             3,
 		Domain:         "example.com",
+		Backend:        "http://1.1.1.1:8080",
 		OIDCEnabled:    true,
 		OIDCProviderID: 7,
 		CreatedAt:      now,
@@ -62,5 +63,8 @@ func TestRouteFromStore_IncludesOIDCProviderID(t *testing.T) {
 	got := RouteFromStore(r)
 	if got.OIDCProviderID != 7 {
 		t.Fatalf("RouteFromStore OIDCProviderID = %d, want 7", got.OIDCProviderID)
+	}
+	if got.Backend != r.Backend {
+		t.Fatalf("RouteFromStore Backend = %q, want %q", got.Backend, r.Backend)
 	}
 }

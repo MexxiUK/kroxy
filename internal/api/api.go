@@ -354,9 +354,12 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		// Referrer policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		// Content Security Policy with nonce. 'unsafe-inline' is intentionally
-		// omitted for both scripts and styles so the nonce policy is effective.
+		// omitted for scripts so the nonce policy is effective. Inline style
+		// attributes are allowed via CSP3 style-src-attr 'unsafe-inline' while
+		// <style> elements remain nonce-gated through style-src-elem. The Google
+		// Fonts stylesheet is explicitly allowed in style-src and style-src-elem.
 		w.Header().Set("Content-Security-Policy", fmt.Sprintf(
-			"default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'nonce-%s'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com",
+			"default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'nonce-%s' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com",
 			nonce, nonce,
 		))
 		// Permissions Policy
@@ -1382,6 +1385,7 @@ func (a *API) generateAPIKey(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": req.Name},
+		Success:   true,
 	})
 
 	// Only return the secret once
@@ -1598,6 +1602,11 @@ func (a *API) createRoute(w http.ResponseWriter, r *http.Request) {
 
 	route := req.ToStore()
 	if err := a.store.CreateRoute(&route); err != nil {
+		if errors.Is(err, store.ErrRouteDomainExists) {
+			respondError(w, http.StatusConflict, "A route for this domain already exists")
+			return
+		}
+		log.Printf("Failed to create route %s: %v", route.Domain, err)
 		respondError(w, http.StatusInternalServerError, "Failed to create route")
 		return
 	}
@@ -1608,6 +1617,7 @@ func (a *API) createRoute(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": route.Domain + " -> " + route.Backend},
+		Success:   true,
 	})
 
 	if a.proxyReloadFunc != nil {
@@ -1757,6 +1767,11 @@ func (a *API) updateRoute(w http.ResponseWriter, r *http.Request) {
 	route := req.ToStore()
 	route.ID = id
 	if err := a.store.UpdateRoute(&route); err != nil {
+		if errors.Is(err, store.ErrRouteDomainExists) {
+			respondError(w, http.StatusConflict, "A route for this domain already exists")
+			return
+		}
+		log.Printf("Failed to update route %s: %v", route.Domain, err)
 		respondError(w, http.StatusInternalServerError, "Failed to update route")
 		return
 	}
@@ -1767,6 +1782,7 @@ func (a *API) updateRoute(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": route.Domain},
+		Success:   true,
 	})
 
 	if a.proxyReloadFunc != nil {
@@ -1804,6 +1820,7 @@ func (a *API) deleteRoute(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
+		Success:   true,
 	})
 
 	if a.proxyReloadFunc != nil {
@@ -2098,6 +2115,7 @@ func (a *API) createOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": provider.Name},
+		Success:   true,
 	})
 
 	// Return without secret
@@ -2223,6 +2241,7 @@ func (a *API) deleteOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
+		Success:   true,
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -2274,6 +2293,7 @@ func (a *API) createBlacklist(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": b.Type + ": " + b.Value},
+		Success:   true,
 	})
 
 	respondJSON(w, http.StatusCreated, dto.BlacklistFromStore(b))
@@ -2299,6 +2319,7 @@ func (a *API) deleteBlacklist(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
+		Success:   true,
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -2344,6 +2365,7 @@ func (a *API) createWhitelist(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": wl.Type + ": " + wl.Value},
+		Success:   true,
 	})
 
 	respondJSON(w, http.StatusCreated, dto.WhitelistFromStore(wl))
@@ -2369,6 +2391,7 @@ func (a *API) deleteWhitelist(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
+		Success:   true,
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -2414,6 +2437,7 @@ func (a *API) createRateLimit(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": rl.Domain},
+		Success:   true,
 	})
 
 	respondJSON(w, http.StatusCreated, dto.RateLimitFromStore(rl))
@@ -2479,6 +2503,7 @@ func (a *API) deleteRateLimit(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
+		Success:   true,
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -2599,6 +2624,7 @@ func (a *API) createCertificate(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"domain": cert.Domain, "type": cert.Type},
+		Success:   true,
 	})
 
 	if a.proxyReloadFunc != nil {
@@ -2630,6 +2656,7 @@ func (a *API) deleteCertificate(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
+		Success:   true,
 	})
 
 	if a.proxyReloadFunc != nil {
@@ -2697,6 +2724,7 @@ func (a *API) provisionCertificate(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"domain": cert.Domain, "success": provisioned},
+		Success:   provisioned,
 	})
 
 	if provisioned {
@@ -2825,7 +2853,7 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 	// cannot be stored and later brick proxy startup (SEC-039).
 	if err := waf.ValidateWAFRuleCompiles(req.Rule); err != nil {
 		log.Printf("WAF rule compile failed for %q (rule: %.100s): %v", req.Name, req.Rule, err)
-		respondError(w, http.StatusBadRequest, "WAF rule failed to compile")
+		respondError(w, http.StatusBadRequest, fmt.Sprintf("WAF rule failed to compile: %v", err))
 		return
 	}
 	// Validate WAF exclusions (comma-separated numeric rule IDs only)
@@ -2873,6 +2901,7 @@ func (a *API) createWAFRule(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": rule.Name},
+		Success:   true,
 	})
 
 	respondJSON(w, http.StatusCreated, dto.WAFFromStore(rule))
@@ -2911,6 +2940,7 @@ func (a *API) deleteWAFRule(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": strconv.Itoa(id)},
+		Success:   true,
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -2941,7 +2971,7 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := waf.ValidateWAFRuleCompiles(req.Rule); err != nil {
-		respondError(w, http.StatusBadRequest, "WAF rule failed to compile")
+		respondError(w, http.StatusBadRequest, fmt.Sprintf("WAF rule failed to compile: %v", err))
 		return
 	}
 	if err := validation.ValidateWAFExclusions(req.Exclusions); err != nil {
@@ -2986,6 +3016,7 @@ func (a *API) updateWAFRule(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": rule.Name},
+		Success:   true,
 	})
 
 	respondJSON(w, http.StatusOK, dto.WAFFromStore(rule))
@@ -3065,6 +3096,7 @@ func (a *API) updateWAFParanoia(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"level": req.Level},
+		Success:   true,
 	})
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{"level": req.Level})
@@ -3131,7 +3163,9 @@ func (a *API) listUsers(w http.ResponseWriter, r *http.Request) {
 	for i, u := range users {
 		responses[i] = dto.UserFromStore(u)
 	}
-	respondJSON(w, http.StatusOK, responses)
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"users": responses,
+	})
 }
 
 func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
@@ -3191,6 +3225,7 @@ func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"info": u.Email},
+		Success:   true,
 	})
 
 	respondJSON(w, http.StatusCreated, dto.UserFromStore(*u))
@@ -3230,6 +3265,7 @@ func (a *API) deleteUser(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"deleted_user_id": id},
+		Success:   true,
 	})
 
 	w.WriteHeader(http.StatusNoContent)
@@ -3290,6 +3326,7 @@ func (a *API) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"target_user_id": id, "new_role": req.Role},
+		Success:   true,
 	})
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "role updated"})
@@ -3397,6 +3434,7 @@ func (a *API) addRedirectDomain(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"domain": req.Domain},
+		Success:   true,
 	})
 
 	respondJSON(w, http.StatusCreated, map[string]string{"domain": req.Domain})
@@ -3422,6 +3460,7 @@ func (a *API) removeRedirectDomain(w http.ResponseWriter, r *http.Request) {
 		UserEmail: user.Email,
 		IP:        security.GetClientIP(r),
 		Details:   map[string]interface{}{"domain": domain},
+		Success:   true,
 	})
 
 	w.WriteHeader(http.StatusNoContent)
