@@ -153,6 +153,52 @@ func TestRenderTemplateCsrfCookie_NonProductionHonoursInsecureOverride(t *testin
 	}
 }
 
+// TestRenderTemplate_AuthenticatedPageIncludesSidebar verifies KR-026: authenticated
+// pages executed through the "root" template must render the sidebar and navbar
+// from the "content" layout, with page content inside <main class="main-content">.
+func TestRenderTemplate_AuthenticatedPageIncludesSidebar(t *testing.T) {
+	a, cleanup := newTestAPIWithEnv(t, false, true)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	ctx := context.WithValue(r.Context(), cspNonceKey, "test-nonce")
+	r = r.WithContext(ctx)
+
+	data := &TemplateData{
+		Title:     "Dashboard",
+		Page:      "dashboard",
+		CSRFToken: "test-token",
+		User:      &TemplateUser{ID: 1, Name: "Admin", Email: "admin@example.com", Role: "admin"},
+	}
+	a.renderTemplate(w, r, "dashboard", data)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	mustContain := []string{
+		`<aside class="sidebar"`,
+		`<nav class="sidebar-nav">`,
+		`<nav class="navbar">`,
+		`<main class="main-content">`,
+		`Dashboard</span>`,
+		`<h1 class="page-title">Dashboard</h1>`,
+		`nonce="test-nonce"`,
+	}
+	for _, s := range mustContain {
+		if !strings.Contains(body, s) {
+			t.Errorf("authenticated dashboard response missing expected markup %q", s)
+		}
+	}
+	// The page-specific content must appear inside the main content wrapper.
+	mainIdx := strings.Index(body, `<main class="main-content">`)
+	dashboardTitleIdx := strings.Index(body, `<h1 class="page-title">Dashboard</h1>`)
+	if mainIdx == -1 || dashboardTitleIdx == -1 || dashboardTitleIdx < mainIdx {
+		t.Errorf("dashboard page content must appear inside <main class=\"main-content\">")
+	}
+}
+
 func TestLogoutCookie_ProductionIgnoresInsecureOverride(t *testing.T) {
 	a, cleanup := newTestAPIWithEnv(t, true, true)
 	defer cleanup()
