@@ -154,5 +154,24 @@ docs/UI_CHECK_PLAN.md
 # Generated E2E reports, screenshots, and snapshots
 e2e/snapshots/
 e2e/screenshots/
-e2e/ui-audit-*/
+e2e/test-results/
+e2e/playwright-report/
+e2e/node_modules/
+
+# Internal E2E test infrastructure (kept locally, not committed)
+e2e/package.json
+e2e/package-lock.json
+e2e/playwright.config.js
+e2e/README.md
+e2e/fixtures/
+e2e/tests/
+e2e/scripts/
+.github/workflows/e2e.yml
+
+# Internal planning documents
+/PLAN.md
+
+# Exception: the 2026-07-17 UI audit deliverables are committed intentionally.
+!e2e/ui-audit-2026-07-17/report.md
+!e2e/ui-audit-2026-07-17/screenshots/
 
